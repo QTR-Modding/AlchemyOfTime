@@ -1,4 +1,6 @@
 #pragma once
+#include <unordered_set>
+
 #include "Utils.h"
 
 using Duration = float;
@@ -170,21 +172,21 @@ struct StageUpdate {
 };
 
 struct AddOnSettings {
-    std::set<FormID> containers;
-    std::map<FormID,float> delayers;
+    std::unordered_set<FormID> containers;
+    std::unordered_map<FormID,float> delayers;
     std::vector<FormID> delayers_order;
-    std::map<FormID, std::tuple<FormID, Duration, std::vector<StageNo>>> transformers;
+    std::unordered_map<FormID, std::tuple<FormID, Duration, std::vector<StageNo>>> transformers;
 	std::vector<FormID> transformers_order;
-    std::map<FormID,uint32_t> delayer_colors;
-    std::map<FormID,uint32_t> transformer_colors;
-    std::map<FormID,FormID> delayer_sounds;
-    std::map<FormID,FormID> transformer_sounds;
-	std::map<FormID, FormID> delayer_artobjects;
-	std::map<FormID, FormID> transformer_artobjects;
-	std::map<FormID, FormID> delayer_effect_shaders;
-	std::map<FormID, FormID> transformer_effect_shaders;
-    std::map<FormID,std::set<FormID>> delayer_containers;
-    std::map<FormID,std::set<FormID>> transformer_containers;
+    std::unordered_map<FormID,uint32_t> delayer_colors;
+    std::unordered_map<FormID,uint32_t> transformer_colors;
+    std::unordered_map<FormID,FormID> delayer_sounds;
+    std::unordered_map<FormID,FormID> transformer_sounds;
+	std::unordered_map<FormID, FormID> delayer_artobjects;
+	std::unordered_map<FormID, FormID> transformer_artobjects;
+	std::unordered_map<FormID, FormID> delayer_effect_shaders;
+	std::unordered_map<FormID, FormID> transformer_effect_shaders;
+    std::unordered_map<FormID,std::unordered_set<FormID>> delayer_containers;
+    std::unordered_map<FormID,std::unordered_set<FormID>> transformer_containers;
 
 
     [[nodiscard]] bool IsHealthy() const { return !init_failed; }
@@ -198,36 +200,36 @@ private:
 };
 
 struct DefaultSettings {
-    std::map<StageNo, FormID> items = {};
-    std::map<StageNo, Duration> durations = {};
-    std::map<StageNo, StageName> stage_names = {};
-    std::map<StageNo, bool> crafting_allowed = {};
-    std::map<StageNo, int> costoverrides = {};
-    std::map<StageNo, float> weightoverrides = {};
-    std::map<StageNo, std::vector<StageEffect>> effects = {};
+    std::unordered_map<StageNo, FormID> items = {};
+    std::unordered_map<StageNo, Duration> durations = {};
+    std::unordered_map<StageNo, StageName> stage_names = {};
+    std::unordered_map<StageNo, bool> crafting_allowed = {};
+    std::unordered_map<StageNo, int> costoverrides = {};
+    std::unordered_map<StageNo, float> weightoverrides = {};
+    std::unordered_map<StageNo, std::vector<StageEffect>> effects = {};
     std::vector<StageNo> numbers = {};
     FormID decayed_id = 0;
-    std::map<StageNo, uint32_t> colors = {};
-	std::map<StageNo, FormID> sounds = {};
-	std::map<StageNo, FormID> artobjects = {};
-	std::map<StageNo, FormID> effect_shaders = {};
+    std::unordered_map<StageNo, uint32_t> colors = {};
+	std::unordered_map<StageNo, FormID> sounds = {};
+	std::unordered_map<StageNo, FormID> artobjects = {};
+	std::unordered_map<StageNo, FormID> effect_shaders = {};
 
 
-    std::set<FormID> containers;
-    std::map<FormID,float> delayers;
+    std::unordered_set<FormID> containers;
+    std::unordered_map<FormID,float> delayers;
     std::vector<FormID> delayers_order;
-    std::map<FormID, std::tuple<FormID, Duration, std::vector<StageNo>>> transformers;
+    std::unordered_map<FormID, std::tuple<FormID, Duration, std::vector<StageNo>>> transformers;
 	std::vector<FormID> transformers_order;
-    std::map<FormID,uint32_t> delayer_colors;
-    std::map<FormID,uint32_t> transformer_colors;
-	std::map<FormID, FormID> delayer_sounds;
-	std::map<FormID, FormID> transformer_sounds;
-	std::map<FormID, FormID> delayer_artobjects;
-	std::map<FormID, FormID> transformer_artobjects;
-	std::map<FormID, FormID> delayer_effect_shaders;
-	std::map<FormID, FormID> transformer_effect_shaders;
-    std::map<FormID,std::set<FormID>> delayer_containers;
-    std::map<FormID,std::set<FormID>> transformer_containers;
+    std::unordered_map<FormID,uint32_t> delayer_colors;
+    std::unordered_map<FormID,uint32_t> transformer_colors;
+	std::unordered_map<FormID, FormID> delayer_sounds;
+	std::unordered_map<FormID, FormID> transformer_sounds;
+	std::unordered_map<FormID, FormID> delayer_artobjects;
+	std::unordered_map<FormID, FormID> transformer_artobjects;
+	std::unordered_map<FormID, FormID> delayer_effect_shaders;
+	std::unordered_map<FormID, FormID> transformer_effect_shaders;
+    std::unordered_map<FormID,std::unordered_set<FormID>> delayer_containers;
+    std::unordered_map<FormID,std::unordered_set<FormID>> transformer_containers;
     
 
     [[nodiscard]] bool IsHealthy() const { return !init_failed; }
@@ -237,7 +239,7 @@ struct DefaultSettings {
     [[nodiscard]] bool IsEmpty();
 
     void Add(AddOnSettings& addon);
-    static void AddHelper(std::map<FormID, FormID>& dest, const std::map<FormID, FormID>& src);
+    static void AddHelper(std::unordered_map<FormID, FormID>& dest, const std::unordered_map<FormID, FormID>& src);
 
 private:
     bool init_failed = false;
@@ -246,7 +248,7 @@ private:
 using CustomSettings = std::map<std::vector<std::string>, DefaultSettings>;
 
 class SoundHelper {
-	std::map<RefID, RE::BSSoundHandle> handles;
+	std::unordered_map<RefID, RE::BSSoundHandle> handles;
 
 	std::shared_mutex mutex;
 public:
@@ -302,8 +304,8 @@ struct RefStop {
 	//RE::ShaderReferenceEffect* shader_ref_eff;
 	//RE::ModelReferenceEffect* model_ref_eff;
 
-	std::set<FormID> applied_art_objects;
-	std::set<FormID> applied_effect_shaders;
+	std::unordered_set<FormID> applied_art_objects;
+	std::unordered_set<FormID> applied_effect_shaders;
 
     RefStop() = default;
     explicit RefStop(RefID ref_id_);

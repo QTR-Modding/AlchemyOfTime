@@ -12,12 +12,12 @@ struct ActEff {
 class DynamicFormTracker : public DFSaveLoadData {
     
     // created form bank during the session. Create populates this.
-    std::map<std::pair<FormID, std::string>, std::set<FormID>> forms;
-    std::map<FormID, uint32_t> customIDforms; // Fetch populates this
+    std::map<std::pair<FormID, std::string>, std::unordered_set<FormID>> forms;
+    std::unordered_map<FormID, uint32_t> customIDforms; // Fetch populates this
 
-    std::set<FormID> active_forms; // _yield populates this
-    std::set<FormID> protected_forms;
-    std::set<FormID> deleted_forms;
+    std::unordered_set<FormID> active_forms; // _yield populates this
+    std::unordered_set<FormID> protected_forms;
+    std::unordered_set<FormID> deleted_forms;
 
 
 	std::shared_mutex forms_mutex;
@@ -425,7 +425,7 @@ public:
 		return protected_forms.contains(a_formid);
     }
 
-    std::set<FormID> GetFormSet(const FormID base_formid, std::string base_editorid = "") {
+    std::unordered_set<FormID> GetFormSet(const FormID base_formid, std::string base_editorid = "") {
         if (base_editorid.empty()) {
             base_editorid = GetEditorID(base_formid);
             if (base_editorid.empty()) {

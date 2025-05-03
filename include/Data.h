@@ -101,7 +101,7 @@ private:
     RE::FormType formtype;
     std::set<StageNo> fake_stages;
     Stage decayed_stage;
-    std::map<FormID, Stage> transformed_stages;
+    std::unordered_map<FormID, Stage> transformed_stages;
 
     std::vector<StageInstance*> queued_time_modulator_updates;
     bool init_failed = false;
@@ -236,5 +236,6 @@ private:
 
     static FormID SearchNearbyModulators(const RE::TESObjectREFR* a_obj, const std::vector<FormID>& candidates);
 
-    static void SearchModulatorInCell(FormID& result, const RE::TESObjectREFR* a_origin, const RE::TESObjectCELL* a_cell, const std::set<FormID>& modulators, float range=0);
+    static void SearchModulatorInCell(FormID& result, const RE::TESObjectREFR* a_origin, const RE::TESObjectCELL* a_cell, const std::unordered_set<FormID>&
+                                      modulators, float range=0);
 };

@@ -6,10 +6,10 @@ class Manager final : public Ticker, public SaveLoadData {
 	RE::TESObjectREFR* player_ref = RE::PlayerCharacter::GetSingleton()->As<RE::TESObjectREFR>();
 	
     std::map<Types::FormFormID, std::pair<int, Count>> handle_crafting_instances;  // formid1: source formid, formid2: stage formid
-    std::map<FormID, bool> faves_list;
-    std::map<FormID, bool> equipped_list;
+    std::unordered_map<FormID, bool> faves_list;
+    std::unordered_map<FormID, bool> equipped_list;
 
-    std::map<RefID, std::vector<FormID>> locs_to_be_handled;  // onceki sessiondan kalan fake formlar
+    std::unordered_map<RefID, std::vector<FormID>> locs_to_be_handled;  // onceki sessiondan kalan fake formlar
 
     bool should_reset = false;
 
@@ -24,10 +24,10 @@ class Manager final : public Ticker, public SaveLoadData {
 
     unsigned int _instance_limit = 200000;
 
-    std::map<RefID, RefStop> _ref_stops_;
-    std::set<RefID> queue_delete_;
+    std::unordered_map<RefID, RefStop> _ref_stops_;
+    std::unordered_set<RefID> queue_delete_;
 
-    std::set<FormID> do_not_register;
+    std::unordered_set<FormID> do_not_register;
 
     void WoUpdateLoop(const std::vector<RefID>& refs);
 

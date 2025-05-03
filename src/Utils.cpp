@@ -1635,13 +1635,13 @@ RE::TESObjectREFR* Menu::GetVendorChestFromMenu()
 
 float Math::Round(const float value, const int n)
 {
-    const float factor = std::powf(10.0f, n);
+    const float factor = std::powf(10.0f, static_cast<float>(n));
     return std::round(value * factor) / factor;
 }
 
 float Math::Ceil(const float value, const int n)
 {
-    const float factor = std::powf(10.0f, n);
+    const float factor = std::powf(10.0f, static_cast<float>(n));
     return std::ceil(value * factor) / factor;
 }
 

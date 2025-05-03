@@ -40,7 +40,7 @@ bool Settings::IsQFormType(const FormID formid, const std::string& qformtype) {
     return false;*/
 
     const auto* form = GetFormByID(formid);
-    auto it = qformCheckers.find(qformtype);
+    const auto it = qformCheckers.find(qformtype);
     return (it != qformCheckers.end()) ? it->second(form) : false;
 }
 
@@ -77,9 +77,9 @@ bool Settings::IsInExclude(const FormID formid, std::string type) {
         return false;
     }
 
-    std::string form_string = std::string(form->GetName());
+    const auto form_string = std::string(form->GetName());
 
-    if (std::string form_editorid = clib_util::editorID::get_editorID(form); !form_editorid.empty() && String::includesWord(form_editorid, Settings::exclude_list[type])) {
+    if (const std::string form_editorid = clib_util::editorID::get_editorID(form); !form_editorid.empty() && String::includesWord(form_editorid, Settings::exclude_list[type])) {
 		return true;
 	}
 
@@ -224,7 +224,7 @@ std::vector<std::string> LoadExcludeList(const std::string& postfix)
 
     // Create folder if it doesn't exist
     std::filesystem::create_directories(folder_path);
-    std::set<std::string> strings;
+    std::unordered_set<std::string> strings;
 
     // Iterate over files in the folder
     for (const auto& entry : std::filesystem::directory_iterator(folder_path)) {
@@ -238,7 +238,7 @@ std::vector<std::string> LoadExcludeList(const std::string& postfix)
         }
     }
 
-    auto result = Vector::SetToVector(strings);
+    std::vector result(strings.begin(), strings.end());
     return result;
 }
 
@@ -1118,7 +1118,7 @@ void LoadSettingsParallel()
                     }
                     try {
                         logger::info("Loading custom settings for {}", _qftype);
-			            if (auto temp_custom_settings = parseCustomsParallel(_qftype); !temp_custom_settings.empty()) {
+			            if (const auto temp_custom_settings = parseCustomsParallel(_qftype); !temp_custom_settings.empty()) {
 							std::lock_guard lock(customsettingsMutex);
                             Settings::custom_settings[_qftype] = temp_custom_settings;
 			            }

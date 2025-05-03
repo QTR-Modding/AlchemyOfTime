@@ -149,12 +149,6 @@ namespace Types {
 };
 
 namespace Vector {
-    static inline std::vector<std::string> SetToVector(const std::set<std::string>& input_set){
-        // Construct a vector using the range constructor
-        std::vector<std::string> result(input_set.begin(), input_set.end());
-        return result;
-    };
-
     template <typename T>
     inline bool HasElement(const std::vector<T>& vec, const T& element) { return std::find(vec.begin(), vec.end(), element) != vec.end(); };
 };

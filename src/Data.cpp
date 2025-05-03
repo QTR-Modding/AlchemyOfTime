@@ -1058,7 +1058,7 @@ FormID Source::SearchNearbyModulators(const RE::TESObjectREFR* a_obj, const std:
 		return 0;
 	}
 	FormID result = 0;
-	const auto candidates_set = std::set(candidates.begin(), candidates.end());
+	const auto candidates_set = std::unordered_set(candidates.begin(), candidates.end());
     if (cell->IsInteriorCell()) {
         SearchModulatorInCell(result, a_obj, cell, candidates_set, Settings::search_radius);
 		return result;
@@ -1086,40 +1086,31 @@ FormID Source::SearchNearbyModulators(const RE::TESObjectREFR* a_obj, const std:
 }
 
 void Source::SearchModulatorInCell(FormID& result, const RE::TESObjectREFR* a_origin,
-                                   const RE::TESObjectCELL* a_cell, const std::set<FormID>& modulators, const float range) {
+                                   const RE::TESObjectCELL* a_cell, const std::unordered_set<FormID>& modulators, const float range) {
+
+    auto callback = [&a_origin,&result, &modulators](const RE::TESObjectREFR* ref)-> RE::BSContainer::ForEachResult {
+        if (!ref || ref->IsDisabled() || ref->IsDeleted() || ref->IsMarkedForDeletion()) return RE::BSContainer::ForEachResult::kContinue;
+        if (const auto form_id = ref->GetObjectReference()->GetFormID(); modulators.contains(form_id)) {
+#ifndef NDEBUG
+	        draw_line(WorldObject::GetPosition(ref), WorldObject::GetPosition(RE::PlayerCharacter::GetSingleton()),3.f, glm::vec4(0.f, 0.f, 1.f, 1.f));
+	        WorldObject::DrawBoundingBox(ref);
+#endif
+            if (!WorldObject::AreClose(a_origin, ref, Settings::proximity_range)) {
+		        return RE::BSContainer::ForEachResult::kContinue;
+            }
+#ifndef NDEBUG
+	        logger::info("Found modulator in proximity: {}", clib_util::editorID::get_editorID(ref->GetBaseObject()));
+#endif
+	        result = form_id;
+	        return RE::BSContainer::ForEachResult::kStop;
+        }
+        return RE::BSContainer::ForEachResult::kContinue;
+        };
+
     if (range>0) {
-        a_cell->ForEachReferenceInRange(WorldObject::GetPosition(a_origin), range,
-                                        [&result, &modulators](const RE::TESObjectREFR* ref)-> RE::BSContainer::ForEachResult {
-                                            if (!ref || ref->IsDisabled() || ref->IsDeleted() || ref->IsMarkedForDeletion()) return RE::BSContainer::ForEachResult::kContinue;
-                                            if (const auto form_id = ref->GetObjectReference()->GetFormID(); modulators.contains(form_id)) {
-                                                result = form_id;
-                                                return RE::BSContainer::ForEachResult::kStop;
-                                            }
-                                            return RE::BSContainer::ForEachResult::kContinue;
-                                        }
-            );
+        a_cell->ForEachReferenceInRange(WorldObject::GetPosition(a_origin), range,callback);
     }
     else {
-		a_cell->ForEachReference(
-			[&a_origin,&result, &modulators](const RE::TESObjectREFR* ref)-> RE::BSContainer::ForEachResult {
-				if (!ref || ref->IsDisabled() || ref->IsDeleted() || ref->IsMarkedForDeletion()) return RE::BSContainer::ForEachResult::kContinue;
-				if (const auto form_id = ref->GetObjectReference()->GetFormID(); modulators.contains(form_id)) {
-#ifndef NDEBUG
-					draw_line(WorldObject::GetPosition(ref), WorldObject::GetPosition(RE::PlayerCharacter::GetSingleton()),3.f, glm::vec4(0.f, 0.f, 1.f, 1.f));
-				    WorldObject::DrawBoundingBox(ref);
-#endif
-                    if (!WorldObject::AreClose(a_origin, ref, Settings::proximity_range)) {
-				        return RE::BSContainer::ForEachResult::kContinue;
-                    }
-#ifndef NDEBUG
-					logger::info("Found modulator in proximity: {}", clib_util::editorID::get_editorID(ref->GetBaseObject()));
-#endif
-					result = form_id;
-					return RE::BSContainer::ForEachResult::kStop;
-				}
-				return RE::BSContainer::ForEachResult::kContinue;
-			}
-		);
+		a_cell->ForEachReference(callback);
     }
 }
-

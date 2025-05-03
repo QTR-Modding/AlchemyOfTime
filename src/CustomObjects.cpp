@@ -310,7 +310,7 @@ void DefaultSettings::Add(AddOnSettings& addon)
 
 }
 
-void DefaultSettings::AddHelper(std::map<FormID, FormID>& dest, const std::map<FormID, FormID>& src)
+void DefaultSettings::AddHelper(std::unordered_map<FormID, FormID>& dest, const std::unordered_map<FormID, FormID>& src)
 {
 	for (const auto& [_formID, _art] : src) {
 		if (!_formID) {
