@@ -206,11 +206,9 @@ class DynamicFormTracker : public DFSaveLoadData {
 			return 0;
 		}
 
-        RE::TESForm* new_form = nullptr;
-
         auto factory = RE::IFormFactory::GetFormFactoryByType(baseForm->GetFormType());
 
-        new_form = factory->Create();
+        RE::TESForm* new_form = factory->Create();
 
         // new_form = baseForm->CreateDuplicateForm(true, (void*)new_form)->As<T>();
 
@@ -621,7 +619,7 @@ public:
         const auto act_eff_list = RE::PlayerCharacter::GetSingleton()->AsMagicTarget()->GetActiveEffectList();
 
         int n_act_effs = 0;
-        std::set<FormID> act_effs_temp;
+        std::unordered_set<FormID> act_effs_temp;
         for (auto it = act_eff_list->begin(); it != act_eff_list->end(); ++it) {
             if (const auto* act_eff = *it){
                 if (const auto act_eff_formid = act_eff->spell->GetFormID(); active_forms.contains(act_eff_formid)) {
@@ -686,7 +684,7 @@ public:
                     logger::info("Dynamic form {:x} does not exist.", dyn_formid);
                     continue;
                 }
-                else if (const auto dyn_form_ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(dyn_formid)) {
+                else if ([[maybe_unused]] const auto dyn_form_ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(dyn_formid)) {
                     logger::info("Dynamic form {:x} is a refr with name {}.", dyn_formid, dyn_form->GetName());
                     continue;
                 }
@@ -756,7 +754,7 @@ public:
 
     void ApplyMissingActiveEffects() {
 
-        std::map<FormID, float> new_act_effs; // terrible name
+        std::unordered_map<FormID, float> new_act_effs; // terrible name
         // I need to change the formids in act_effs if they are not valid to valid ones
         for (std::shared_lock lock(act_effs_mutex);
             auto& [baseFormid, dynamicFormid, elapsed, customid] : act_effs) {

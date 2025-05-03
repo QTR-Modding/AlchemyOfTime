@@ -384,12 +384,12 @@ AddOnSettings parseAddOns_(const YAML::Node& config)
     return settings;
 }
 
-std::map<FormID, AddOnSettings> parseAddOns(const std::string& _type)
+std::unordered_map<FormID, AddOnSettings> parseAddOns(const std::string& _type)
 {
     const auto folder_path = "Data/SKSE/Plugins/AlchemyOfTime/" + _type + "/addon";
     std::filesystem::create_directories(folder_path);
 
-	std::map<FormID, AddOnSettings> _addon_settings;
+	std::unordered_map<FormID, AddOnSettings> _addon_settings;
 
     for (const auto& entry : std::filesystem::directory_iterator(folder_path)) {
         if (!entry.is_regular_file() || entry.path().extension() != ".yml") continue;
@@ -711,7 +711,7 @@ DefaultSettings parseDefaults_(const YAML::Node& config)
 }
 
 
-DefaultSettings parseDefaults(std::string _type)
+DefaultSettings parseDefaults(const std::string& _type)
 { 
     const auto filename = "Data/SKSE/Plugins/AlchemyOfTime/" + _type + "/AoT_default" + _type + ".yml";
 
@@ -788,9 +788,9 @@ CustomSettings parseCustomsParallel(const std::string& _type)
     return combinedSettings;
 }
 
-std::map<FormID, AddOnSettings> parseAddOnsParallel(const std::string& _type)
+std::unordered_map<FormID, AddOnSettings> parseAddOnsParallel(const std::string& _type)
 {
-	std::map<FormID, AddOnSettings> combinedSettings;
+	std::unordered_map<FormID, AddOnSettings> combinedSettings;
 	const auto folder_path = "Data/SKSE/Plugins/AlchemyOfTime/" + _type + "/addon";
 	std::filesystem::create_directories(folder_path);
 	// Gather all .yml filenames in the directory
@@ -818,7 +818,7 @@ std::map<FormID, AddOnSettings> parseAddOnsParallel(const std::string& _type)
 }
 
 
-void processCustomFile(std::string filename, CustomSettings& combinedSettings)
+void processCustomFile(const std::string& filename, CustomSettings& combinedSettings)
 {
 	CustomSettings fileResult;
     if (FileIsEmpty(filename)) {
@@ -863,11 +863,11 @@ void processCustomFile(std::string filename, CustomSettings& combinedSettings)
     }
 }
 
-void processAddOnFile(std::string filename, std::map<FormID, AddOnSettings>& combinedSettings)
+void processAddOnFile(const std::string& filename, std::unordered_map<FormID, AddOnSettings>& combinedSettings)
 {
     logger::info("Parsing file: {}", filename);
 
-	std::map<FormID, AddOnSettings> fileResult;
+	std::unordered_map<FormID, AddOnSettings> fileResult;
 
     if (FileIsEmpty(filename)) {
 		logger::info("File is empty: {}", filename);
@@ -938,7 +938,7 @@ void mergeCustomSettings(CustomSettings& dest, const CustomSettings& src) {
     }
 }
 
-void mergeAddOnSettings(std::map<FormID, AddOnSettings>& dest, const std::map<FormID, AddOnSettings>& src)
+void mergeAddOnSettings(std::unordered_map<FormID, AddOnSettings>& dest, const std::unordered_map<FormID, AddOnSettings>& src)
 {
 	for (const auto& [formID, settings] : src) {
 		dest[formID] = settings;
