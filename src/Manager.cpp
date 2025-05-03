@@ -184,8 +184,14 @@ Source* Manager::ForceGetSource(const FormID some_formid)
         return nullptr;
     }
     
-	if (const auto* customSetting = Settings::GetCustomSetting(some_form)) return MakeSource(some_formid, customSetting);
-	if (const auto* defaultSetting = Settings::GetDefaultSetting(some_formid)) return MakeSource(some_formid, defaultSetting);
+    if (const auto* customSetting = Settings::GetCustomSetting(some_form)) {
+        return MakeSource(some_formid, customSetting);
+    }
+	if (const auto* defaultSetting = Settings::GetDefaultSetting(some_formid)) {
+        if (defaultSetting->durations.at(0)<=10000.f || Settings::GetAddOnSettings(some_form)) {
+            return MakeSource(some_formid, defaultSetting);
+        }
+	}
 
     // stage item olarak dusunulduyse, custom a baslangic itemi olarak koymali
     return nullptr;
@@ -997,8 +1003,11 @@ void Manager::Reset()
     logger::info("Resetting manager...");
 	Stop();
 	ClearWOUpdateQueue();
-    for (auto& src : sources) src.Reset();
-    sources.clear();
+    {
+	    std::unique_lock lock(sourceMutex_);
+        for (auto& src : sources) src.Reset();
+        sources.clear();
+    }
     // external_favs.clear();         // we will update this in ReceiveData
     handle_crafting_instances.clear();
     faves_list.clear();
@@ -1013,7 +1022,7 @@ void Manager::Reset()
 
 void Manager::HandleFormDelete(const FormID a_refid)
 {
-
+	std::unique_lock lock(sourceMutex_);
     for (auto& src : sources) {
         if (src.data.contains(a_refid)) {
             logger::warn("HandleFormDelete: Formid {}", a_refid);
@@ -1026,13 +1035,18 @@ void Manager::HandleFormDelete(const FormID a_refid)
 
 void Manager::SendData()
 {
-    // std::lock_guard<std::mutex> lock(mutex);
     logger::info("--------Sending data---------");
     Print();
     Clear();
 
     int n_instances = 0;
+	std::shared_lock lock(sourceMutex_);
     for (const auto& src : sources) {
+		if (src.GetStageDuration(0) >= 10000.f) {
+            if (src.settings.transformers_order.size()==0 && src.settings.delayers_order.size()==0) {
+			    continue;
+            }
+		}
         for (auto& [loc, instances] : src.data) {
             if (instances.empty()) continue;
             const SaveDataLHS lhs{{src.formid, src.editorid}, loc};

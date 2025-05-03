@@ -143,8 +143,8 @@ public:
         return sources;
     }
 
-    std::map<RefID, float> GetUpdateQueue() {
-		std::map<RefID, float> _ref_stops_copy;
+    std::unordered_map<RefID, float> GetUpdateQueue() {
+		std::unordered_map<RefID, float> _ref_stops_copy;
 		std::shared_lock lock(queueMutex_);
 		for (const auto& [key, value] : _ref_stops_) {
 			_ref_stops_copy[key] = value.stop_time;
