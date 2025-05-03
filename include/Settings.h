@@ -185,7 +185,7 @@ void mergeAddOnSettings(std::map<FormID, AddOnSettings>& dest, const std::map<Fo
 
 void LoadINISettings();
 void LoadJSONSettings();
-void LoadSettings();
+[[maybe_unused]] void LoadSettings();
 void LoadSettingsParallel();
 void SaveSettings();
 
