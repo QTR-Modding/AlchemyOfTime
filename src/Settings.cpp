@@ -1,5 +1,4 @@
 #include "Settings.h"
-
 #include <future>
 #include <utility>
 #include "SimpleIni.h"
@@ -245,6 +244,7 @@ std::vector<std::string> LoadExcludeList(const std::string& postfix)
 AddOnSettings parseAddOns_(const YAML::Node& config)
 {
     AddOnSettings settings;
+    constexpr int warnings_limit = 5;
 
     // containers
     if (config["containers"] && !config["containers"].IsNull()) {
@@ -257,13 +257,17 @@ AddOnSettings parseAddOns_(const YAML::Node& config)
     } 
 
     // delayers
+    int n_warnings = 0;
     for (const auto& modulator : config["timeModulators"]) {
         const auto temp_formeditorid = modulator["FormEditorID"] && !modulator["FormEditorID"].IsNull()
                                             ? modulator["FormEditorID"].as<std::string>()
                                             : "";
         const FormID temp_formid = GetFormEditorIDFromString(temp_formeditorid);
 		if (!temp_formid) {
-			logger::warn("timeModulators: Formid is 0 for {}", temp_formeditorid);
+			if (n_warnings < warnings_limit) {
+			    logger::warn("timeModulators: Formid is 0 for {}", temp_formeditorid);
+            }
+			n_warnings++;
 			continue;
 		}
         settings.delayers[temp_formid] = !modulator["magnitude"].IsNull() ? modulator["magnitude"].as<float>() : 1;
@@ -304,12 +308,16 @@ AddOnSettings parseAddOns_(const YAML::Node& config)
     }
 
 	// transformers
+	n_warnings = 0;
     for (const auto& transformer : config["transformers"]) {
         const auto temp_formeditorid = transformer["FormEditorID"] &&
                                         !transformer["FormEditorID"].IsNull() ? transformer["FormEditorID"].as<std::string>() : "";
         const FormID temp_formid = GetFormEditorIDFromString(temp_formeditorid);
 		if (!temp_formid) {
-			logger::warn("Transformer Formid is 0 for {}", temp_formeditorid);
+			if (n_warnings < warnings_limit) {
+				logger::warn("transformers: Formid is 0 for {}", temp_formeditorid);
+			}
+			n_warnings++;
 			continue;
 		}
         const auto temp_finalFormEditorID =
@@ -564,6 +572,8 @@ DefaultSettings parseDefaults_(const YAML::Node& config)
     } 
 
     // delayers
+	constexpr int warnings_limit = 10;
+    int n_warnings = 0;
 #ifndef NDEBUG
     logger::trace("timeModulators");
 #endif
@@ -573,7 +583,10 @@ DefaultSettings parseDefaults_(const YAML::Node& config)
                                             : "";
         const FormID temp_formid = GetFormEditorIDFromString(temp_formeditorid);
 		if (!temp_formid) {
-			logger::warn("timeModulators: Formid is 0 for {}", temp_formeditorid);
+			if (n_warnings < warnings_limit) {
+				logger::warn("timeModulators: Formid is 0 for {}", temp_formeditorid);
+			}
+			n_warnings++;
 			continue;
 		}
         settings.delayers[temp_formid] = !modulator["magnitude"].IsNull() ? modulator["magnitude"].as<float>() : 1;
@@ -615,12 +628,16 @@ DefaultSettings parseDefaults_(const YAML::Node& config)
     }
 
 	// transformers
+	n_warnings = 0;
     for (const auto& transformer : config["transformers"]) {
         const auto temp_formeditorid = transformer["FormEditorID"] &&
                                         !transformer["FormEditorID"].IsNull() ? transformer["FormEditorID"].as<std::string>() : "";
         const FormID temp_formid = GetFormEditorIDFromString(temp_formeditorid);
 		if (!temp_formid) {
-			logger::warn("Transformer Formid is 0 for {}", temp_formeditorid);
+			if (n_warnings < warnings_limit) {
+				logger::warn("transformers: Formid is 0 for {}", temp_formeditorid);
+			}
+			n_warnings++;
 			continue;
 		}
         const auto temp_finalFormEditorID =
