@@ -193,26 +193,24 @@ struct AddOnSettings {
 
     [[nodiscard]] bool CheckIntegrity();
 
-    [[nodiscard]] bool IsEmpty();
-
 private:
     bool init_failed = false;
 };
 
 struct DefaultSettings {
-    std::unordered_map<StageNo, FormID> items = {};
-    std::unordered_map<StageNo, Duration> durations = {};
-    std::unordered_map<StageNo, StageName> stage_names = {};
-    std::unordered_map<StageNo, bool> crafting_allowed = {};
-    std::unordered_map<StageNo, int> costoverrides = {};
-    std::unordered_map<StageNo, float> weightoverrides = {};
-    std::unordered_map<StageNo, std::vector<StageEffect>> effects = {};
+    std::map<StageNo, FormID> items = {};
+    std::map<StageNo, Duration> durations = {};
+    std::map<StageNo, StageName> stage_names = {};
+    std::map<StageNo, bool> crafting_allowed = {};
+    std::map<StageNo, int> costoverrides = {};
+    std::map<StageNo, float> weightoverrides = {};
+    std::map<StageNo, std::vector<StageEffect>> effects = {};
     std::vector<StageNo> numbers = {};
     FormID decayed_id = 0;
-    std::unordered_map<StageNo, uint32_t> colors = {};
-	std::unordered_map<StageNo, FormID> sounds = {};
-	std::unordered_map<StageNo, FormID> artobjects = {};
-	std::unordered_map<StageNo, FormID> effect_shaders = {};
+    std::map<StageNo, uint32_t> colors = {};
+	std::map<StageNo, FormID> sounds = {};
+	std::map<StageNo, FormID> artobjects = {};
+	std::map<StageNo, FormID> effect_shaders = {};
 
 
     std::unordered_set<FormID> containers;
