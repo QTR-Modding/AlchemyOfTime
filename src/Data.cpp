@@ -1,5 +1,4 @@
 #include "Data.h"
-
 #include "DrawDebug.h"
 
 void Source::Init(const DefaultSettings* defaultsettings) {
@@ -125,13 +124,14 @@ void Source::UpdateAddons()
 	}
 }
 
-std::map<RefID, std::vector<StageUpdate>> Source::UpdateAllStages(const std::vector<RefID>& filter, const float time) {
+std::unordered_map<RefID, std::vector<StageUpdate>> Source::UpdateAllStages(
+    const std::vector<RefID>& filter, const float time) {
     if (init_failed) {
         logger::critical("UpdateAllStages: Initialisation failed.");
         return {};
     }
     // save the updated instances
-    std::map<RefID, std::vector<StageUpdate>> updated_instances;
+    std::unordered_map<RefID, std::vector<StageUpdate>> updated_instances;
     if (data.empty()) {
 		logger::warn("No data found for source {}", editorid);
 		return updated_instances;
@@ -224,12 +224,11 @@ const Stage* Source::GetStageSafe(const StageNo no) const
 }
 
 Duration Source::GetStageDuration(const StageNo no) const {
-    if (!IsStageNo(no) || !stages.contains(no)) return 0;
+    if (!stages.contains(no)) return 0;
     return stages.at(no).duration;
 }
 
 std::string Source::GetStageName(const StageNo no) const {
-    if (!IsStageNo(no)) return "";
 	if (stages.contains(no)) return stages.at(no).name;
 	return "";
 }
@@ -1081,16 +1080,15 @@ FormID Source::SearchNearbyModulators(const RE::TESObjectREFR* a_obj, const std:
 			SearchModulatorInCell(result, a_obj, skycell, candidates_set, Settings::search_radius);
 		}
 	}
-
 	return result;
 }
 
-static bool SearchModulatorInCell_Sub(const RE::TESObjectREFR* a_origin, const RE::TESObjectREFR* ref) {
+static bool SearchModulatorInCell_Sub(const RE::TESObjectREFR* a_origin, const RE::TESObjectREFR* ref, float proximity=Settings::proximity_range) {
 #ifndef NDEBUG
 	draw_line(WorldObject::GetPosition(ref), WorldObject::GetPosition(RE::PlayerCharacter::GetSingleton()),3.f, glm::vec4(0.f, 0.f, 1.f, 1.f));
 	WorldObject::DrawBoundingBox(ref);
 #endif
-    if (!WorldObject::AreClose(a_origin, ref, Settings::proximity_range)) {
+    if (!WorldObject::AreClose(a_origin, ref, proximity)) {
 		return false;
     }
 #ifndef NDEBUG
@@ -1109,7 +1107,7 @@ void Source::SearchModulatorInCell(FormID& result, const RE::TESObjectREFR* a_or
 			result = form_id;
 	        return RE::BSContainer::ForEachResult::kStop;
         }
-        if (ref->IsWater() && a_base->GetWaterType() && modulators.contains(a_base->GetWaterType()->GetFormID()) && SearchModulatorInCell_Sub(a_origin,ref)) {
+        if (ref->IsWater() && a_base->GetWaterType() && modulators.contains(a_base->GetWaterType()->GetFormID()) && a_origin->IsInWater()) {
 			result = a_base->GetWaterType()->GetFormID();
 			return RE::BSContainer::ForEachResult::kStop;
         }

@@ -1,10 +1,9 @@
 #pragma once
-#include <algorithm>
 #include "DynamicFormTracker.h"
 
 struct Source {
     
-    using SourceData = std::map<RefID,std::vector<StageInstance>>;
+    using SourceData = std::unordered_map<RefID,std::vector<StageInstance>>;
     using StageDict = std::map<StageNo, Stage>;
 
     SourceData data;
@@ -28,7 +27,7 @@ struct Source {
 
     [[nodiscard]] RE::TESBoundObject* GetBoundObject() const { return GetFormByID<RE::TESBoundObject>(formid, editorid); };
 
-    std::map<RefID,std::vector<StageUpdate>> UpdateAllStages(const std::vector<RefID>& filter, float time);
+    std::unordered_map<RefID, std::vector<StageUpdate>> UpdateAllStages(const std::vector<RefID>& filter, float time);
 
     // daha once yaratilmis bi stage olmasi gerekiyo
     bool IsStage(FormID some_formid);
