@@ -1083,19 +1083,21 @@ FormID Source::SearchNearbyModulators(const RE::TESObjectREFR* a_obj, const std:
 	return result;
 }
 
-static bool SearchModulatorInCell_Sub(const RE::TESObjectREFR* a_origin, const RE::TESObjectREFR* ref, float proximity=Settings::proximity_range) {
+namespace {
+    bool SearchModulatorInCell_Sub(const RE::TESObjectREFR* a_origin, const RE::TESObjectREFR* ref, const float proximity=Settings::proximity_range) {
 #ifndef NDEBUG
-	draw_line(WorldObject::GetPosition(ref), WorldObject::GetPosition(RE::PlayerCharacter::GetSingleton()),3.f, glm::vec4(0.f, 0.f, 1.f, 1.f));
-	WorldObject::DrawBoundingBox(ref);
+        draw_line(WorldObject::GetPosition(ref), WorldObject::GetPosition(RE::PlayerCharacter::GetSingleton()),3.f, glm::vec4(0.f, 0.f, 1.f, 1.f));
+        WorldObject::DrawBoundingBox(ref);
 #endif
-    if (!WorldObject::AreClose(a_origin, ref, proximity)) {
-		return false;
+        if (!WorldObject::AreClose(a_origin, ref, proximity)) {
+	        return false;
+        }
+#ifndef NDEBUG
+        logger::info("Found modulator in proximity: {}", clib_util::editorID::get_editorID(ref->GetBaseObject()));
+#endif
+        return true;
     }
-#ifndef NDEBUG
-	logger::info("Found modulator in proximity: {}", clib_util::editorID::get_editorID(ref->GetBaseObject()));
-#endif
-    return true;
-}
+};
 
 void Source::SearchModulatorInCell(FormID& result, const RE::TESObjectREFR* a_origin,
                                    const RE::TESObjectCELL* a_cell, const std::unordered_set<FormID>& modulators, const float range) {
@@ -1106,10 +1108,6 @@ void Source::SearchModulatorInCell(FormID& result, const RE::TESObjectREFR* a_or
         if (const auto form_id = a_base->GetFormID(); modulators.contains(form_id) && SearchModulatorInCell_Sub(a_origin,ref)) {
 			result = form_id;
 	        return RE::BSContainer::ForEachResult::kStop;
-        }
-        if (ref->IsWater() && a_base->GetWaterType() && modulators.contains(a_base->GetWaterType()->GetFormID()) && a_origin->IsInWater()) {
-			result = a_base->GetWaterType()->GetFormID();
-			return RE::BSContainer::ForEachResult::kStop;
         }
         return RE::BSContainer::ForEachResult::kContinue;
         };

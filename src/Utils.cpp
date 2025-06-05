@@ -139,16 +139,16 @@ std::string decodeString(const std::vector<std::pair<int, bool>>& encodedValues)
 void hexToRGBA(const uint32_t color_code, RE::NiColorA& nicolora) {
     if (color_code > 0xFFFFFF) {
         // 8-digit hex (RRGGBBAA)
-        nicolora.red   = (color_code >> 24) & 0xFF; // Bits 24-31
-        nicolora.green = (color_code >> 16) & 0xFF; // Bits 16-23
-        nicolora.blue  = (color_code >> 8)  & 0xFF; // Bits 8-15
+        nicolora.red   = static_cast<float>(color_code >> 24 & 0xFF); // Bits 24-31
+        nicolora.green = static_cast<float>(color_code >> 16 & 0xFF); // Bits 16-23
+        nicolora.blue  = static_cast<float>(color_code >> 8  & 0xFF); // Bits 8-15
         const uint8_t alphaInt = color_code & 0xFF;       // Bits 0-7
         nicolora.alpha = static_cast<float>(alphaInt) / 255.0f;
     } else {
         // 6-digit hex (RRGGBB)
-        nicolora.red   = (color_code >> 16) & 0xFF; // Bits 16-23
-        nicolora.green = (color_code >> 8)  & 0xFF; // Bits 8-15
-        nicolora.blue  = color_code & 0xFF;         // Bits 0-7
+        nicolora.red   = static_cast<float>(color_code >> 16 & 0xFF); // Bits 16-23
+        nicolora.green = static_cast<float>(color_code >> 8  & 0xFF); // Bits 8-15
+        nicolora.blue  = static_cast<float>(color_code & 0xFF);         // Bits 0-7
         nicolora.alpha = 1.0f;                      // Default to fully opaque
     }
 	nicolora.red /= 255.0f;
@@ -156,19 +156,22 @@ void hexToRGBA(const uint32_t color_code, RE::NiColorA& nicolora) {
 	nicolora.blue /= 255.0f;
 }
 
-bool isValidHexWithLength7or8(const char* input)
-{
-    std::string inputStr(input);
+namespace {
+    bool isValidHexWithLength7or8(std::string_view input)
+    {
+        if (input.starts_with("0x") || input.starts_with("0X")) {
+            input.remove_prefix(2);
+        }
 
-    if (inputStr.substr(0, 2) == "0x") {
-        // Remove "0x" from the beginning of the string
-        inputStr = inputStr.substr(2);
+        if (input.length() < 7 || input.length() > 8) {
+            return false;
+        }
+
+        return std::ranges::all_of(input, [](const char c) {
+            return std::isxdigit(static_cast<unsigned char>(c));
+        });
     }
-
-    const std::regex hexRegex("^[0-9A-Fa-f]{7,8}$");  // Allow 7 to 8 characters
-    const bool isValid = std::regex_match(inputStr, hexRegex);
-    return isValid;
-}
+};
 
 std::string GetEditorID(const FormID a_formid) {
     if (const auto form = RE::TESForm::LookupByID(a_formid)) {
@@ -188,7 +191,7 @@ FormID GetFormEditorIDFromString(const std::string& formEditorId)
 		if (const auto form = RE::TESForm::LookupByID(formid)) return form->GetFormID();
 	}
 
-    if (isValidHexWithLength7or8(formEditorId.c_str())) {
+    if (isValidHexWithLength7or8(formEditorId)) {
         int form_id_;
         std::stringstream ss;
         ss << std::hex << formEditorId;
@@ -206,6 +209,7 @@ FormID GetFormEditorIDFromString(const std::string& formEditorId)
     if (const auto temp_form = GetFormByID(0, formEditorId)) return temp_form->GetFormID();
     return 0;
 }
+
 
 inline bool FormIsOfType(const RE::TESForm* form, const RE::FormType type)
 {
@@ -282,7 +286,7 @@ void FavoriteItem(const RE::TESBoundObject* item, RE::TESObjectREFR* inventory_o
     const auto inventory_changes = inventory_owner->GetInventoryChanges();
     const auto entries = inventory_changes->entryList;
     for (auto it = entries->begin(); it != entries->end(); ++it) {
-        if (!(*it)) {
+        if (!*it) {
 			logger::error("Item entry is null");
 			continue;
 		}
@@ -307,7 +311,7 @@ void FavoriteItem(const RE::TESBoundObject* item, RE::TESObjectREFR* inventory_o
                 //inventory_changes->SetFavorite((*it), nullptr);
             } else if (xLists->front()) {
                 logger::trace("ExtraLists found");
-                inventory_changes->SetFavorite((*it), xLists->front());
+                inventory_changes->SetFavorite(*it, xLists->front());
             }
             return;
         }
@@ -345,7 +349,7 @@ void EquipItem(const RE::TESBoundObject* item, const bool unequip)
     const auto entries = inventory_changes->entryList;
     for (auto it = entries->begin(); it != entries->end(); ++it) {
         if (const auto formid = (*it)->object->GetFormID(); formid == item->GetFormID()) {
-            if (!(*it) || !(*it)->extraLists) {
+            if (!*it || !(*it)->extraLists) {
 				logger::error("Item extraLists is null");
 				return;
 			}
@@ -818,7 +822,7 @@ bool WorldObject::IsInTriangle(const RE::NiPoint3& A, const RE::NiPoint3& B, con
     const float v = (dot00 * dot12 - dot01 * dot02) / denom;
 
     // Check if point is inside triangle
-    return (u >= 0) && (v >= 0) && (u + v <= 1);
+    return u >= 0 && v >= 0 && u + v <= 1;
 }
 
 namespace {

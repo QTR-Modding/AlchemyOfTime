@@ -909,7 +909,6 @@ void processAddOnFile(const std::string& filename, std::unordered_map<FormID, Ad
 			std::set<FormID> owners;
             for (const auto& owner : Node_["forms"]) {
                 if (const auto formID = GetFormEditorIDFromString(owner.as<std::string>())) {
-                    logger::error("Formid: {}", formID);
                     owners.insert(formID);
                 }
 				else logger::error("Formid could not be obtained for {}", owner.as<std::string>());

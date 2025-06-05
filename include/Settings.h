@@ -37,7 +37,7 @@ namespace Settings {
 	inline std::atomic unowned_objects_evolve = false;
     inline float proximity_range = 40.f;
 
-    inline float search_radius = -1.f;
+    inline float search_radius = 1000.f;
     inline float search_scaling = 0.5f; // for IsNextTo
     namespace Ticker {
         enum Intervals {
