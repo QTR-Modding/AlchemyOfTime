@@ -145,7 +145,8 @@ namespace DebugAPI_IMPL {
 
     glm::vec3 GetCameraPos() {
         const auto playerCam = RE::PlayerCamera::GetSingleton();
-        return glm::vec3(playerCam->pos.x, playerCam->pos.y, playerCam->pos.z);
+        const auto pos = playerCam->GetRuntimeData2().pos;
+        return glm::vec3(pos.x, pos.y, pos.z);
     }
 
     glm::quat GetCameraRot() {

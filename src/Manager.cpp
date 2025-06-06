@@ -1064,7 +1064,7 @@ void Manager::SendData()
         }
     }
     logger::info("Data sent. Number of instances: {}", n_instances);
-};
+}
 
 void Manager::HandleLoc(RE::TESObjectREFR* loc_ref)
 {
