@@ -628,7 +628,7 @@ void Source::CleanUpData()
                 (it->start_time > curr_time) ||
                 (it->xtra.is_decayed || !IsStageNo(it->no));
 
-            const auto decay_time =  GetDecayTime(*it);
+            const auto decay_time = should_erase ? 0.f : GetDecayTime(*it);
             if (should_erase || 
                 decay_time > 0.f && curr_time-decay_time > static_cast<float>(Settings::nForgettingTime)) {
                 it = instances.erase(it);
