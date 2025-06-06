@@ -1,5 +1,7 @@
 #include "CustomObjects.h"
 
+#include "Settings.h"
+
 bool StageInstance::operator==(const StageInstance& other) const
 {
     return no == other.no && count == other.count && 
@@ -43,7 +45,7 @@ float StageInstance::GetElapsed(const float curr_time) const {
 }
 
 float StageInstance::GetDelaySlope() const {
-    return std::min(std::max(-1000.f, _delay_mag), 1000.f);
+    return std::min(std::max(-Settings::max_modulator_strength, _delay_mag), Settings::max_modulator_strength);
 }
 
 void StageInstance::SetNewStart(const float curr_time, const float overshot)

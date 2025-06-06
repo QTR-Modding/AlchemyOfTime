@@ -38,6 +38,7 @@ namespace Settings {
     inline float proximity_range = 40.f;
 
     inline float search_radius = 1000.f;
+    inline float max_modulator_strength = 500000.f;
     inline float search_scaling = 0.5f; // for IsNextTo
     namespace Ticker {
         enum Intervals {
