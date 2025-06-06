@@ -41,7 +41,7 @@ void OnMessage(SKSE::MessagingInterface::Message* message) {
         eventSourceHolder->AddEventSink<RE::TESWaitStopEvent>(eventSink);
         eventSourceHolder->AddEventSink<RE::TESFormDeleteEvent>(eventSink);
         SKSE::GetCrosshairRefEventSource()->AddEventSink(eventSink);
-        RE::PlayerCharacter::GetSingleton()->AsBGSActorCellEventSource()->AddEventSink(eventSink);
+        RE::PlayerCharacter::GetSingleton()->AddEventSink<RE::BGSActorCellEvent>(eventSink);
         logger::info("Event sinks added.");
         
         // 5) Start MCP
