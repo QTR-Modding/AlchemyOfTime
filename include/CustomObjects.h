@@ -1,6 +1,5 @@
 #pragma once
 #include <unordered_set>
-
 #include "Utils.h"
 
 using Duration = float;
@@ -118,6 +117,7 @@ struct StageInstance {
 
     [[nodiscard]] inline float GetDelaySlope() const;
 
+    void SetNewStart(float start_t);
     void SetNewStart(float curr_time, float overshot);
 
     void SetDelay(float time, float delay, FormID formid);
@@ -173,21 +173,24 @@ struct StageUpdate {
 
 struct AddOnSettings {
     std::unordered_set<FormID> containers;
-    std::unordered_map<FormID,float> delayers;
-    std::vector<FormID> delayers_order;
-    std::unordered_map<FormID, std::tuple<FormID, Duration, std::vector<StageNo>>> transformers;
-	std::vector<FormID> transformers_order;
-    std::unordered_map<FormID,uint32_t> delayer_colors;
-    std::unordered_map<FormID,uint32_t> transformer_colors;
-    std::unordered_map<FormID,FormID> delayer_sounds;
-    std::unordered_map<FormID,FormID> transformer_sounds;
-	std::unordered_map<FormID, FormID> delayer_artobjects;
-	std::unordered_map<FormID, FormID> transformer_artobjects;
-	std::unordered_map<FormID, FormID> delayer_effect_shaders;
-	std::unordered_map<FormID, FormID> transformer_effect_shaders;
-    std::unordered_map<FormID,std::unordered_set<FormID>> delayer_containers;
-    std::unordered_map<FormID,std::unordered_set<FormID>> transformer_containers;
 
+    std::unordered_map<FormID,float> delayers;
+    std::unordered_set<FormID> delayers_order;
+    std::unordered_map<FormID,uint32_t> delayer_colors;
+    std::unordered_map<FormID,FormID> delayer_sounds;
+	std::unordered_map<FormID, FormID> delayer_artobjects;
+	std::unordered_map<FormID, FormID> delayer_effect_shaders;
+    std::unordered_map<FormID,std::unordered_set<FormID>> delayer_containers;
+	std::unordered_map<FormID, std::unordered_set<StageNo>> delayer_allowed_stages;
+
+    std::unordered_map<FormID, std::pair<FormID, Duration>> transformers;
+	std::unordered_set<FormID> transformers_order;
+    std::unordered_map<FormID,uint32_t> transformer_colors;
+    std::unordered_map<FormID,FormID> transformer_sounds;
+	std::unordered_map<FormID, FormID> transformer_artobjects;
+	std::unordered_map<FormID, FormID> transformer_effect_shaders;
+    std::unordered_map<FormID,std::unordered_set<FormID>> transformer_containers;
+    std::unordered_map<FormID, std::unordered_set<StageNo>> transformer_allowed_stages;
 
     [[nodiscard]] bool IsHealthy() const { return !init_failed; }
 
@@ -197,7 +200,7 @@ private:
     bool init_failed = false;
 };
 
-struct DefaultSettings {
+struct DefaultSettings : AddOnSettings {
     std::map<StageNo, FormID> items = {};
     std::map<StageNo, Duration> durations = {};
     std::map<StageNo, StageName> stage_names = {};
@@ -212,24 +215,6 @@ struct DefaultSettings {
 	std::map<StageNo, FormID> artobjects = {};
 	std::map<StageNo, FormID> effect_shaders = {};
 
-
-    std::unordered_set<FormID> containers;
-    std::unordered_map<FormID,float> delayers;
-    std::vector<FormID> delayers_order;
-    std::unordered_map<FormID, std::tuple<FormID, Duration, std::vector<StageNo>>> transformers;
-	std::vector<FormID> transformers_order;
-    std::unordered_map<FormID,uint32_t> delayer_colors;
-    std::unordered_map<FormID,uint32_t> transformer_colors;
-	std::unordered_map<FormID, FormID> delayer_sounds;
-	std::unordered_map<FormID, FormID> transformer_sounds;
-	std::unordered_map<FormID, FormID> delayer_artobjects;
-	std::unordered_map<FormID, FormID> transformer_artobjects;
-	std::unordered_map<FormID, FormID> delayer_effect_shaders;
-	std::unordered_map<FormID, FormID> transformer_effect_shaders;
-    std::unordered_map<FormID,std::unordered_set<FormID>> delayer_containers;
-    std::unordered_map<FormID,std::unordered_set<FormID>> transformer_containers;
-    
-
     [[nodiscard]] bool IsHealthy() const { return !init_failed; }
 
     [[nodiscard]] bool CheckIntegrity();
@@ -238,6 +223,7 @@ struct DefaultSettings {
 
     void Add(AddOnSettings& addon);
     static void AddHelper(std::unordered_map<FormID, FormID>& dest, const std::unordered_map<FormID, FormID>& src);
+    static void AddHelper(std::unordered_set<FormID>& dest, const std::unordered_set<FormID>& src);
 
 private:
     bool init_failed = false;
@@ -330,4 +316,7 @@ struct RefStop {
 
 	void Update(const RefStop& other);
 
+    RE::TESObjectREFR* GetRef() const {
+        return RE::TESForm::LookupByID<RE::TESObjectREFR>(ref_id);
+    }
 };

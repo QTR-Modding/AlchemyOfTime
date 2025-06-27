@@ -1,5 +1,4 @@
 #include "CustomObjects.h"
-
 #include "Settings.h"
 
 bool StageInstance::operator==(const StageInstance& other) const
@@ -46,6 +45,13 @@ float StageInstance::GetElapsed(const float curr_time) const {
 
 float StageInstance::GetDelaySlope() const {
     return std::min(std::max(-Settings::max_modulator_strength, _delay_mag), Settings::max_modulator_strength);
+}
+
+void StageInstance::SetNewStart(const float start_t)
+{
+    start_time = start_t;
+    _delay_start = start_time;
+    _elapsed = 0;
 }
 
 void StageInstance::SetNewStart(const float curr_time, const float overshot)
@@ -179,12 +185,17 @@ bool DefaultSettings::CheckIntegrity() {
         init_failed = true;
         return false;
     }
-    for (const auto& [_formID, _transformer] : transformers) {
-        const FormID _finalFormEditorID = std::get<0>(_transformer);
-        const Duration _duration = std::get<1>(_transformer);
-        std::vector<StageNo> _allowedStages = std::get<2>(_transformer);
-        if (!GetFormByID(_formID) || !GetFormByID(_finalFormEditorID)) {
+    for (const auto& [a_formID, _transformer] : transformers) {
+        const FormID _finalFormEditorID = _transformer.first;
+        const Duration _duration = _transformer.second;
+        const auto& _allowedStages = transformer_allowed_stages.at(a_formID);
+        if (!GetFormByID(a_formID) || !GetFormByID(_finalFormEditorID)) {
 			logger::error("Formid not found.");
+			init_failed = true;
+			return false;
+		}
+		if (!transformers_order.contains(a_formID)) {
+			logger::error("Transformer formid {:x} not found in transformers_order.", a_formID);
 			init_failed = true;
 			return false;
 		}
@@ -208,17 +219,35 @@ bool DefaultSettings::CheckIntegrity() {
 
 	}
 
-	for (const auto& _formID : delayers | std::views::keys) {
-		if (!GetFormByID(_formID)) {
-			logger::error("Delayer formid {} not found.", _formID);
+	for (const auto& a_formID : delayers | std::views::keys) {
+		const auto& _allowedStages = delayer_allowed_stages.at(a_formID);
+		if (!GetFormByID(a_formID)) {
+			logger::error("Delayer formid {:x} not found.", a_formID);
 			init_failed = true;
 			return false;
+		}
+		if (!delayers_order.contains(a_formID)) {
+			logger::error("Delayer formid {:x} not found in delayers_order.", a_formID);
+			init_failed = true;
+			return false;
+		}
+		if (_allowedStages.empty()) {
+			logger::error("Allowed stages is empty for delayer formid {:x}.", a_formID);
+			init_failed = true;
+			return false;
+		}
+		for (const auto& _stage : _allowedStages) {
+			if (!Vector::HasElement<StageNo>(numbers, _stage)) {
+				logger::error("Stage {} not found in numbers for delayer formid {:x}.", _stage, a_formID);
+				init_failed = true;
+				return false;
+			}
 		}
 	}
 
     for (const auto& _formID : containers) {
 		if (!GetFormByID(_formID)) {
-			logger::error("Container formid {} not found.", _formID);
+			logger::error("Container formid {:x} not found.", _formID);
 			init_failed = true;
 			return false;
 		}
@@ -235,55 +264,64 @@ bool DefaultSettings::IsEmpty()
 	return false;
 }
 
+
+// check it
 void DefaultSettings::Add(AddOnSettings& addon)
 {
     if (addon.transformers.empty()) {
 		logger::error("Transformers is empty.");
     }
-	for (const auto& _formID : addon.containers) {
-        if (!_formID) {
+	// containers
+	AddHelper(containers,addon.containers);
+
+	// delayers
+	for (const auto& [a_formID, _delay] : addon.delayers) {
+        if (!a_formID) {
             logger::critical("AddOn has null formid.");
 	        continue;
         }
-		containers.insert(_formID);
-    }
-	for (const auto& [_formID, _delay] : addon.delayers) {
-        if (!_formID) {
-            logger::critical("AddOn has null formid.");
-	        continue;
-        }
-        if (!delayers.contains(_formID)) {
-			delayers_order.push_back(_formID);
+        if (!delayers.contains(a_formID)) {
+			delayers_order.insert(a_formID);
 		}
-		delayers[_formID] = _delay;
+		delayers[a_formID] = _delay;
+
+		if (addon.delayer_allowed_stages.contains(a_formID)) {
+			AddHelper(delayer_allowed_stages[a_formID],addon.delayer_allowed_stages.at(a_formID));
+		}
+		if (delayer_allowed_stages.at(a_formID).empty()) {
+			delayer_allowed_stages[a_formID] = std::unordered_set(numbers.begin(), numbers.end());
+		}
     }
-	for (auto& [_formID, _transformer] : addon.transformers) {
-        if (!_formID) {
+	// transformers
+	for (auto& [a_formID, _transformer] : addon.transformers) {
+        if (!a_formID) {
             logger::critical("AddOn has null formid.");
 	        continue;
         }
-		if (!transformers.contains(_formID)) {
-			transformers_order.push_back(_formID);
+		if (!transformers.contains(a_formID)) {
+			transformers_order.insert(a_formID);
         }
-        if (auto& allowed_stages = std::get<2>(_transformer); allowed_stages.empty()) {
-			for (const auto& key : numbers) {
-				allowed_stages.push_back(key);
-			}
+		transformers[a_formID] = _transformer;
+		if (addon.transformer_allowed_stages.contains(a_formID)) {
+			AddHelper(transformer_allowed_stages[a_formID], addon.transformer_allowed_stages.at(a_formID));
 		}
-		transformers[_formID] = _transformer;
+		if (transformer_allowed_stages.at(a_formID).empty()) {
+			transformer_allowed_stages.at(a_formID) = std::unordered_set(numbers.begin(), numbers.end());
+		}
     }
 
 	AddHelper(delayer_colors, addon.delayer_colors);
-	AddHelper(transformer_colors, addon.transformer_colors);
 	AddHelper(delayer_sounds, addon.delayer_sounds);
-	AddHelper(transformer_sounds, addon.transformer_sounds);
 	AddHelper(delayer_artobjects, addon.delayer_artobjects);
-	AddHelper(transformer_artobjects, addon.transformer_artobjects);
 	AddHelper(delayer_effect_shaders, addon.delayer_effect_shaders);
+	AddHelper(transformer_colors, addon.transformer_colors);
+	AddHelper(transformer_sounds, addon.transformer_sounds);
+	AddHelper(transformer_artobjects, addon.transformer_artobjects);
 	AddHelper(transformer_effect_shaders, addon.transformer_effect_shaders);
-	// containers
-	for (const auto& [_formID, _containers] : addon.delayer_containers) {
-		if (!_formID) {
+
+    // delayer/transformer containers
+	for (const auto& [a_formID, _containers] : addon.delayer_containers) {
+		if (!a_formID) {
 			logger::critical("AddOn has null formid.");
 			continue;
 		}
@@ -292,7 +330,7 @@ void DefaultSettings::Add(AddOnSettings& addon)
 				logger::critical("AddOn has null formid.");
 				continue;
 			}
-			delayer_containers[_formID].insert(_container);
+			delayer_containers[a_formID].insert(_container);
 		}
 	}
 	for (const auto& [_formID, _containers] : addon.transformer_containers) {
@@ -323,6 +361,17 @@ void DefaultSettings::AddHelper(std::unordered_map<FormID, FormID>& dest, const 
 	}
 }
 
+void DefaultSettings::AddHelper(std::unordered_set<FormID>& dest, const std::unordered_set<FormID>& src)
+{
+	for (const auto& _formID : src) {
+		if (!_formID) {
+			logger::critical("AddOn has null formid.");
+			continue;
+		}
+		dest.insert(_formID);
+	}
+}
+
 RefStopFeature::operator bool() const { return id > 0 && enabled.load(); }
 
 RefStopFeature::RefStopFeature() {
@@ -340,7 +389,7 @@ RefStopFeature& RefStopFeature::operator=(const RefStopFeature& other)
 }
 
 RefStop::~RefStop() {
-	//auto soundhelper = SoundHelper::GetSingleton();
+	//const auto soundhelper = SoundHelper::GetSingleton();
 	//soundhelper->DeleteHandle(ref_id);
 }
 
@@ -364,13 +413,38 @@ RefStop::RefStop(const RefID ref_id_) {
 
 bool RefStop::IsDue(const float curr_time) const { return stop_time <= curr_time; }
 
+// check it
 bool AddOnSettings::CheckIntegrity()
 {
-    for (const auto& [_formID, _transformer] : transformers) {
-        const FormID _finalFormEditorID = std::get<0>(_transformer);
-        const Duration _duration = std::get<1>(_transformer);
-        std::vector<StageNo> _allowedStages = std::get<2>(_transformer);
-        if (!GetFormByID(_formID) || !GetFormByID(_finalFormEditorID)) {
+	for (const auto& _formID : containers) {
+		if (!GetFormByID(_formID)) {
+			logger::error("Container form {} not found.", _formID);
+			init_failed = true;
+			return false;
+		}
+	}
+
+	std::unordered_set<FormID> all_delayers;
+	for (const auto& a_formID : delayers | std::views::keys) {
+		if (!GetFormByID(a_formID)) {
+			logger::error("Delayer form {} not found.", a_formID);
+			init_failed = true;
+			return false;
+		}
+		all_delayers.insert(a_formID);
+	}
+
+	if (all_delayers != delayers_order) {
+		logger::error("Delayers order does not match the keys in delayers map.");
+		init_failed = true;
+		return false;
+	}
+
+	std::unordered_set<FormID> all_transformers;
+    for (const auto& [a_formid, _transformer] : transformers) {
+		const FormID _finalFormEditorID = _transformer.first;
+        const Duration _duration = _transformer.second;
+        if (!GetFormByID(a_formid) || !GetFormByID(_finalFormEditorID)) {
 			logger::error("Form not found.");
 			init_failed = true;
 			return false;
@@ -380,28 +454,21 @@ bool AddOnSettings::CheckIntegrity()
 			init_failed = true;
 			return false;
 		}
+		all_transformers.insert(a_formid);
 	}
-
-	for (const auto& _formID : delayers | std::views::keys) {
-		if (!GetFormByID(_formID)) {
-			logger::error("Delayer form {} not found.", _formID);
-			init_failed = true;
-			return false;
-		}
-	}
-	for (const auto& _formID : containers) {
-		if (!GetFormByID(_formID)) {
-			logger::error("Container form {} not found.", _formID);
-			init_failed = true;
-			return false;
-		}
+	if (all_transformers != transformers_order) {
+		logger::error("Transformers order does not match the keys in transformers map.");
+		init_failed = true;
+		return false;
 	}
 
 	return true;
 }
 
 void RefStop::ApplyTint(RE::NiAVObject* a_obj3d) {
-	if (!tint_color.id) return RemoveTint(a_obj3d);
+	if (!tint_color.id) {
+        return RemoveTint(a_obj3d);
+	}
 	if (tint_color.enabled.load()) return;
     RE::NiColorA color;
 	hexToRGBA(tint_color.id, color);
