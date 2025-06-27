@@ -204,7 +204,7 @@ void __stdcall UI::RenderUpdateQ()
 			if (ImGui::Selectable(speed_str.c_str(), Settings::ticker_speed == speed)) {
 				Settings::ticker_speed = speed;
 				M->UpdateInterval(std::chrono::milliseconds(Settings::Ticker::GetInterval(Settings::ticker_speed)));
-                SaveSettings();
+                PresetParse::SaveSettings();
             }
         }
         ImGui::EndCombo();

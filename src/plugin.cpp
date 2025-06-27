@@ -17,7 +17,7 @@ void OnMessage(SKSE::MessagingInterface::Message* message) {
 		// 2) Load settings
         {
 			SpeedProfiler prof("LoadSettings");
-            LoadSettingsParallel();
+            PresetParse::LoadSettingsParallel();
         }
         if (Settings::failed_to_load) {
             MsgBoxesNotifs::InGame::CustomMsg("Failed to load settings. Check log for details.");
