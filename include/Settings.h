@@ -38,7 +38,8 @@ namespace Settings {
     inline float proximity_range = 40.f;
 
     inline float search_radius = 1000.f;
-    inline float max_modulator_strength = 500000.f;
+    inline float max_modulator_strength = 1000000.f;
+    inline float critical_stage_dur = 9999.f;
     inline float search_scaling = 0.5f; // for IsNextTo
     namespace Ticker {
         enum Intervals {
@@ -156,7 +157,7 @@ namespace Settings {
     // 0x88 - ExtraAliasInstanceArray 136
     // 0x8C - ExtraPromotedRef 140 NOT OK
     // 0x1C - ExtraReferenceHandle 28 NOT OK (npc muhabbeti)
-    const std::vector<int> xRemove = {
+    constexpr std::vector<int> xRemove = {
         //0x99, 
         //0x3C, 0x0B, 0x48,
          //0x21, 
@@ -167,28 +168,21 @@ namespace Settings {
     };
 };
 
-inline std::mutex g_settingsMutex;
+namespace PresetParse {
+    inline std::mutex g_settingsMutex;
 
-std::vector<std::string> LoadExcludeList(const std::string& postfix);
-AddOnSettings parseAddOns_(const YAML::Node& config);
-std::unordered_map<FormID, AddOnSettings> parseAddOns(const std::string& _type);
-DefaultSettings parseDefaults_(const YAML::Node& config);
-DefaultSettings parseDefaults(const std::string& _type);
-CustomSettings parseCustoms(const std::string& _type);
+    std::vector<std::string> LoadExcludeList(const std::string& postfix);
+    AddOnSettings parseAddOns_(const YAML::Node& config);
+    DefaultSettings parseDefaults_(const YAML::Node& config);
+    DefaultSettings parseDefaults(const std::string& _type);
 
-CustomSettings parseCustomsParallel(const std::string& _type);
-std::unordered_map<FormID, AddOnSettings> parseAddOnsParallel(const std::string& _type);
-void processCustomFile(const std::string& filename, CustomSettings& combinedSettings);
-void processAddOnFile(const std::string& filename, std::unordered_map<FormID, AddOnSettings>& combinedSettings);
-void mergeCustomSettings(CustomSettings& dest, const CustomSettings& src);
-void mergeAddOnSettings(std::unordered_map<FormID, AddOnSettings>& dest, const std::unordered_map<FormID, AddOnSettings>& src);
+    void LoadINISettings();
+    void LoadJSONSettings();
+    [[maybe_unused]] void LoadSettings();
+    void LoadSettingsParallel();
+    void SaveSettings();
+};
 
-
-void LoadINISettings();
-void LoadJSONSettings();
-[[maybe_unused]] void LoadSettings();
-void LoadSettingsParallel();
-void SaveSettings();
 
 
 namespace LogSettings {

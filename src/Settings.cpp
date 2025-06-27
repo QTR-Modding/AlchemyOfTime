@@ -1,6 +1,8 @@
 #include "Settings.h"
 #include <future>
 #include <utility>
+
+#include "DynamicFormTracker.h"
 #include "SimpleIni.h"
 #include "Threading.h"
 
@@ -183,7 +185,7 @@ AddOnSettings* Settings::GetAddOnSettings(const RE::TESForm* form)
 	return nullptr;
 }
 
-void SaveSettings()
+void PresetParse::SaveSettings()
 {
 	using namespace rapidjson;
     Document doc;
@@ -217,7 +219,8 @@ void SaveSettings()
     ofs.close();
 }
 
-std::vector<std::string> LoadExcludeList(const std::string& postfix)
+
+std::vector<std::string> PresetParse::LoadExcludeList(const std::string& postfix)  // NOLINT(misc-use-internal-linkage)
  {
     const auto folder_path = "Data/SKSE/Plugins/AlchemyOfTime/" + postfix + "/exclude";
 
@@ -241,10 +244,291 @@ std::vector<std::string> LoadExcludeList(const std::string& postfix)
     return result;
 }
 
-AddOnSettings parseAddOns_(const YAML::Node& config)
+namespace {
+
+    constexpr int warnings_limit = 5;
+
+    template <typename T>
+    std::vector<T> parse_vector(const YAML::Node& node, const char* key)
+    {
+        std::vector<T> results;
+        if (node[key]) {
+            if (node[key].IsScalar()) {
+                results.push_back(node[key].as<StageNo>());
+            } 
+            else results = node[key].as<std::vector<StageNo>>();
+        }
+        return results;
+    }
+
+    void mergeCustomSettings(CustomSettings& dest, const CustomSettings& src) {
+        for (const auto& [owners, settings] : src) {
+            dest[owners] = settings;
+        }
+    }
+
+    void processCustomFile(const std::string& filename, CustomSettings& combinedSettings)
+    {
+        logger::info("Parsing file: {}", filename);
+		// Create a temporary result for this file
+	    CustomSettings fileResult;
+        if (FileIsEmpty(filename)) {
+		    logger::info("File is empty: {}", filename);
+		    return;
+        }
+
+        YAML::Node config = YAML::LoadFile(filename);
+
+        if (!config["ownerLists"]) {
+		    logger::warn("OwnerLists not found in {}", filename);
+		    return;
+	    }
+
+        for (const auto& Node_ : config["ownerLists"]){
+		    if (!Node_["owners"]) {
+			    logger::warn("Owners not found in {}", filename);
+			    return;
+		    }
+            // we have list of owners at each node or a scalar owner
+            if (Node_["owners"].IsScalar()) {
+                const auto ownerName = Node_["owners"].as<std::string>();
+                if (auto temp_settings = PresetParse::parseDefaults_(Node_); temp_settings.CheckIntegrity()) {
+                    fileResult[std::vector{ownerName}] = temp_settings;
+                }
+		    } 
+            else {
+			    std::vector<std::string> owners;
+                for (const auto& owner : Node_["owners"]) {
+				    owners.push_back(owner.as<std::string>());
+			    }
+
+                if (auto temp_settings = PresetParse::parseDefaults_(Node_); temp_settings.CheckIntegrity()) {
+                    fileResult[owners] = temp_settings;
+                }
+		    }
+        }
+
+        if (!fileResult.empty()) {
+            std::lock_guard lock(PresetParse::g_settingsMutex);
+		    mergeCustomSettings(combinedSettings, fileResult);
+        }
+    }
+
+    CustomSettings parseCustomsParallel(const std::string& _type)
+    {
+        CustomSettings combinedSettings;
+        const auto folder_path = "Data/SKSE/Plugins/AlchemyOfTime/" + _type + "/custom";
+        std::filesystem::create_directories(folder_path);
+
+        // Gather all .yml filenames in the directory
+        std::vector<std::string> filenames;
+        for (const auto& entry : std::filesystem::directory_iterator(folder_path)) {
+            if (entry.is_regular_file() && entry.path().extension() == ".yml") {
+                filenames.push_back(entry.path().string());
+            }
+        }
+
+        // Reserve space for futures
+        std::vector<std::future<void>> futures;
+        futures.reserve(filenames.size());
+
+        // Create a thread pool with available hardware threads
+        ThreadPool pool(numThreads);
+
+        // Enqueue a task for each file. Each task will parse and merge its file.
+        for (const auto& filename : filenames) {
+            futures.emplace_back(
+                pool.enqueue([filename, &combinedSettings]() {
+                    processCustomFile(filename, combinedSettings);
+                })
+            );
+        }
+
+        // Wait for all tasks to complete
+        for (auto& fut : futures) {
+            fut.get();
+        }
+
+        // Return the fully merged settings after all threads are done
+        return combinedSettings;
+    }
+
+    CustomSettings parseCustoms(const std::string& _type)
+    {
+        CustomSettings _custom_settings;
+        const auto folder_path = "Data/SKSE/Plugins/AlchemyOfTime/" + _type + "/custom";
+        std::filesystem::create_directories(folder_path);
+            
+        for (const auto& entry : std::filesystem::directory_iterator(folder_path)) {
+            if (entry.is_regular_file() && entry.path().extension() == ".yml") {
+                const auto filename = entry.path().string();
+                processCustomFile(filename,_custom_settings);
+            }
+        }
+        return _custom_settings;
+    }
+
+    void mergeAddOnSettings(std::unordered_map<FormID, AddOnSettings>& dest, const std::unordered_map<FormID, AddOnSettings>& src)
+    {
+	    for (const auto& [formID, settings] : src) {
+		    dest[formID] = settings;
+	    }
+    }
+    void processAddOnFile(const std::string& filename, std::unordered_map<FormID, AddOnSettings>& combinedSettings)
+    {
+        logger::info("Parsing file: {}", filename);
+
+	    std::unordered_map<FormID, AddOnSettings> fileResult;
+
+        if (FileIsEmpty(filename)) {
+		    logger::info("File is empty: {}", filename);
+		    return;
+        }
+
+        YAML::Node config = YAML::LoadFile(filename);
+
+        if (!config["formsLists"] || config["formsLists"].IsNull()) {
+		    logger::warn("formsLists not found in {}", filename);
+		    return;
+	    }
+	    if (config["formsLists"].size() == 0) {
+		    logger::warn("formsLists is empty in {}", filename);
+		    return;
+        }
+
+        for (const auto& Node_ : config["formsLists"]){
+		    if (!Node_["forms"]) {
+			    logger::warn("Forms not found in {}", filename);
+			    return;
+		    }
+            // we have list of owners at each node or a scalar owner
+            if (Node_["forms"].IsScalar()) {
+                const auto ownerName = Node_["forms"].as<std::string>();
+                if (auto temp_settings = PresetParse::parseAddOns_(Node_); temp_settings.CheckIntegrity()) {
+				    if (const auto formID = GetFormEditorIDFromString(ownerName)) {
+					    fileResult[formID] = temp_settings;
+				    }
+				    else {
+                        logger::error("Formid could not be obtained for {}", ownerName);
+                    }
+                }
+                else {
+				    logger::error("Settings integrity check failed for {}", ownerName);
+                }
+            } 
+            else {
+			    std::set<FormID> owners;
+                for (const auto& owner : Node_["forms"]) {
+                    if (const auto formID = GetFormEditorIDFromString(owner.as<std::string>())) {
+                        owners.insert(formID);
+                    }
+				    else logger::error("Formid could not be obtained for {}", owner.as<std::string>());
+			    }
+
+                if (auto temp_settings = PresetParse::parseAddOns_(Node_); temp_settings.CheckIntegrity()) {
+				    for (const auto owner : owners) {
+					    fileResult[owner] = temp_settings;
+				    }
+			    }
+			    else {
+				    logger::error("Settings integrity check failed for forms starting with {}", *owners.begin());
+                }
+		    }
+        }
+
+	    if (!fileResult.empty()) {
+		    std::lock_guard lock(PresetParse::g_settingsMutex);
+		    mergeAddOnSettings(combinedSettings, fileResult);
+        }
+    }
+
+    std::unordered_map<FormID, AddOnSettings> parseAddOnsParallel(const std::string& _type)
+    {
+	    std::unordered_map<FormID, AddOnSettings> combinedSettings;
+	    const auto folder_path = "Data/SKSE/Plugins/AlchemyOfTime/" + _type + "/addon";
+	    std::filesystem::create_directories(folder_path);
+	    // Gather all .yml filenames in the directory
+	    std::vector<std::string> filenames;
+	    for (const auto& entry : std::filesystem::directory_iterator(folder_path)) {
+		    if (entry.is_regular_file() && entry.path().extension() == ".yml") {
+			    filenames.push_back(entry.path().string());
+		    }
+	    }
+	    std::vector<std::future<void>> futures;
+	    futures.reserve(filenames.size());
+	    ThreadPool pool(numThreads);
+	    for (const auto& filename : filenames) {
+		    futures.emplace_back(
+			    pool.enqueue([filename, &combinedSettings]() {
+				    processAddOnFile(filename, combinedSettings);
+				    })
+		    );
+	    }
+	    // Wait for all tasks to complete
+	    for (auto& fut : futures) {
+		    fut.get();
+	    }
+	    return combinedSettings;
+    }
+
+    std::unordered_map<FormID, AddOnSettings> parseAddOns(const std::string& _type)
+    {
+        const auto folder_path = "Data/SKSE/Plugins/AlchemyOfTime/" + _type + "/addon";
+        std::filesystem::create_directories(folder_path);
+
+	    std::unordered_map<FormID, AddOnSettings> _addon_settings;
+
+        for (const auto& entry : std::filesystem::directory_iterator(folder_path)) {
+            if (!entry.is_regular_file() || entry.path().extension() != ".yml") continue;
+            const auto filename = entry.path().string();
+            processAddOnFile(filename,_addon_settings);
+        }
+        return _addon_settings;
+    }
+
+
+    auto parse_color = [](const YAML::Node& node, const char* key) -> std::optional<uint32_t> {
+        if (node[key] && !node[key].IsNull())
+            return std::stoul(node[key].as<std::string>(), nullptr, 16);
+        return std::nullopt;
+    };
+
+    auto parse_formid = [](const YAML::Node& node, const char* key) -> std::optional<FormID> {
+        if (node[key] && !node[key].IsNull()) {
+            const auto formid_str = node[key].as<std::string>();
+            if (const FormID formid = GetFormEditorIDFromString(formid_str); formid > 0) {
+                return formid;
+            }
+            logger::warn("parse_formid: Invalid FormID for key '{}': {}", key, formid_str);
+        }
+		return std::nullopt;
+    };
+
+    auto parse_formid_vec = [](const YAML::Node& node, const char* key) -> std::vector<FormID> {
+        std::vector<FormID> formids;
+        if (node[key] && !node[key].IsNull()) {
+            const auto temps = node[key].IsScalar() ? std::vector{ node[key].as<std::string>() } : node[key].as<std::vector<std::string>>();
+            for (const auto& a_temp : temps) {
+				if (const FormID container_formid = GetFormEditorIDFromString(a_temp)) {
+					formids.push_back(container_formid);
+				}
+            }
+        }
+		return formids;
+    };
+
+	template <typename T>
+    std::optional<T> parse_type(const YAML::Node& node, const char* key) {
+        if (node[key] && !node[key].IsNull()) {
+            return node[key].as<T>();
+        }
+        return std::nullopt;
+	}
+};
+
+AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config)
 {
     AddOnSettings settings;
-    constexpr int warnings_limit = 5;
 
     // containers
     if (config["containers"] && !config["containers"].IsNull()) {
@@ -259,124 +543,88 @@ AddOnSettings parseAddOns_(const YAML::Node& config)
     // delayers
     int n_warnings = 0;
     for (const auto& modulator : config["timeModulators"]) {
-        const auto temp_formeditorid = modulator["FormEditorID"] && !modulator["FormEditorID"].IsNull()
-                                            ? modulator["FormEditorID"].as<std::string>()
-                                            : "";
-        const FormID temp_formid = GetFormEditorIDFromString(temp_formeditorid);
-		if (!temp_formid) {
-			if (n_warnings < warnings_limit) {
-			    logger::warn("timeModulators: Formid is 0 for {}", temp_formeditorid);
-            }
+        if (auto temp_formid = parse_formid(modulator, "FormEditorID")) {
+			auto a_formid = *temp_formid;
+			// allowed_stages
+            auto a_asv = parse_vector<StageNo>(modulator, "allowed_stages");
+		    settings.delayer_allowed_stages[a_formid] = std::unordered_set<StageNo>(a_asv.begin(), a_asv.end());
+		    // delayer magnitude
+            settings.delayers[a_formid] = !modulator["magnitude"].IsNull() ? modulator["magnitude"].as<float>() : 1;
+            // delayer (order)
+		    settings.delayers_order.insert(a_formid);
+            // colors
+            if (auto a_color = parse_color(modulator, "color")) settings.delayer_colors[a_formid] = *a_color ;
+		    // sounds
+		    if (auto a_sound = parse_formid(modulator, "sound")) settings.delayer_sounds[a_formid] = *a_sound;
+		    // art_objects
+		    if (auto a_art_object = parse_formid(modulator, "art_object")) settings.delayer_artobjects[a_formid] = *a_art_object;
+		    // effect_shaders
+		    if (auto a_effect_shader = parse_formid(modulator, "effect_shader")) settings.delayer_effect_shaders[a_formid] = *a_effect_shader;
+		    // containers
+            auto containers = parse_formid_vec(modulator, "containers");
+		    settings.delayer_containers[a_formid].insert(containers.begin(), containers.end());
+        }
+        else if (n_warnings < warnings_limit) {
+			logger::warn("timeModulators: Formid is 0");
 			n_warnings++;
-			continue;
-		}
-        settings.delayers[temp_formid] = !modulator["magnitude"].IsNull() ? modulator["magnitude"].as<float>() : 1;
-		settings.delayers_order.push_back(temp_formid);
-
-        // colors
-		if (modulator["color"] && !modulator["color"].IsNull()) {
-			settings.delayer_colors[temp_formid] = std::stoul(modulator["color"].as<std::string>(), nullptr, 16);
-        }
-
-		// sounds
-		if (modulator["sound"] && !modulator["sound"].IsNull()) {
-			const auto sound_formid = GetFormEditorIDFromString(modulator["sound"].as<std::string>());
-			settings.delayer_sounds[temp_formid] = sound_formid;
-        }
-
-		// art_objects
-		if (modulator["art_object"] && !modulator["art_object"].IsNull()) {
-			const auto art_formid = GetFormEditorIDFromString(modulator["art_object"].as<std::string>());
-			settings.delayer_artobjects[temp_formid] = art_formid;
-        }
-
-		// effect_shaders
-		if (modulator["effect_shader"] && !modulator["effect_shader"].IsNull()) {
-			const auto shader_formid = GetFormEditorIDFromString(modulator["effect_shader"].as<std::string>());
-			settings.delayer_effect_shaders[temp_formid] = shader_formid;
-        }
-
-		// containers
-		if (modulator["containers"] && !modulator["containers"].IsNull()) {
-			const auto temp_containers = modulator["containers"].IsScalar() ? std::vector{ modulator["containers"].as<std::string>() } : modulator["containers"].as<std::vector<std::string>>();
-			for (const auto& container : temp_containers) {
-				if (const FormID container_formid = GetFormEditorIDFromString(container)) {
-					settings.delayer_containers[temp_formid].insert(container_formid);
-				}
-            }
         }
     }
 
 	// transformers
 	n_warnings = 0;
     for (const auto& transformer : config["transformers"]) {
-        const auto temp_formeditorid = transformer["FormEditorID"] &&
-                                        !transformer["FormEditorID"].IsNull() ? transformer["FormEditorID"].as<std::string>() : "";
-        const FormID temp_formid = GetFormEditorIDFromString(temp_formeditorid);
-		if (!temp_formid) {
+
+        FormID a_formid; FormID a_formid2;
+		if (auto temp_formid = parse_formid(transformer, "FormEditorID"); !temp_formid) {
+            if (n_warnings < warnings_limit) {
+                logger::warn("transformers: Formid is 0");
+            }
+            n_warnings++;
+            continue;
+        } else {
+            a_formid = *temp_formid;
+        }
+
+        if (auto temp_finalFormEditorID = parse_formid(transformer, "finalFormEditorID"); !temp_finalFormEditorID) {
+            if (n_warnings < warnings_limit) {
+                logger::warn("transformers: Final FormEditorID is missing.");
+            }
+            n_warnings++;
+            continue;
+		}
+		else {
+            a_formid2 = *temp_finalFormEditorID;
+		} 
+
+		// duration
+		if (auto temp_duration = parse_type<float>(transformer, "duration"); !temp_duration) {
 			if (n_warnings < warnings_limit) {
-				logger::warn("transformers: Formid is 0 for {}", temp_formeditorid);
-			}
-			n_warnings++;
+				logger::warn("transformers: Duration is missing");
+                n_warnings++;
+            }
 			continue;
-		}
-        const auto temp_finalFormEditorID =
-            transformer["finalFormEditorID"] &&
-            !transformer["finalFormEditorID"].IsNull() ? transformer["finalFormEditorID"].as<std::string>() : "";
-        const FormID temp_formid2 = GetFormEditorIDFromString(temp_finalFormEditorID);
-        if (!transformer["duration"] || transformer["duration"].IsNull()) {
-			logger::warn("Duration is missing.");
-			continue;
-		}
-        const auto temp_duration = transformer["duration"].as<float>();
-        std::vector<StageNo> allowed_stages;
-        if (!transformer["allowed_stages"]) {
-            // default is all stages
-            //for (const auto& key : settings.items | std::views::keys) {
-            //    allowed_stages.push_back(key);
-            //}
-        } 
-        else if (transformer["allowed_stages"].IsScalar()) {
-            allowed_stages.push_back(transformer["allowed_stages"].as<StageNo>());
-        } 
-        else allowed_stages = transformer["allowed_stages"].as<std::vector<StageNo>>();
+        }
+        else {
+            settings.transformers[a_formid] = {a_formid2,*temp_duration};
+        }
 
-        const auto temp_tuple = std::make_tuple(temp_formid2, temp_duration, allowed_stages);
-        settings.transformers[temp_formid] = temp_tuple;
-		settings.transformers_order.push_back(temp_formid);
+		// transformers (order)
+		settings.transformers_order.insert(a_formid);
 
+		// allowed_stages
+		auto a_asv = parse_vector<StageNo>(transformer, "allowed_stages");
+		settings.transformer_allowed_stages[a_formid] = std::unordered_set<StageNo>(a_asv.begin(), a_asv.end());
 		// colors
-		if (transformer["color"] && !transformer["color"].IsNull()) {
-			settings.transformer_colors[temp_formid] = std::stoul(transformer["color"].as<std::string>(), nullptr, 16);
-        }
-
+		if (auto a_color = parse_color(transformer, "color"); a_color) settings.transformer_colors[a_formid] = *a_color;
 		// sounds
-		if (transformer["sound"] && !transformer["sound"].IsNull()) {
-			const auto sound_formid = GetFormEditorIDFromString(transformer["sound"].as<std::string>());
-			settings.transformer_sounds[temp_formid] = sound_formid;
-        }
-
+		if (auto a_sound = parse_formid(transformer, "sound"); a_sound) settings.transformer_sounds[a_formid] = *a_sound;
 		// art_objects
-		if (transformer["art_object"] && !transformer["art_object"].IsNull()) {
-			const auto art_formid = GetFormEditorIDFromString(transformer["art_object"].as<std::string>());
-			settings.transformer_artobjects[temp_formid] = art_formid;
-        }
-
+		if (auto a_art_object = parse_formid(transformer, "art_object"); a_art_object) settings.transformer_artobjects[a_formid] = *a_art_object;
 		// effect_shaders
-		if (transformer["effect_shader"] && !transformer["effect_shader"].IsNull()) {
-			const auto shader_formid = GetFormEditorIDFromString(transformer["effect_shader"].as<std::string>());
-			settings.transformer_effect_shaders[temp_formid] = shader_formid;
-        }
-
+		if (auto a_effect_shader = parse_formid(transformer, "effect_shader"); a_effect_shader) settings.transformer_effect_shaders[a_formid] = *a_effect_shader;
 		// containers
-		if (transformer["containers"] && !transformer["containers"].IsNull()) {
-			const auto temp_containers = transformer["containers"].IsScalar() ? std::vector{ transformer["containers"].as<std::string>() } : transformer["containers"].as<std::vector<std::string>>();
-			for (const auto& container : temp_containers) {
-				if (const FormID container_formid = GetFormEditorIDFromString(container)) {
-					settings.transformer_containers[temp_formid].insert(container_formid);
-				}
-			}
-        }
+		auto containers = parse_formid_vec(transformer, "containers");
+		settings.transformer_containers[a_formid].insert(containers.begin(), containers.end());
     }
         
     if (!settings.CheckIntegrity()) logger::critical("Settings integrity check failed.");
@@ -384,44 +632,25 @@ AddOnSettings parseAddOns_(const YAML::Node& config)
     return settings;
 }
 
-std::unordered_map<FormID, AddOnSettings> parseAddOns(const std::string& _type)
+DefaultSettings PresetParse::parseDefaults_(const YAML::Node& config)
 {
-    const auto folder_path = "Data/SKSE/Plugins/AlchemyOfTime/" + _type + "/addon";
-    std::filesystem::create_directories(folder_path);
 
-	std::unordered_map<FormID, AddOnSettings> _addon_settings;
+    DefaultSettings settings = {};
 
-    for (const auto& entry : std::filesystem::directory_iterator(folder_path)) {
-        if (!entry.is_regular_file() || entry.path().extension() != ".yml") continue;
-        const auto filename = entry.path().string();
-        processAddOnFile(filename,_addon_settings);
-    }
-    return _addon_settings;
-}
-
-DefaultSettings parseDefaults_(const YAML::Node& config)
- {
-#ifndef NDEBUG
-    logger::trace("Parsing settings.");
-#endif
-    DefaultSettings settings;
-
-    //we have:stages, decayedFormEditorID and delayers
     if (!config["stages"] || config["stages"].size() == 0) {
         logger::error("Stages are empty.");
         return settings;
     }
+
     for (const auto& stageNode : config["stages"]) {
         if (!stageNode["no"] || stageNode["no"].IsNull()) {
 			logger::error("No is missing for stage.");
             return settings;
 		}
-        const auto temp_no = stageNode["no"].as<StageNo>();
+        const auto a_stage_no = stageNode["no"].as<StageNo>();
+
         // add to numbers
-#ifndef NDEBUG
-        logger::trace("Stage no: {}", temp_no);
-#endif
-        settings.numbers.push_back(temp_no);
+        settings.numbers.push_back(a_stage_no);
         const auto temp_formeditorid = stageNode["FormEditorID"] && !stageNode["FormEditorID"].IsNull()
                                             ? stageNode["FormEditorID"].as<std::string>()
                                             : "";
@@ -433,59 +662,36 @@ DefaultSettings parseDefaults_(const YAML::Node& config)
             return {};
         }
         // add to items
-#ifndef NDEBUG
-        logger::trace("Formid");
-#endif
-        settings.items[temp_no] = temp_formid;
+        settings.items[a_stage_no] = temp_formid;
         // add to durations
-#ifndef NDEBUG
-        logger::trace("Duration");
-#endif
-        settings.durations[temp_no] = stageNode["duration"].as<Duration>();
+        settings.durations[a_stage_no] = stageNode["duration"].as<Duration>();
         // add to stage_names
-#ifndef NDEBUG
-        logger::trace("Name");
-#endif
         if (!stageNode["name"].IsNull()) {
-            const auto temp_name = stageNode["name"].as<StageName>();
             // if it is empty, or just whitespace, set it to empty
-            if (temp_name.empty() || std::ranges::all_of(temp_name, isspace))
-				settings.stage_names[temp_no] = "";
-			else settings.stage_names[temp_no] = stageNode["name"].as<StageName>();
-        } else settings.stage_names[temp_no] = "";
+            if (const auto temp_name = stageNode["name"].as<StageName>(); 
+                temp_name.empty() || std::ranges::all_of(temp_name, isspace)) {
+				settings.stage_names[a_stage_no] = "";
+            }
+            else settings.stage_names[a_stage_no] = stageNode["name"].as<StageName>();
+        } else settings.stage_names[a_stage_no] = "";
         // add to costoverrides
-#ifndef NDEBUG
-        logger::trace("Cost");
-#endif
-        if (stageNode["value"] && !stageNode["value"].IsNull()) {
-            settings.costoverrides[temp_no] = stageNode["value"].as<int>();
-        } else settings.costoverrides[temp_no] = -1;
+        if (auto a_value = parse_type<int>(stageNode, "value"); a_value) {
+            settings.costoverrides[a_stage_no] = *a_value;
+		} else settings.costoverrides[a_stage_no] = -1;
         // add to weightoverrides
-#ifndef NDEBUG
-        logger::trace("Weight");
-#endif
-        if (stageNode["weight"] && !stageNode["weight"].IsNull()) {
-            settings.weightoverrides[temp_no] = stageNode["weight"].as<float>();
-        } else settings.weightoverrides[temp_no] = -1.0f;
+        if (auto a_weight = parse_type<float>(stageNode, "weight"); a_weight) {
+            settings.weightoverrides[a_stage_no] = *a_weight;
+        } else settings.weightoverrides[a_stage_no] = -1.0f;
             
         // add to crafting_allowed
-#ifndef NDEBUG
-        logger::trace("Crafting");
-#endif
-        if (stageNode["crafting_allowed"] && !stageNode["crafting_allowed"].IsNull()){
-            settings.crafting_allowed[temp_no] = stageNode["crafting_allowed"].as<bool>();
-        } else settings.crafting_allowed[temp_no] = false;
+        if (auto crafting_allowed = parse_type<bool>(stageNode, "crafting_allowed"); crafting_allowed) {
+            settings.crafting_allowed[a_stage_no] = *crafting_allowed;
+		} else settings.crafting_allowed[a_stage_no] = false;
 
 
         // add to effects
-#ifndef NDEBUG
-        logger::trace("Effects");
-#endif
         std::vector<StageEffect> effects;
         if (!stageNode["mgeffect"] || stageNode["mgeffect"].size() == 0) {
-#ifndef NDEBUG
-			logger::trace("Effects are empty. Skipping.");
-#endif
         } else {
             for (const auto& effectNode : stageNode["mgeffect"]) {
                 const auto temp_effect_formeditorid =
@@ -503,48 +709,26 @@ DefaultSettings parseDefaults_(const YAML::Node& config)
                 break;
             }
         }
-        settings.effects[temp_no] = effects;
+        settings.effects[a_stage_no] = effects;
 
 		// add to colors
-#ifndef NDEBUG
-		logger::trace("Color");
-#endif
-		if (stageNode["color"] && !stageNode["color"].IsNull()) {
-			settings.colors[temp_no] = std::stoul(stageNode["color"].as<std::string>(), nullptr, 16);
-		}
-		else settings.colors[temp_no] = 0;
-
+        if (auto a_color = parse_color(stageNode, "color"); a_color) {
+            settings.colors[a_stage_no] = *a_color;
+		} else settings.colors[a_stage_no] = 0;
 		// add to sounds
-#ifndef NDEBUG
-		logger::trace("Sound");
-#endif
-		if (stageNode["sound"] && !stageNode["sound"].IsNull()) {
-			const auto sound_formid = GetFormEditorIDFromString(stageNode["sound"].as<std::string>());
-			settings.sounds[temp_no] = sound_formid;
-        }
-
+		if (auto a_sound = parse_formid(stageNode, "sound"); a_sound) {
+            settings.sounds[a_stage_no] = *a_sound;
+		}
 		// add to art_objects
-#ifndef NDEBUG
-		logger::trace("ArtObject");
-#endif
-		if (stageNode["art_object"] && !stageNode["art_object"].IsNull()) {
-			const auto art_formid = GetFormEditorIDFromString(stageNode["art_object"].as<std::string>());
-			settings.artobjects[temp_no] = art_formid;
-        }
-
+        if (auto a_art_object = parse_formid(stageNode, "art_object"); a_art_object) {
+            settings.artobjects[a_stage_no] = *a_art_object;
+		}
 		// add to effect_shaders
-#ifndef NDEBUG
-		logger::trace("EffectShader");
-#endif
-		if (stageNode["effect_shader"] && !stageNode["effect_shader"].IsNull()) {
-			const auto shader_formid = GetFormEditorIDFromString(stageNode["effect_shader"].as<std::string>());
-			settings.effect_shaders[temp_no] = shader_formid;
+        if (auto a_effect_shader = parse_formid(stageNode, "effect_shader"); a_effect_shader) {
+			settings.effect_shaders[a_stage_no] = *a_effect_shader;
         }
     }
     // final formid
-#ifndef NDEBUG
-    logger::trace("terminal item");
-#endif
     const FormID temp_decayed_id =
         config["finalFormEditorID"] && !config["finalFormEditorID"].IsNull()
 			? GetFormEditorIDFromString(config["finalFormEditorID"].as<std::string>())
@@ -553,165 +737,61 @@ DefaultSettings parseDefaults_(const YAML::Node& config)
         logger::error("Decayed id is 0.");
         return {};
     }
-#ifndef NDEBUG
-    logger::trace("Decayed id: {}", temp_decayed_id);
-#endif
     settings.decayed_id = temp_decayed_id;
 
+	const auto addons = parseAddOns_(config);
     // containers
-#ifndef NDEBUG
-    logger::trace("containers");
-#endif
-    if (config["containers"] && !config["containers"].IsNull()) {
-		const auto temp_containers = config["containers"].IsScalar() ? std::vector{config["containers"].as<std::string>()} : config["containers"].as<std::vector<std::string>>();
-		for (const auto& container : temp_containers) {
-			if (const FormID temp_formid = GetFormEditorIDFromString(container)) {
-				settings.containers.insert(temp_formid);
-			}
-		}
-    } 
-
-    // delayers
-	constexpr int warnings_limit = 10;
-    int n_warnings = 0;
-#ifndef NDEBUG
-    logger::trace("timeModulators");
-#endif
-    for (const auto& modulator : config["timeModulators"]) {
-        const auto temp_formeditorid = modulator["FormEditorID"] && !modulator["FormEditorID"].IsNull()
-                                            ? modulator["FormEditorID"].as<std::string>()
-                                            : "";
-        const FormID temp_formid = GetFormEditorIDFromString(temp_formeditorid);
-		if (!temp_formid) {
-			if (n_warnings < warnings_limit) {
-				logger::warn("timeModulators: Formid is 0 for {}", temp_formeditorid);
-			}
-			n_warnings++;
-			continue;
-		}
-        settings.delayers[temp_formid] = !modulator["magnitude"].IsNull() ? modulator["magnitude"].as<float>() : 1;
-		settings.delayers_order.push_back(temp_formid);
-
-        // colors
-		if (modulator["color"] && !modulator["color"].IsNull()) {
-			settings.delayer_colors[temp_formid] = std::stoul(modulator["color"].as<std::string>(), nullptr, 16);
-        }
-
-		// sounds
-		if (modulator["sound"] && !modulator["sound"].IsNull()) {
-			const auto sound_formid = GetFormEditorIDFromString(modulator["sound"].as<std::string>());
-			settings.delayer_sounds[temp_formid] = sound_formid;
-        }
-
-		// art_objects
-		if (modulator["art_object"] && !modulator["art_object"].IsNull()) {
-			const auto art_formid = GetFormEditorIDFromString(modulator["art_object"].as<std::string>());
-			settings.delayer_artobjects[temp_formid] = art_formid;
-        }
-
-		// effect_shaders
-		if (modulator["effect_shader"] && !modulator["effect_shader"].IsNull()) {
-			const auto shader_formid = GetFormEditorIDFromString(modulator["effect_shader"].as<std::string>());
-			settings.delayer_effect_shaders[temp_formid] = shader_formid;
-        }
-
-		// containers
-		if (modulator["containers"] && !modulator["containers"].IsNull()) {
-			const auto temp_containers = modulator["containers"].IsScalar() ? std::vector{ modulator["containers"].as<std::string>() } : modulator["containers"].as<std::vector<std::string>>();
-			for (const auto& container : temp_containers) {
-				if (const FormID container_formid = GetFormEditorIDFromString(container)) {
-					settings.delayer_containers[temp_formid].insert(container_formid);
-				}
-			}
-        }
-
-    }
-
+	settings.containers = addons.containers;
+	// delayers
+	settings.delayers = addons.delayers;
+	settings.delayer_allowed_stages = addons.delayer_allowed_stages;
+	settings.delayer_colors = addons.delayer_colors;
+	settings.delayer_sounds = addons.delayer_sounds;
+	settings.delayer_artobjects = addons.delayer_artobjects;
+	settings.delayer_effect_shaders = addons.delayer_effect_shaders;
+	settings.delayer_containers = addons.delayer_containers;
+	// delayers_order
+	settings.delayers_order = addons.delayers_order;
 	// transformers
-	n_warnings = 0;
-    for (const auto& transformer : config["transformers"]) {
-        const auto temp_formeditorid = transformer["FormEditorID"] &&
-                                        !transformer["FormEditorID"].IsNull() ? transformer["FormEditorID"].as<std::string>() : "";
-        const FormID temp_formid = GetFormEditorIDFromString(temp_formeditorid);
-		if (!temp_formid) {
-			if (n_warnings < warnings_limit) {
-				logger::warn("transformers: Formid is 0 for {}", temp_formeditorid);
+	settings.transformers = addons.transformers;
+	settings.transformer_allowed_stages = addons.transformer_allowed_stages;
+	settings.transformer_colors = addons.transformer_colors;
+	settings.transformer_sounds = addons.transformer_sounds;
+	settings.transformer_artobjects = addons.transformer_artobjects;
+	settings.transformer_effect_shaders = addons.transformer_effect_shaders;
+	settings.transformer_containers = addons.transformer_containers;
+	// transformers_order
+	settings.transformers_order = addons.transformers_order;
+
+    // loop delayers
+    for (const auto& a_formid : settings.delayers_order) {
+        if (settings.delayer_allowed_stages.contains(a_formid)) {
+            if (settings.delayer_allowed_stages.at(a_formid).empty()) {
+				settings.delayer_allowed_stages.at(a_formid) = std::unordered_set(settings.numbers.begin(), settings.numbers.end());
 			}
-			n_warnings++;
-			continue;
+        } else {
+			settings.delayer_allowed_stages[a_formid] = std::unordered_set(settings.numbers.begin(), settings.numbers.end());
+        }
+	}
+
+	// loop transformers
+    for (const auto& a_formid : settings.transformers_order) {
+        if (settings.transformer_allowed_stages.contains(a_formid)) {
+			if (settings.transformer_allowed_stages.at(a_formid).empty()) {
+				settings.transformer_allowed_stages.at(a_formid) = std::unordered_set(settings.numbers.begin(), settings.numbers.end());
+                }
 		}
-        const auto temp_finalFormEditorID =
-            transformer["finalFormEditorID"] &&
-            !transformer["finalFormEditorID"].IsNull() ? transformer["finalFormEditorID"].as<std::string>() : "";
-        const FormID temp_formid2 = GetFormEditorIDFromString(temp_finalFormEditorID);
-        if (!transformer["duration"] || transformer["duration"].IsNull()) {
-			logger::warn("Duration is missing.");
-			continue;
-		}
-        const auto temp_duration = transformer["duration"].as<float>();
-        std::vector<StageNo> allowed_stages;
-        if (!transformer["allowed_stages"]) {
-            // default is all stages
-            for (const auto& key : settings.items | std::views::keys) {
-                allowed_stages.push_back(key);
+		else {
+			settings.transformer_allowed_stages[a_formid] = std::unordered_set(settings.numbers.begin(), settings.numbers.end());
             }
-        } 
-        else if (transformer["allowed_stages"].IsScalar()) {
-            allowed_stages.push_back(transformer["allowed_stages"].as<StageNo>());
-        } 
-        else allowed_stages = transformer["allowed_stages"].as<std::vector<StageNo>>();
-        if (allowed_stages.empty()) {
-            for (const auto& key : settings.items | std::views::keys) {
-				allowed_stages.push_back(key);
-			}
-        }
+	}
 
-        auto temp_tuple = std::make_tuple(temp_formid2, temp_duration, allowed_stages);
-        settings.transformers[temp_formid] = temp_tuple;
-		settings.transformers_order.push_back(temp_formid);
-
-		// colors
-		if (transformer["color"] && !transformer["color"].IsNull()) {
-			settings.transformer_colors[temp_formid] = std::stoul(transformer["color"].as<std::string>(), nullptr, 16);
-        }
-
-		// sounds
-		if (transformer["sound"] && !transformer["sound"].IsNull()) {
-			const auto sound_formid = GetFormEditorIDFromString(transformer["sound"].as<std::string>());
-			settings.transformer_sounds[temp_formid] = sound_formid;
-        }
-
-		// art_objects
-		if (transformer["art_object"] && !transformer["art_object"].IsNull()) {
-			const auto art_formid = GetFormEditorIDFromString(transformer["art_object"].as<std::string>());
-			settings.transformer_artobjects[temp_formid] = art_formid;
-        }
-
-		// effect_shaders
-		if (transformer["effect_shader"] && !transformer["effect_shader"].IsNull()) {
-			const auto shader_formid = GetFormEditorIDFromString(transformer["effect_shader"].as<std::string>());
-			settings.transformer_effect_shaders[temp_formid] = shader_formid;
-        }
-
-        // containers
-		if (transformer["containers"] && !transformer["containers"].IsNull()) {
-			const auto temp_containers = transformer["containers"].IsScalar() ? std::vector{ transformer["containers"].as<std::string>() } : transformer["containers"].as<std::vector<std::string>>();
-			for (const auto& container : temp_containers) {
-				if (const FormID container_formid = GetFormEditorIDFromString(container)) {
-					settings.transformer_containers[temp_formid].insert(container_formid);
-				}
-            }
-        }
-        
-    }
-        
     if (!settings.CheckIntegrity()) logger::critical("Settings integrity check failed.");
 
     return settings;
 }
 
-
-DefaultSettings parseDefaults(const std::string& _type)
+DefaultSettings PresetParse::parseDefaults(const std::string& _type)
 { 
     const auto filename = "Data/SKSE/Plugins/AlchemyOfTime/" + _type + "/AoT_default" + _type + ".yml";
 
@@ -734,217 +814,8 @@ DefaultSettings parseDefaults(const std::string& _type)
     }
     return temp_settings;
 }
-CustomSettings parseCustoms(const std::string& _type)
-{
-    CustomSettings _custom_settings;
-    const auto folder_path = "Data/SKSE/Plugins/AlchemyOfTime/" + _type + "/custom";
-    std::filesystem::create_directories(folder_path);
-        
-    for (const auto& entry : std::filesystem::directory_iterator(folder_path)) {
-        if (entry.is_regular_file() && entry.path().extension() == ".yml") {
-            const auto filename = entry.path().string();
-            processCustomFile(filename,_custom_settings);
-        }
-    }
-    return _custom_settings;
-}
 
-CustomSettings parseCustomsParallel(const std::string& _type)
-{
-    CustomSettings combinedSettings;
-    const auto folder_path = "Data/SKSE/Plugins/AlchemyOfTime/" + _type + "/custom";
-    std::filesystem::create_directories(folder_path);
-
-    // Gather all .yml filenames in the directory
-    std::vector<std::string> filenames;
-    for (const auto& entry : std::filesystem::directory_iterator(folder_path)) {
-        if (entry.is_regular_file() && entry.path().extension() == ".yml") {
-            filenames.push_back(entry.path().string());
-        }
-    }
-
-    // Reserve space for futures
-    std::vector<std::future<void>> futures;
-    futures.reserve(filenames.size());
-
-    // Create a thread pool with available hardware threads
-    ThreadPool pool(numThreads);
-
-    // Enqueue a task for each file. Each task will parse and merge its file.
-    for (const auto& filename : filenames) {
-        futures.emplace_back(
-            pool.enqueue([filename, &combinedSettings]() {
-                processCustomFile(filename, combinedSettings);
-            })
-        );
-    }
-
-    // Wait for all tasks to complete
-    for (auto& fut : futures) {
-        fut.get();
-    }
-
-    // Return the fully merged settings after all threads are done
-    return combinedSettings;
-}
-
-std::unordered_map<FormID, AddOnSettings> parseAddOnsParallel(const std::string& _type)
-{
-	std::unordered_map<FormID, AddOnSettings> combinedSettings;
-	const auto folder_path = "Data/SKSE/Plugins/AlchemyOfTime/" + _type + "/addon";
-	std::filesystem::create_directories(folder_path);
-	// Gather all .yml filenames in the directory
-	std::vector<std::string> filenames;
-	for (const auto& entry : std::filesystem::directory_iterator(folder_path)) {
-		if (entry.is_regular_file() && entry.path().extension() == ".yml") {
-			filenames.push_back(entry.path().string());
-		}
-	}
-	std::vector<std::future<void>> futures;
-	futures.reserve(filenames.size());
-	ThreadPool pool(numThreads);
-	for (const auto& filename : filenames) {
-		futures.emplace_back(
-			pool.enqueue([filename, &combinedSettings]() {
-				processAddOnFile(filename, combinedSettings);
-				})
-		);
-	}
-	// Wait for all tasks to complete
-	for (auto& fut : futures) {
-		fut.get();
-	}
-	return combinedSettings;
-}
-
-
-void processCustomFile(const std::string& filename, CustomSettings& combinedSettings)
-{
-	CustomSettings fileResult;
-    if (FileIsEmpty(filename)) {
-		logger::info("File is empty: {}", filename);
-		return;
-    }
-
-    YAML::Node config = YAML::LoadFile(filename);
-
-    if (!config["ownerLists"]) {
-		logger::warn("OwnerLists not found in {}", filename);
-		return;
-	}
-
-    for (const auto& Node_ : config["ownerLists"]){
-		if (!Node_["owners"]) {
-			logger::warn("Owners not found in {}", filename);
-			return;
-		}
-        // we have list of owners at each node or a scalar owner
-        if (Node_["owners"].IsScalar()) {
-            const auto ownerName = Node_["owners"].as<std::string>();
-            if (auto temp_settings = parseDefaults_(Node_); temp_settings.CheckIntegrity()) {
-                fileResult[std::vector{ownerName}] = temp_settings;
-            }
-		} 
-        else {
-			std::vector<std::string> owners;
-            for (const auto& owner : Node_["owners"]) {
-				owners.push_back(owner.as<std::string>());
-			}
-
-            if (auto temp_settings = parseDefaults_(Node_); temp_settings.CheckIntegrity()) {
-                fileResult[owners] = temp_settings;
-            }
-		}
-    }
-
-    if (!fileResult.empty()) {
-        std::lock_guard lock(g_settingsMutex);
-		mergeCustomSettings(combinedSettings, fileResult);
-    }
-}
-
-void processAddOnFile(const std::string& filename, std::unordered_map<FormID, AddOnSettings>& combinedSettings)
-{
-    logger::info("Parsing file: {}", filename);
-
-	std::unordered_map<FormID, AddOnSettings> fileResult;
-
-    if (FileIsEmpty(filename)) {
-		logger::info("File is empty: {}", filename);
-		return;
-    }
-
-    YAML::Node config = YAML::LoadFile(filename);
-
-    if (!config["formsLists"] || config["formsLists"].IsNull()) {
-		logger::warn("formsLists not found in {}", filename);
-		return;
-	}
-	if (config["formsLists"].size() == 0) {
-		logger::warn("formsLists is empty in {}", filename);
-		return;
-    }
-
-    for (const auto& Node_ : config["formsLists"]){
-		if (!Node_["forms"]) {
-			logger::warn("Forms not found in {}", filename);
-			return;
-		}
-        // we have list of owners at each node or a scalar owner
-        if (Node_["forms"].IsScalar()) {
-            const auto ownerName = Node_["forms"].as<std::string>();
-            if (auto temp_settings = parseAddOns_(Node_); temp_settings.CheckIntegrity()) {
-				if (const auto formID = GetFormEditorIDFromString(ownerName)) {
-					fileResult[formID] = temp_settings;
-				}
-				else {
-                    logger::error("Formid could not be obtained for {}", ownerName);
-                }
-            }
-            else {
-				logger::error("Settings integrity check failed for {}", ownerName);
-            }
-        } 
-        else {
-			std::set<FormID> owners;
-            for (const auto& owner : Node_["forms"]) {
-                if (const auto formID = GetFormEditorIDFromString(owner.as<std::string>())) {
-                    owners.insert(formID);
-                }
-				else logger::error("Formid could not be obtained for {}", owner.as<std::string>());
-			}
-
-            if (auto temp_settings = parseAddOns_(Node_); temp_settings.CheckIntegrity()) {
-				for (const auto owner : owners) {
-					fileResult[owner] = temp_settings;
-				}
-			}
-			else {
-				logger::error("Settings integrity check failed for forms starting with {}", *owners.begin());
-            }
-		}
-    }
-
-	if (!fileResult.empty()) {
-		std::lock_guard lock(g_settingsMutex);
-		mergeAddOnSettings(combinedSettings, fileResult);
-    }
-}
-
-void mergeCustomSettings(CustomSettings& dest, const CustomSettings& src) {
-    for (const auto& [owners, settings] : src) {
-        dest[owners] = settings;
-    }
-}
-
-void mergeAddOnSettings(std::unordered_map<FormID, AddOnSettings>& dest, const std::unordered_map<FormID, AddOnSettings>& src)
-{
-	for (const auto& [formID, settings] : src) {
-		dest[formID] = settings;
-	}
-}
-
-void LoadINISettings()
+void PresetParse::LoadINISettings()
 {
     logger::info("Loading ini settings");
 
@@ -994,13 +865,13 @@ void LoadINISettings()
     ini.SaveFile(Settings::INI_path);
 }
 
-void LoadJSONSettings()
+void PresetParse::LoadJSONSettings()
 {
 	logger::info("Loading json settings.");
 	std::ifstream ifs(Settings::json_path);
 	if (!ifs.is_open()) {
 		logger::info("Failed to open file for reading: {}", Settings::json_path);
-        SaveSettings();
+        PresetParse::SaveSettings();
 		return;
 	}
 	rapidjson::IStreamWrapper isw(ifs);
@@ -1022,7 +893,7 @@ void LoadJSONSettings()
 	Settings::ticker_speed = Settings::Ticker::from_string(ticker["speed"].GetString());
 }
 
-void LoadSettings() {
+void PresetParse::LoadSettings() {
     logger::info("Loading settings.");
     try {
         LoadINISettings();
@@ -1063,7 +934,7 @@ void LoadSettings() {
         }
         try {
 			logger::info("Loading exclude list for {}", _qftype);
-            Settings::exclude_list[_qftype] = LoadExcludeList(_qftype);
+            Settings::exclude_list[_qftype] = PresetParse::LoadExcludeList(_qftype);
         } catch (const std::exception& ex) {
 			logger::critical("Failed to load exclude list for {}: {}", _qftype, ex.what());
             Settings::failed_to_load = true;
@@ -1090,7 +961,7 @@ void LoadSettings() {
 	}
 }
 
-void LoadSettingsParallel()
+void PresetParse::LoadSettingsParallel()
 {
     logger::info("Loading settings.");
     try {
@@ -1146,7 +1017,7 @@ void LoadSettingsParallel()
                     try {
 			            logger::info("Loading exclude list for {}", _qftype);
 						std::lock_guard lock(excludeListMutex);
-                        Settings::exclude_list[_qftype] = LoadExcludeList(_qftype);
+                        Settings::exclude_list[_qftype] = PresetParse::LoadExcludeList(_qftype);
                     } catch (const std::exception& ex) {
 			            logger::critical("Failed to load exclude list for {}: {}", _qftype, ex.what());
                         Settings::failed_to_load = true;
@@ -1180,11 +1051,10 @@ void LoadSettingsParallel()
 		Settings::failed_to_load = true;
 		return;
 	}
-
 }
 
 
-rapidjson::Value Settings::Ticker::to_json(rapidjson::Document::AllocatorType& a)
+rapidjson::Value Settings::Ticker::to_json(rapidjson::Document::AllocatorType& a)  // NOLINT(misc-use-internal-linkage)
 {
 	using namespace rapidjson;
     Value ticker(kObjectType);
