@@ -58,17 +58,15 @@ struct Source {
 
     Count MoveInstances(RefID from_ref, RefID to_ref, FormID instance_formid, Count count, bool older_first);
     
-    [[nodiscard]] inline bool IsTimeModulator(FormID _form_id) const;
-
     [[nodiscard]] bool IsDecayedItem(FormID _form_id) const;
 
-    FormID inline GetModulatorInInventory(RE::TESObjectREFR* inventory_owner) const;
+    FormID inline GetModulatorInInventory(RE::TESObjectREFR* inventory_owner, StageNo a_no) const;
 
-    FormID inline GetModulatorInWorld(const RE::TESObjectREFR* wo) const;
+    FormID inline GetModulatorInWorld(const RE::TESObjectREFR* wo, StageNo a_no) const;
 
-    inline FormID GetTransformerInInventory(RE::TESObjectREFR* inventory_owner) const;
+    inline FormID GetTransformerInInventory(RE::TESObjectREFR* inventory_owner, StageNo a_no) const;
 
-    inline FormID GetTransformerInWorld(const RE::TESObjectREFR* wo) const;
+    inline FormID GetTransformerInWorld(const RE::TESObjectREFR* wo, StageNo a_no) const;
 
     // always update before doing this
     void UpdateTimeModulationInInventory(RE::TESObjectREFR* inventory_owner, float _time);
@@ -108,6 +106,7 @@ private:
     StageDict stages;
 
     // counta karismiyor
+    [[nodiscard]] bool UpdateStageInstanceHelper(StageInstance& st_inst, float curr_time, const std::unordered_set<StageNo>& a_allowed_delayer_stages);
     [[nodiscard]] bool UpdateStageInstance(StageInstance& st_inst, float curr_time);
 
     template <typename T>
@@ -169,10 +168,9 @@ private:
 
     void SetDelayOfInstances(float some_time, RE::TESObjectREFR* inventory_owner);
 
-    void SetDelayOfInstance(StageInstance& instance, float curr_time, RE::TESObjectREFR* a_object, bool inventory_owner=true) const;
+    void SetDelayOfInstance(StageInstance& instance, float curr_time, RE::TESObjectREFR* a_loc, bool inventory_owner=true) const;
 
-    void SetDelayOfInstance(StageInstance& instance, float a_time, FormID a_transformer, FormID a_delayer, const std::vector<StageNo>&
-                            allowed_stages) const;
+    void SetDelayOfInstance(StageInstance& instance, float a_time, FormID a_modulator) const;
    
     [[nodiscard]] bool CheckIntegrity();
 
