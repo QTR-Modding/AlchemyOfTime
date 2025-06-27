@@ -114,23 +114,25 @@ void Manager::QueueWOUpdate(const RefStop& a_refstop)
 
 void Manager::UpdateRefStop(Source& src, const StageInstance& wo_inst, RefStop& a_ref_stop, const float stop_t) {
 	const auto wo_inst_delayer = wo_inst.GetDelayerFormID();
+    const bool trnsfrm = src.settings.transformers.contains(wo_inst_delayer);
+	const bool mdlt = !trnsfrm ? src.settings.delayers.contains(wo_inst_delayer) : false;
+
     // color
-    const auto color = wo_inst.xtra.is_transforming ? src.settings.transformer_colors[wo_inst_delayer] : wo_inst_delayer  ? src.settings.delayer_colors[wo_inst_delayer ] : src.settings.colors[wo_inst.no];
+	const auto color = trnsfrm ? src.settings.transformer_colors[wo_inst_delayer] : mdlt ? src.settings.delayer_colors[wo_inst_delayer] : src.settings.colors[wo_inst.no];
 	a_ref_stop.tint_color.id = color;
 	// art object
-	const auto art_object = wo_inst.xtra.is_transforming ? src.settings.transformer_artobjects[wo_inst_delayer] : wo_inst_delayer  ? src.settings.delayer_artobjects[wo_inst_delayer] : src.settings.artobjects[wo_inst.no];
+	const auto art_object = trnsfrm ? src.settings.transformer_artobjects[wo_inst_delayer] : mdlt ? src.settings.delayer_artobjects[wo_inst_delayer] : src.settings.artobjects[wo_inst.no];
 	a_ref_stop.art_object.id = art_object;
 
 	// effect shader
-	const auto effect_shader = wo_inst.xtra.is_transforming ? src.settings.transformer_effect_shaders[wo_inst_delayer] : wo_inst_delayer ? src.settings.delayer_effect_shaders[wo_inst_delayer] : src.settings.effect_shaders[wo_inst.no];
+	const auto effect_shader = trnsfrm ? src.settings.transformer_effect_shaders[wo_inst_delayer] : mdlt ? src.settings.delayer_effect_shaders[wo_inst_delayer] : src.settings.effect_shaders[wo_inst.no];
 	a_ref_stop.effect_shader.id = effect_shader;
 
 	// sound
-	const auto sound = wo_inst.xtra.is_transforming ? src.settings.transformer_sounds[wo_inst_delayer] : wo_inst_delayer ? src.settings.delayer_sounds[wo_inst_delayer] : src.settings.sounds[wo_inst.no];
+	const auto sound = trnsfrm ? src.settings.transformer_sounds[wo_inst_delayer] : mdlt ? src.settings.delayer_sounds[wo_inst_delayer] : src.settings.sounds[wo_inst.no];
 	a_ref_stop.sound.id = sound;
 
     a_ref_stop.stop_time = stop_t;
-
 }
 
 
@@ -188,7 +190,7 @@ Source* Manager::ForceGetSource(const FormID some_formid)
         return MakeSource(some_formid, customSetting);
     }
 	if (const auto* defaultSetting = Settings::GetDefaultSetting(some_formid)) {
-        if (defaultSetting->durations.at(0)<=10000.f || Settings::GetAddOnSettings(some_form)) {
+        if (defaultSetting->durations.at(0) < Settings::critical_stage_dur || Settings::GetAddOnSettings(some_form)) {
             return MakeSource(some_formid, defaultSetting);
         }
 	}
@@ -259,8 +261,9 @@ void Manager::ApplyStageInWorld(RE::TESObjectREFR* wo_ref, const Stage& stage, R
 	//});
 }
 
-inline void Manager::ApplyEvolutionInInventoryX(RE::TESObjectREFR* inventory_owner, Count update_count, FormID old_item, FormID new_item)
+inline void Manager::ApplyEvolutionInInventoryX(RE::TESObjectREFR* inventory_owner, const Count update_count, const FormID old_item, const FormID new_item)
 {
+    // ReSharper disable once CppLocalVariableMayBeConst
     auto* old_bound = RE::TESForm::LookupByID<RE::TESBoundObject>(old_item);
     if (!old_bound) {
         logger::error("Old item is null.");
@@ -301,14 +304,15 @@ inline void Manager::ApplyEvolutionInInventoryX(RE::TESObjectREFR* inventory_own
     RemoveItem(inventory_owner, old_item, inv_count);
 }
 
-inline void Manager::ApplyEvolutionInInventory_(RE::TESObjectREFR* inventory_owner, Count update_count, FormID old_item, FormID new_item)
+inline void Manager::ApplyEvolutionInInventory_(RE::TESObjectREFR* inventory_owner, Count update_count, const FormID old_item, const FormID new_item)
 {
     if (update_count <= 0) {
         logger::error("Update count is 0 or less {}.", update_count);
         return;
     }
 
-    auto* old_bound = RE::TESForm::LookupByID<RE::TESBoundObject>(old_item);
+    // ReSharper disable once CppLocalVariableMayBeConst
+    auto old_bound = RE::TESForm::LookupByID<RE::TESBoundObject>(old_item);
     if (!old_bound) {
         logger::error("Old item is null.");
         return;
@@ -482,7 +486,7 @@ bool Manager::UpdateInventory(RE::TESObjectREFR* ref, const float t)
 		CleanUpSourceData(&src);
 #ifndef NDEBUG
 		if (updates.empty()) {
-			logger::trace("UpdateInventory: No updates for source formid {} editorid {}", src.formid, src.editorid);
+			logger::trace("UpdateInventory: No updates for source formid {:x} editorid {}", src.formid, src.editorid);
         }
 #endif // !NDEBUG
 		for (const auto& update : updates) {
@@ -743,7 +747,7 @@ void Manager::Register(const FormID some_formid, const Count count, const RefID 
     
     if (register_time < EPSILON) register_time = RE::Calendar::GetSingleton()->GetHoursPassed();
 
-    logger::trace("Registering new instance. Formid {} , Count {} , Location refid {}, register_time {}",
+    logger::trace("Registering new instance. Formid {:x} , Count {} , Location refid {}, register_time {}",
                     some_formid, count, location_refid, register_time);
 
     // make new registry
@@ -911,6 +915,7 @@ void Manager::HandleCraftingExit()
 void Manager::Update(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::TESForm* what, Count count)
 {
 
+	logger::trace("Update: from {}, to {}, what {}, count {}", from ? from->GetFormID() : 0, to ? to->GetFormID() : 0, what ? what->GetFormID() : 0, count);
     const bool to_is_world_object = to && !to->HasContainer();
     if (to_is_world_object) count = to->extraList.GetCount();
 
@@ -978,6 +983,8 @@ void Manager::Update(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::T
 		std::unique_lock lock(sourceMutex_);
 		UpdateRef(from);
 	}
+
+	logger::trace("Update completed.");
 }
 
 void Manager::SwapWithStage(RE::TESObjectREFR* wo_ref)
@@ -1025,7 +1032,7 @@ void Manager::HandleFormDelete(const FormID a_refid)
 	std::unique_lock lock(sourceMutex_);
     for (auto& src : sources) {
         if (src.data.contains(a_refid)) {
-            logger::warn("HandleFormDelete: Formid {}", a_refid);
+            logger::warn("HandleFormDelete: Formid {:x}", a_refid);
             for (auto& st_inst : src.data.at(a_refid)) {
                 st_inst.count = 0;
             }
