@@ -212,10 +212,32 @@ private:
             const auto temp_weight = settings.weightoverrides[st_no];
             if (temp_weight >= 0) FormTraits<T>::SetWeight(stage_form, temp_weight);
 
+			// Update magic effects of the fake form
             if (!settings.effects[st_no].empty() &&
                 Vector::HasElement<std::string>(Settings::mgeffs_allowedQFORMS, qFormType)) {
                 // change mgeff of fake form
                 ApplyMGEFFSettings(stage_form, settings.effects[st_no]);
+            }
+
+			// Update dynamic form overrides
+            if (settings.dynamic_form_overrides.contains(st_no)) {
+				auto& [a_mesh, a_kw] = settings.dynamic_form_overrides.at(st_no);
+                if (!a_mesh.empty()) {
+                    stage_form->As<RE::TESModel>()->SetModel(a_mesh.c_str());
+				}
+                if (!a_kw.empty()) {
+					RE::BGSKeyword* kw = nullptr;
+                    auto kw_id = GetFormEditorIDFromString(a_kw);
+					kw = RE::TESForm::LookupByID<RE::BGSKeyword>(kw_id);
+                    if (!kw) {
+						kw = RE::BGSKeyword::CreateKeyword(a_kw);
+                    }
+                    if (kw) {
+                        stage_form->AddKeyword(kw);
+                    } else {
+                        logger::error("Could not add keyword {} for fake form {}", a_kw,new_formid);
+					}
+                }
             }
 
         } else {
