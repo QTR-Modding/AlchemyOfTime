@@ -143,29 +143,6 @@ namespace Settings {
 	DefaultSettings* GetCustomSetting(const RE::TESForm* form);
 	AddOnSettings* GetAddOnSettings(const RE::TESForm* form);
 
-    // 0x99 - ExtraTextDisplayData 
-    // 0x3C - ExtraSavedHavokData
-    // 0x0B - ExtraPersistentCell
-    // 0x48 - ExtraStartingWorldOrCell
-
-    // 0x21 - ExtraOwnership
-    // 0x24 - ExtraCount
-    // 0x0E - ExtraStartingPosition //crahes when removed
-    
-    // 0x70 - ExtraEncounterZone 112
-    // 0x7E - ExtraReservedMarkers 126
-    // 0x88 - ExtraAliasInstanceArray 136
-    // 0x8C - ExtraPromotedRef 140 NOT OK
-    // 0x1C - ExtraReferenceHandle 28 NOT OK (npc muhabbeti)
-    constexpr std::vector<int> xRemove = {
-        //0x99, 
-        //0x3C, 0x0B, 0x48,
-         //0x21, 
-         // 
-        //0x24,
-                                //0x70, 0x7E, 0x88, 
-        //0x8C, 0x1C
-    };
 };
 
 namespace PresetParse {
