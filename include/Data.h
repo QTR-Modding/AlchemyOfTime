@@ -218,28 +218,6 @@ private:
                 // change mgeff of fake form
                 ApplyMGEFFSettings(stage_form, settings.effects[st_no]);
             }
-
-			// Update dynamic form overrides
-            if (settings.dynamic_form_overrides.contains(st_no)) {
-				auto& [a_mesh, a_kw] = settings.dynamic_form_overrides.at(st_no);
-                if (!a_mesh.empty()) {
-                    stage_form->As<RE::TESModel>()->SetModel(a_mesh.c_str());
-				}
-                if (!a_kw.empty()) {
-					RE::BGSKeyword* kw = nullptr;
-                    auto kw_id = GetFormEditorIDFromString(a_kw);
-					kw = RE::TESForm::LookupByID<RE::BGSKeyword>(kw_id);
-                    if (!kw) {
-						kw = RE::BGSKeyword::CreateKeyword(a_kw);
-                    }
-                    if (kw) {
-                        stage_form->AddKeyword(kw);
-                    } else {
-                        logger::error("Could not add keyword {} for fake form {}", a_kw,new_formid);
-					}
-                }
-            }
-
         } else {
 		    logger::error("Could not create copy form for source {}", editorid);
 		    return 0;

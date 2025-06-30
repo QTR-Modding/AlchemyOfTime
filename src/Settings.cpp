@@ -728,18 +728,6 @@ DefaultSettings PresetParse::parseDefaults_(const YAML::Node& config)
         if (auto a_effect_shader = parse_formid(stageNode, "effect_shader"); a_effect_shader) {
 			settings.effect_shaders[a_stage_no] = *a_effect_shader;
         }
-
-		// add to dynamic_form_overrides
-        DynamicFormOverride a_override;
-        if (stageNode["mesh"] && !stageNode["mesh"].IsNull()) {
-		    a_override.mesh = stageNode["mesh"].as<std::string>();
-        }
-	    if (stageNode["keyword"] && !stageNode["keyword"].IsNull()) {
-		    a_override.keyword = stageNode["keyword"].as<std::string>();
-        }
-        if (!a_override.mesh.empty() || !a_override.keyword.empty()) {
-			settings.dynamic_form_overrides[a_stage_no] = a_override;
-        }
     }
     // final formid
     const FormID temp_decayed_id =

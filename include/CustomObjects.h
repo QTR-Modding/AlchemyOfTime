@@ -7,12 +7,6 @@ using DurationMGEFF = std::uint32_t;
 using StageNo = unsigned int;
 using StageName = std::string;
 
-
-struct DynamicFormOverride {
-    std::string mesh;
-    std::string keyword;
-};
-
 struct StageEffect {
     FormID beffect;          // base effect
     float magnitude;         // in effectitem
@@ -221,8 +215,6 @@ struct DefaultSettings : AddOnSettings {
 	std::map<StageNo, FormID> sounds = {};
 	std::map<StageNo, FormID> artobjects = {};
 	std::map<StageNo, FormID> effect_shaders = {};
-
-    std::map<StageNo, DynamicFormOverride> dynamic_form_overrides;
 
     [[nodiscard]] bool IsHealthy() const { return !init_failed; }
 
