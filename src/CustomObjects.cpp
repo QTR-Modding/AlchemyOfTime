@@ -691,19 +691,25 @@ void SoundHelper::Play(const RefID refid, const FormID sound_id, const float vol
 		logger::error("Ref not found.");
 		return;
 	}
+	const auto ref_node = ref->Get3D();
+	if (!ref_node) {
+		logger::error("Ref has no 3D.");
+		return;
+	}
 
 	
-	if (!handles.contains(refid)) {
-		std::unique_lock lock(mutex);
+	if (std::unique_lock lock(mutex); !handles.contains(refid)) {
 		handles[refid] = RE::BSSoundHandle();
 	}
+
+	std::shared_lock lock(mutex);
 
 	auto& sound_handle = handles.at(refid);
 	if (sound_handle.IsPlaying()) {
 		return;
 	}
 	RE::BSAudioManager::GetSingleton()->BuildSoundDataFromDescriptor(sound_handle, sound);
-	sound_handle.SetObjectToFollow(ref->Get3D());
+	sound_handle.SetObjectToFollow(ref_node);
 	sound_handle.SetVolume(volume);
 	if (!sound_handle.IsValid()) {
 		logger::error("SoundHandle not valid.");

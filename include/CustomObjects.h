@@ -1,6 +1,7 @@
 #pragma once
 #include <unordered_set>
 #include "Utils.h"
+#include "ClibUtil/singleton.hpp"
 
 using Duration = float;
 using DurationMGEFF = std::uint32_t;
@@ -232,21 +233,17 @@ private:
 
 using CustomSettings = std::map<std::vector<std::string>, DefaultSettings>;
 
-class SoundHelper {
+class SoundHelper : public clib_util::singleton::ISingleton<SoundHelper> {
 	std::unordered_map<RefID, RE::BSSoundHandle> handles;
 
 	std::shared_mutex mutex;
 public:
-    static SoundHelper* GetSingleton() {
-        static SoundHelper singleton;
-        return &singleton;
-    }
 
 	RE::BSSoundHandle& GetHandle(const RefID refid) {
-		std::shared_lock lock(mutex);
-		if (handles.contains(refid)) return handles.at(refid);
-		handles[refid] = RE::BSSoundHandle();
-		return handles.at(refid);
+		if (std::shared_lock lock(mutex); handles.contains(refid)) return handles.at(refid);
+		std::unique_lock lock(mutex);
+		auto [it, inserted] = handles.try_emplace(refid, RE::BSSoundHandle{});
+		return it->second;
 	}
 
 	void DeleteHandle(RefID refid);
