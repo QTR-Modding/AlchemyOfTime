@@ -44,7 +44,7 @@ void Manager::UpdateLoop()
             if (const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(it->first); 
                 queue_delete_.contains(it->first) ||
                 ref && !Settings::placed_objects_evolve && WorldObject::IsPlacedObject(ref)) {
-                PreDeleteRefStop(it->second,ref ? ref->Get3D() : nullptr);
+                PreDeleteRefStop(it->second, ref ? ref->Get3D() : nullptr);
 	            it = _ref_stops_.erase(it);
             }
             else ++it;
@@ -53,7 +53,9 @@ void Manager::UpdateLoop()
     }
 
 
-    if (_ref_stops_.empty()) {
+    if (std::shared_lock sh_lk(queueMutex_);
+        _ref_stops_.empty()) {
+		sh_lk.unlock();
         Stop();
 	    std::unique_lock lock(queueMutex_);
         queue_delete_.clear();
@@ -920,8 +922,9 @@ void Manager::Update(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::T
     if (to_is_world_object) count = to->extraList.GetCount();
 
     if (from && to && !from->HasContainer()) {
-        if (const auto temp_refid = from->GetFormID(); _ref_stops_.contains(temp_refid)) {
-		    std::unique_lock lock(queueMutex_);
+        const auto temp_refid = from->GetFormID();
+		std::unique_lock lock(queueMutex_);
+        if ( _ref_stops_.contains(temp_refid)) {
             queue_delete_.insert(temp_refid);
         }
     }
