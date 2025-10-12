@@ -189,7 +189,7 @@ bool DefaultSettings::CheckIntegrity() {
         const FormID _finalFormEditorID = _transformer.first;
         const Duration _duration = _transformer.second;
         const auto& _allowedStages = transformer_allowed_stages.at(a_formID);
-        if (!GetFormByID(a_formID) || !GetFormByID(_finalFormEditorID)) {
+        if (!FormReader::GetFormByID(a_formID) || !FormReader::GetFormByID(_finalFormEditorID)) {
 			logger::error("Formid not found.");
 			init_failed = true;
 			return false;
@@ -221,7 +221,7 @@ bool DefaultSettings::CheckIntegrity() {
 
 	for (const auto& a_formID : delayers | std::views::keys) {
 		const auto& _allowedStages = delayer_allowed_stages.at(a_formID);
-		if (!GetFormByID(a_formID)) {
+		if (!FormReader::GetFormByID(a_formID)) {
 			logger::error("Delayer formid {:x} not found.", a_formID);
 			init_failed = true;
 			return false;
@@ -246,7 +246,7 @@ bool DefaultSettings::CheckIntegrity() {
 	}
 
     for (const auto& _formID : containers) {
-		if (!GetFormByID(_formID)) {
+		if (!FormReader::GetFormByID(_formID)) {
 			logger::error("Container formid {:x} not found.", _formID);
 			init_failed = true;
 			return false;
@@ -417,7 +417,7 @@ bool RefStop::IsDue(const float curr_time) const { return stop_time <= curr_time
 bool AddOnSettings::CheckIntegrity()
 {
 	for (const auto& _formID : containers) {
-		if (!GetFormByID(_formID)) {
+		if (!FormReader::GetFormByID(_formID)) {
 			logger::error("Container form {} not found.", _formID);
 			init_failed = true;
 			return false;
@@ -426,7 +426,7 @@ bool AddOnSettings::CheckIntegrity()
 
 	std::unordered_set<FormID> all_delayers;
 	for (const auto& a_formID : delayers | std::views::keys) {
-		if (!GetFormByID(a_formID)) {
+		if (!FormReader::GetFormByID(a_formID)) {
 			logger::error("Delayer form {} not found.", a_formID);
 			init_failed = true;
 			return false;
@@ -444,7 +444,7 @@ bool AddOnSettings::CheckIntegrity()
     for (const auto& [a_formid, _transformer] : transformers) {
 		const FormID _finalFormEditorID = _transformer.first;
         const Duration _duration = _transformer.second;
-        if (!GetFormByID(a_formid) || !GetFormByID(_finalFormEditorID)) {
+        if (!FormReader::GetFormByID(a_formid) || !FormReader::GetFormByID(_finalFormEditorID)) {
 			logger::error("Form not found.");
 			init_failed = true;
 			return false;

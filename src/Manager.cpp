@@ -182,7 +182,7 @@ Source* Manager::ForceGetSource(const FormID some_formid)
 
 	if (const auto src = GetSource(some_formid)) return src;
 
-    const auto some_form = GetFormByID(some_formid);
+    const auto some_form = FormReader::GetFormByID(some_formid);
     if (!some_form) {
         logger::warn("Form not found.");
         return nullptr;
@@ -205,7 +205,7 @@ Source* Manager::ForceGetSource(const FormID some_formid)
 bool Manager::IsSource(const FormID some_formid)
 {
     if (!some_formid) return false;
-    const auto some_form = GetFormByID(some_formid);
+    const auto some_form = FormReader::GetFormByID(some_formid);
     if (!some_form) {
         logger::warn("Form not found.");
         return false;
@@ -894,7 +894,7 @@ void Manager::HandleCraftingExit()
         logger::trace("HandleCraftingExit: Formid1: {} , Formid2: {} , Count1: {} , Count2: {}", formids.form_id1,
                         formids.form_id2, counts.first, counts.second);
 
-        const auto it_src = player_inventory.find(GetFormByID<RE::TESBoundObject>(formids.form_id1));
+        const auto it_src = player_inventory.find(FormReader::GetFormByID<RE::TESBoundObject>(formids.form_id1));
         const auto actual_count_src = it_src != player_inventory.end() ? it_src->second.first : 0;
 
         if (const auto to_be_taken_back = actual_count_src - counts.second; to_be_taken_back > 0) {
@@ -1227,7 +1227,7 @@ void Manager::ReceiveData()
             logger::error("ReceiveData: Editorid is empty.");
             continue;
         }
-        const auto source_form = GetFormByID(0, source_editorid);
+        const auto source_form = FormReader::GetFormByID(0, source_editorid);
         if (!source_form) {
             logger::critical("ReceiveData: Source form not found. Saved formid: {}, editorid: {}", source_formid,
                                 source_editorid);

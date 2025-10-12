@@ -1,14 +1,13 @@
 #pragma once
 #include <windows.h>
-#include <atomic>
 #include <shared_mutex>
-#include "ClibUtil/editorID.hpp"
-#include <ranges>
 #include "rapidjson/document.h"
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/istreamwrapper.h>
 #include <rapidjson/error/en.h>
 #include <rapidjson/writer.h>
+
+#include "CLibUtilsQTR/FormReader.hpp"
 
 const auto mod_name = static_cast<std::string>(SKSE::PluginDeclaration::GetSingleton()->GetName());
 const auto plugin_version = SKSE::PluginDeclaration::GetSingleton()->GetVersion();
@@ -33,24 +32,6 @@ std::string decodeString(const std::vector<std::pair<int, bool>>& encodedValues)
 
 void hexToRGBA(uint32_t color_code, RE::NiColorA& nicolora);
 
-inline bool isValidHexWithLength7or8(const char* input);
-
-
-
-template <class T = RE::TESForm>
-static T* GetFormByID(const RE::FormID id, const std::string& editor_id="") {
-    if (!editor_id.empty()) {
-        if (auto* form = RE::TESForm::LookupByEditorID<T>(editor_id)) return form;
-    }
-    if (T* form = RE::TESForm::LookupByID<T>(id)) return form;
-    return nullptr;
-};
-
-std::string GetEditorID(const FormID a_formid);
-
-FormID GetFormEditorIDFromString(const std::string& formEditorId);
-
-inline bool FormIsOfType(const RE::TESForm* form, RE::FormType type);
 
 bool IsFoodItem(const RE::TESForm* form);
 
@@ -68,11 +49,11 @@ void FavoriteItem(const RE::TESBoundObject* item, RE::TESObjectREFR* inventory_o
 [[nodiscard]] bool IsFavorited(RE::TESBoundObject* item, RE::TESObjectREFR* inventory_owner);
 
 [[nodiscard]] inline bool IsFavorited(const RE::FormID formid, const RE::FormID refid) {
-    return IsFavorited(GetFormByID<RE::TESBoundObject>(formid),GetFormByID<RE::TESObjectREFR>(refid));
+    return IsFavorited(FormReader::GetFormByID<RE::TESBoundObject>(formid), FormReader::GetFormByID<RE::TESObjectREFR>(refid));
 }
 
 inline void FavoriteItem(const FormID formid, const FormID refid) {
-	FavoriteItem(GetFormByID<RE::TESBoundObject>(formid), GetFormByID<RE::TESObjectREFR>(refid));
+	FavoriteItem(FormReader::GetFormByID<RE::TESBoundObject>(formid), FormReader::GetFormByID<RE::TESObjectREFR>(refid));
 }
 
 [[nodiscard]] inline bool IsPlayerFavorited(RE::TESBoundObject* item) {
@@ -82,13 +63,13 @@ inline void FavoriteItem(const FormID formid, const FormID refid) {
 void EquipItem(const RE::TESBoundObject* item, bool unequip = false);
 
 inline void EquipItem(const FormID formid, const bool unequip = false) {
-	EquipItem(GetFormByID<RE::TESBoundObject>(formid), unequip);
+	EquipItem(FormReader::GetFormByID<RE::TESBoundObject>(formid), unequip);
 }
 
 [[nodiscard]] bool IsEquipped(RE::TESBoundObject* item);
 
 [[nodiscard]] inline bool IsEquipped(const FormID formid) {
-	return IsEquipped(GetFormByID<RE::TESBoundObject>(formid));
+	return IsEquipped(FormReader::GetFormByID<RE::TESBoundObject>(formid));
 }
 
 template <typename T>

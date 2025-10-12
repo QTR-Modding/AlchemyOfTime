@@ -1,8 +1,6 @@
 #include "Settings.h"
 #include <future>
 #include <utility>
-
-#include "DynamicFormTracker.h"
 #include "SimpleIni.h"
 #include "Threading.h"
 
@@ -12,15 +10,15 @@ using QFormChecker = bool(*)(const RE::TESForm*);
 static const std::unordered_map<std::string, QFormChecker> qformCheckers = {
     // POPULATE THIS
 	{"FOOD", [](const auto form) {return IsFoodItem(form); } },
-	{"INGR", [](const auto form) {return FormIsOfType(form, RE::IngredientItem::FORMTYPE); } },
+	{"INGR", [](const auto form) {return form->Is(RE::IngredientItem::FORMTYPE); } },
 	{"MEDC", [](const auto form) {return IsMedicineItem(form); } },
 	{"POSN", [](const auto form) {return IsPoisonItem(form); } },
-	{"ARMO", [](const auto form) {return FormIsOfType(form, RE::TESObjectARMO::FORMTYPE); } },
-	{"WEAP", [](const auto form) {return FormIsOfType(form, RE::TESObjectWEAP::FORMTYPE); } },
-	{"SCRL", [](const auto form) {return FormIsOfType(form, RE::ScrollItem::FORMTYPE); } },
-	{"BOOK", [](const auto form) {return FormIsOfType(form, RE::TESObjectBOOK::FORMTYPE); } },
-	{"SLGM", [](const auto form) {return FormIsOfType(form, RE::TESSoulGem::FORMTYPE); } },
-	{"MISC", [](const auto form) {return FormIsOfType(form, RE::TESObjectMISC::FORMTYPE); } },
+	{"ARMO", [](const auto form) {return form->Is(RE::TESObjectARMO::FORMTYPE); } },
+	{"WEAP", [](const auto form) {return form->Is(RE::TESObjectWEAP::FORMTYPE); } },
+	{"SCRL", [](const auto form) {return form->Is(RE::ScrollItem::FORMTYPE); } },
+	{"BOOK", [](const auto form) {return form->Is(RE::TESObjectBOOK::FORMTYPE); } },
+	{"SLGM", [](const auto form) {return form->Is(RE::TESSoulGem::FORMTYPE); } },
+	{"MISC", [](const auto form) {return form->Is(RE::TESObjectMISC::FORMTYPE); } },
 	//{"NPC", [](const auto form) {return FormIsOfType(form, RE::TESNPC::FORMTYPE); } }
 };
 
@@ -40,7 +38,7 @@ bool Settings::IsQFormType(const FormID formid, const std::string& qformtype) {
 	if (qformtype == "NPC") return FormIsOfType(form,RE::TESNPC::FORMTYPE);
     return false;*/
 
-    const auto* form = GetFormByID(formid);
+    const auto* form = FormReader::GetFormByID(formid);
     const auto it = qformCheckers.find(qformtype);
     return (it != qformCheckers.end()) ? it->second(form) : false;
 }
@@ -63,7 +61,7 @@ bool Settings::IsSpecialQForm(RE::TESObjectREFR* ref)
 }
 
 bool Settings::IsInExclude(const FormID formid, std::string type) {
-    const auto form = GetFormByID(formid);
+    const auto form = FormReader::GetFormByID(formid);
     if (!form) {
         logger::warn("Form not found.");
         return false;
@@ -155,9 +153,9 @@ DefaultSettings* Settings::GetCustomSetting(const RE::TESForm* form)
         for (auto& customSetting = custom_settings[qform_type]; auto& [names, sttng] : customSetting) {
             if (!sttng.IsHealthy()) continue;
             for (auto& name : names) {
-                if (const FormID temp_cstm_formid = GetFormEditorIDFromString(name); 
+                if (const FormID temp_cstm_formid = FormReader::GetFormEditorIDFromString(name); 
                     temp_cstm_formid > 0) {
-                    if (const auto temp_cstm_form = GetFormByID(temp_cstm_formid, name); 
+                    if (const auto temp_cstm_form = FormReader::GetFormByID(temp_cstm_formid, name); 
                         temp_cstm_form && temp_cstm_form->GetFormID() == form_id) {
                         return &sttng;
                     }
@@ -405,7 +403,7 @@ namespace {
             if (Node_["forms"].IsScalar()) {
                 const auto ownerName = Node_["forms"].as<std::string>();
                 if (auto temp_settings = PresetParse::parseAddOns_(Node_); temp_settings.CheckIntegrity()) {
-				    if (const auto formID = GetFormEditorIDFromString(ownerName)) {
+				    if (const auto formID = FormReader::GetFormEditorIDFromString(ownerName)) {
 					    fileResult[formID] = temp_settings;
 				    }
 				    else {
@@ -419,7 +417,7 @@ namespace {
             else {
 			    std::set<FormID> owners;
                 for (const auto& owner : Node_["forms"]) {
-                    if (const auto formID = GetFormEditorIDFromString(owner.as<std::string>())) {
+                    if (const auto formID = FormReader::GetFormEditorIDFromString(owner.as<std::string>())) {
                         owners.insert(formID);
                     }
 				    else logger::error("Formid could not be obtained for {}", owner.as<std::string>());
@@ -496,7 +494,7 @@ namespace {
     auto parse_formid = [](const YAML::Node& node, const char* key) -> std::optional<FormID> {
         if (node[key] && !node[key].IsNull()) {
             const auto formid_str = node[key].as<std::string>();
-            if (const FormID formid = GetFormEditorIDFromString(formid_str); formid > 0) {
+            if (const FormID formid = FormReader::GetFormEditorIDFromString(formid_str); formid > 0) {
                 return formid;
             }
             logger::warn("parse_formid: Invalid FormID for key '{}': {}", key, formid_str);
@@ -509,7 +507,7 @@ namespace {
         if (node[key] && !node[key].IsNull()) {
             const auto temps = node[key].IsScalar() ? std::vector{ node[key].as<std::string>() } : node[key].as<std::vector<std::string>>();
             for (const auto& a_temp : temps) {
-				if (const FormID container_formid = GetFormEditorIDFromString(a_temp)) {
+				if (const FormID container_formid = FormReader::GetFormEditorIDFromString(a_temp)) {
 					formids.push_back(container_formid);
 				}
             }
@@ -534,7 +532,7 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config)
     if (config["containers"] && !config["containers"].IsNull()) {
 		const auto temp_containers = config["containers"].IsScalar() ? std::vector{config["containers"].as<std::string>()} : config["containers"].as<std::vector<std::string>>();
 		for (const auto& container : temp_containers) {
-			if (const FormID temp_formid = GetFormEditorIDFromString(container)) {
+			if (const FormID temp_formid = FormReader::GetFormEditorIDFromString(container)) {
 				settings.containers.insert(temp_formid);
 			}
 		}
@@ -657,7 +655,7 @@ DefaultSettings PresetParse::parseDefaults_(const YAML::Node& config)
                                             : "";
         const FormID temp_formid = temp_formeditorid.empty()
                                         ? 0
-                                        : GetFormEditorIDFromString(temp_formeditorid);
+                                        : FormReader::GetFormEditorIDFromString(temp_formeditorid);
         if (!temp_formid && !temp_formeditorid.empty()) {
             logger::error("Formid could not be obtained for {}", temp_formid, temp_formeditorid);
             return {};
@@ -700,7 +698,7 @@ DefaultSettings PresetParse::parseDefaults_(const YAML::Node& config)
                 const FormID temp_effect_formid =
                     temp_effect_formeditorid.empty()
                         ? 0
-                        : GetFormEditorIDFromString(temp_effect_formeditorid);
+                        : FormReader::GetFormEditorIDFromString(temp_effect_formeditorid);
                 if (temp_effect_formid>0){
                     const auto temp_magnitude = effectNode["magnitude"].as<float>();
                     const auto temp_duration = effectNode["duration"].as<DurationMGEFF>();
@@ -732,7 +730,7 @@ DefaultSettings PresetParse::parseDefaults_(const YAML::Node& config)
     // final formid
     const FormID temp_decayed_id =
         config["finalFormEditorID"] && !config["finalFormEditorID"].IsNull()
-			? GetFormEditorIDFromString(config["finalFormEditorID"].as<std::string>())
+			? FormReader::GetFormEditorIDFromString(config["finalFormEditorID"].as<std::string>())
 			: 0;
     if (!temp_decayed_id) {
         logger::error("Decayed id is 0.");

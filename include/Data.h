@@ -25,7 +25,7 @@ struct Source {
 
     void UpdateAddons();
 
-    [[nodiscard]] RE::TESBoundObject* GetBoundObject() const { return GetFormByID<RE::TESBoundObject>(formid, editorid); };
+    [[nodiscard]] RE::TESBoundObject* GetBoundObject() const { return FormReader::GetFormByID<RE::TESBoundObject>(formid, editorid); };
 
     std::unordered_map<RefID, std::vector<StageUpdate>> UpdateAllStages(const std::vector<RefID>& filter, float time);
 
@@ -151,7 +151,7 @@ private:
 
             if (stage_no == 0) RegisterStage(formid, stage_no);
 			else {
-                if (const auto stage_form = GetFormByID(stage_formid, ""); !stage_form) {
+                if (const auto stage_form = FormReader::GetFormByID(stage_formid, ""); !stage_form) {
                     logger::error("Stage form {} not found.", stage_formid);
 					continue;
 				}
@@ -189,7 +189,7 @@ private:
 	    }
         const FormID new_formid = DFT->FetchCreate<T>(formid, editorid, static_cast<uint32_t>(st_no));
 
-        if (const auto stage_form = GetFormByID<T>(new_formid)) {
+        if (const auto stage_form = FormReader::GetFormByID<T>(new_formid)) {
             RegisterStage(new_formid, st_no);
             if (!stages.contains(st_no)) {
                 logger::error("Stage {} not found in stages.", st_no);

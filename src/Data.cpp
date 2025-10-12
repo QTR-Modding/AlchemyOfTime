@@ -11,7 +11,7 @@ void Source::Init(const DefaultSettings* defaultsettings) {
 		return;
 	}
 
-    const RE::TESForm* form = GetFormByID(formid, editorid);
+    const RE::TESForm* form = FormReader::GetFormByID(formid, editorid);
     if (const auto bound_ = GetBoundObject(); !form || !bound_) {
         logger::error("Form not found.");
         InitFailed();
@@ -104,13 +104,13 @@ void Source::Init(const DefaultSettings* defaultsettings) {
 }
 
 std::string_view Source::GetName() const {
-    if (const auto form = GetFormByID(formid, editorid)) return form->GetName();
+    if (const auto form = FormReader::GetFormByID(formid, editorid)) return form->GetName();
     return "";
 }
 
 void Source::UpdateAddons()
 {
-	const auto* form = GetFormByID(formid, editorid);
+	const auto* form = FormReader::GetFormByID(formid, editorid);
 	if (!form) {
 		logger::error("UpdateAddons: Form not found.");
 		return;
@@ -977,7 +977,7 @@ void Source::RegisterStage(const FormID stage_formid, const StageNo stage_no)
         return;
     }
 
-    if (const auto stage_form = GetFormByID(stage_formid); !stage_form) {
+    if (const auto stage_form = FormReader::GetFormByID(stage_formid); !stage_form) {
         logger::error("Could not create copy form for stage {}", stage_no);
         return;
     }

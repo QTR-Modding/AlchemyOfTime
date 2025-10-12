@@ -55,7 +55,7 @@ struct Stage {
         return no == other.no && formid == other.formid && duration == other.duration;
     }
 
-    [[nodiscard]] RE::TESBoundObject* GetBound() const { return GetFormByID<RE::TESBoundObject>(formid); }
+    [[nodiscard]] RE::TESBoundObject* GetBound() const { return FormReader::GetFormByID<RE::TESBoundObject>(formid); }
 
     [[nodiscard]] bool CheckIntegrity() const;
 
@@ -111,7 +111,7 @@ struct StageInstance {
 
     StageInstance& operator=(const StageInstance& other);
 
-    [[nodiscard]] RE::TESBoundObject* GetBound() const { return GetFormByID<RE::TESBoundObject>(xtra.form_id); };
+    [[nodiscard]] RE::TESBoundObject* GetBound() const { return FormReader::GetFormByID<RE::TESBoundObject>(xtra.form_id); };
 
     [[nodiscard]] inline float GetElapsed(float curr_time) const;
 

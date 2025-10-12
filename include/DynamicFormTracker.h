@@ -80,7 +80,7 @@ class DynamicFormTracker : public DFSaveLoadData {
 		std::shared_lock lock(forms_mutex);
 		for (const auto& [base_pair, dyn_formset] : forms) {
 			if (dyn_formset.contains(dynamic_formid)) {
-				return GetFormByID(base_pair.first, base_pair.second);
+				return FormReader::GetFormByID(base_pair.first, base_pair.second);
 			}
 		}
 		return nullptr;
@@ -425,7 +425,7 @@ public:
 
     std::unordered_set<FormID> GetFormSet(const FormID base_formid, std::string base_editorid = "") {
         if (base_editorid.empty()) {
-            base_editorid = GetEditorID(base_formid);
+            base_editorid = FormReader::GetEditorID(base_formid);
             if (base_editorid.empty()) {
                 return {};
             }
@@ -464,7 +464,7 @@ public:
 		lock.unlock();
 		std::shared_lock lock2(act_effs_mutex);
         for (const auto& [base_formid, dynamicFormid, elapsed, custom_id] : act_effs) {
-            const auto base_form = GetFormByID(base_formid);
+            const auto base_form = FormReader::GetFormByID(base_formid);
             if (!base_form) {
 				logger::error("Failed to get base form.");
 				continue;
@@ -499,7 +499,7 @@ public:
     // tries to fetch by custom id. regardless, returns formid if there is in the bank
     FormID Fetch(const FormID baseFormID, const std::string& baseEditorID,
                  const std::optional<uint32_t> customID) {
-        auto* base_form = GetFormByID(baseFormID, baseEditorID);
+        auto* base_form = FormReader::GetFormByID(baseFormID, baseEditorID);
 
         if (!base_form) {
             logger::error("Failed to get base form.");
@@ -525,8 +525,8 @@ public:
                        const std::optional<uint32_t> customID) {
 
         // TODO merge with Fetch
-        auto* base_form = GetFormByID<T>(baseFormID, baseEditorID);
-        
+        auto* base_form = FormReader::GetFormByID<T>(baseFormID, baseEditorID);
+
         if (!base_form) {
 			logger::error("Failed to get base form.");
 			return 0;
@@ -545,7 +545,7 @@ public:
         }
 
 		// before creating new one, try to find one from the bank without custom id
-		if (const auto dyn_form = GetFormByID<T>(Fetch(baseFormID,baseEditorID,{}))) {
+		if (const auto dyn_form = FormReader::GetFormByID<T>(Fetch(baseFormID,baseEditorID,{}))) {
 			return dyn_form->GetFormID();
         }
 
@@ -560,7 +560,7 @@ public:
 
     [[maybe_unused]] void ReviveAll() {
         for (const auto& [base, formset] : forms) {
-            auto* base_form = GetFormByID(base.first, base.second);
+            auto* base_form = FormReader::GetFormByID(base.first, base.second);
             if (!base_form) {
                 logger::error("Failed to get base form.");
                 continue;
@@ -575,17 +575,17 @@ public:
 
     void Reserve(const FormID baseID, const std::string& baseEditorID,const FormID dynamic_formid) {
         if (auto lock = std::shared_lock(protected_forms_mutex); protected_forms.contains(dynamic_formid)) return;
-        const auto base_form = GetFormByID(
+        const auto base_form = FormReader::GetFormByID(
             baseID, baseEditorID);
         if (!base_form) {
 			logger::warn("Base form with ID {:x} not found in forms.", baseID);
 			return;
 		}
-        if (!GetFormByID(dynamic_formid)) {
+        if (!FormReader::GetFormByID(dynamic_formid)) {
             logger::warn("Form with ID {:x} not found in forms.", dynamic_formid);
             return;
         } 
-        const auto form = GetFormByID(dynamic_formid);
+        const auto form = FormReader::GetFormByID(dynamic_formid);
         if (!underlying_check(base_form, form)) {
             logger::warn("Underlying check failed for form with ID {:x}.", dynamic_formid);
             return;
@@ -669,7 +669,7 @@ public:
         for (const auto& [lhs, rhs] : m_Data) {
             auto base_formid = lhs.first;
             const auto& base_editorid = lhs.second;
-            const auto temp_form = GetFormByID(0, base_editorid);
+            const auto temp_form = FormReader::GetFormByID(0, base_editorid);
             if (!temp_form) logger::critical("Failed to get base form.");
             else base_formid = temp_form->GetFormID();
             for (const auto& [dyn_formid, custom_id, act_eff_elpsd] : rhs) {
@@ -747,7 +747,7 @@ public:
         for (const auto& [base, formset] : forms) {
 			logger::info("---------------------Base formid: {:x}, EditorID: {}---------------------", base.first, base.second);
 			for (const auto _formid : formset) {
-				logger::info("Dynamic formid: {:x} with name: {}", _formid, GetFormByID(_formid)->GetName());
+				logger::info("Dynamic formid: {:x} with name: {}", _formid, FormReader::GetFormByID(_formid)->GetName());
 			}
 		}
     }
@@ -763,7 +763,7 @@ public:
 				continue;
 			}
             const auto& [has_cstmid, custom_id] = customid;
-            const auto base_mg_item = GetFormByID(baseFormid);
+            const auto base_mg_item = FormReader::GetFormByID(baseFormid);
             if (!base_mg_item) {
 				logger::error("Failed to get base form.");
 				continue;

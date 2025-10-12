@@ -52,39 +52,6 @@ bool FileIsEmpty(const std::string& filename)
     return true;  // Only whitespace characters or file is empty
 }
 
-std::vector<std::pair<int, bool>> encodeString(const std::string& inputString) {
-    std::vector<std::pair<int, bool>> encodedValues;
-    try {
-        for (int i = 0; i < 100 && inputString[i] != '\0'; i++) {
-            char ch = inputString[i];
-            if (std::isprint(ch) && (std::isalnum(ch) || std::isspace(ch) || std::ispunct(ch)) && ch >= 0 &&
-                ch <= 255) {
-                encodedValues.emplace_back(static_cast<int>(ch), std::isupper(ch));
-            }
-        }
-    } catch (const std::exception& e) {
-        logger::error("Error encoding string: {}", e.what());
-        return encodeString("ERROR");
-    }
-    return encodedValues;
-}
-
-std::string decodeString(const std::vector<std::pair<int, bool>>& encodedValues) {
-    std::string decodedString;
-    for (const auto& [fst, snd] : encodedValues) {
-        char ch = static_cast<char>(fst);
-        if (std::isalnum(ch) || std::isspace(ch) || std::ispunct(ch)) {
-            if (snd) {
-                decodedString += ch;
-            } else {
-                decodedString += static_cast<char>(std::tolower(ch));
-            }
-        }
-    }
-    return decodedString;
-}
-
-
 void hexToRGBA(const uint32_t color_code, RE::NiColorA& nicolora) {
     if (color_code > 0xFFFFFF) {
         // 8-digit hex (RRGGBBAA)
@@ -105,93 +72,26 @@ void hexToRGBA(const uint32_t color_code, RE::NiColorA& nicolora) {
 	nicolora.blue /= 255.0f;
 }
 
-namespace {
-    bool isValidHexWithLength7or8(std::string_view input)
-    {
-        if (input.starts_with("0x") || input.starts_with("0X")) {
-            input.remove_prefix(2);
-        }
-
-        if (input.length() < 7 || input.length() > 8) {
-            return false;
-        }
-
-        return std::ranges::all_of(input, [](const char c) {
-            return std::isxdigit(static_cast<unsigned char>(c));
-        });
-    }
-};
-
-std::string GetEditorID(const FormID a_formid) {
-    if (const auto form = RE::TESForm::LookupByID(a_formid)) {
-        return clib_util::editorID::get_editorID(form);
-    }
-    return "";
-}
-
-FormID GetFormEditorIDFromString(const std::string& formEditorId)
-{
-	static const std::string delimiter = "~";
-	const auto plugin_and_localid = FormReader::split(formEditorId, delimiter);
-	if (plugin_and_localid.size() == 2) {
-		const auto& plugin_name = plugin_and_localid[1];
-		const auto local_id = FormReader::GetFormIDFromString(plugin_and_localid[0]);
-		const auto formid = FormReader::GetForm(plugin_name.c_str(), local_id);
-		if (const auto form = RE::TESForm::LookupByID(formid)) return form->GetFormID();
-	}
-
-    if (isValidHexWithLength7or8(formEditorId)) {
-        int form_id_;
-        std::stringstream ss;
-        ss << std::hex << formEditorId;
-        ss >> form_id_;
-        if (const auto temp_form = GetFormByID(form_id_, "")) return temp_form->GetFormID();
-        logger::warn("Formid is null for editorid {}", formEditorId);
-        return 0;
-    }
-    if (formEditorId.empty()) return 0;
-    if (!IsPo3Installed()) {
-        logger::error("Po3 is not installed.");
-        MsgBoxesNotifs::Windows::Po3ErrMsg();
-        return 0;
-    }
-    if (const auto temp_form = GetFormByID(0, formEditorId)) return temp_form->GetFormID();
-    return 0;
-}
-
-
-inline bool FormIsOfType(const RE::TESForm* form, const RE::FormType type)
-{
-    if (!form) return false;
-    return form->Is(type);
-	//return form->GetFormType() == type;
-}
-
 bool IsFoodItem(const RE::TESForm* form)
 {
-    if (FormIsOfType(form,RE::AlchemyItem::FORMTYPE)){
+    if (form->Is(RE::AlchemyItem::FORMTYPE)){
         const RE::AlchemyItem* form_as_ = form->As<RE::AlchemyItem>();
         if (!form_as_) return false;
         if (!form_as_->IsFood()) return false;
     }
-    else if (FormIsOfType(form,RE::IngredientItem::FORMTYPE)){
+    else if (form->Is(RE::IngredientItem::FORMTYPE)){
         const RE::IngredientItem* form_as_ = form->As<RE::IngredientItem>();
         if (!form_as_) return false;
         if (!form_as_->IsFood()) return false;
 
     }
-    //else if(FormIsOfType(form,RE::MagicItem::FORMTYPE)){
-    //    RE::MagicItem* form_as_ = form->As<RE::MagicItem>();
-    //    if (!form_as_) return false;
-    //    if (!form_as_->IsFood()) return false;
-    //}
     else return false;
     return true;
 }
 
 bool IsPoisonItem(const RE::TESForm* form)
 {
-    if (FormIsOfType(form, RE::AlchemyItem::FORMTYPE)) {
+    if (form->Is(RE::AlchemyItem::FORMTYPE)) {
         const RE::AlchemyItem* form_as_ = form->As<RE::AlchemyItem>();
         if (!form_as_) return false;
         if (!form_as_->IsPoison()) return false;
@@ -202,7 +102,7 @@ bool IsPoisonItem(const RE::TESForm* form)
 
 bool IsMedicineItem(const RE::TESForm* form)
 {
-    if (FormIsOfType(form, RE::AlchemyItem::FORMTYPE)) {
+    if (form->Is(RE::AlchemyItem::FORMTYPE)) {
         const RE::AlchemyItem* form_as_ = form->As<RE::AlchemyItem>();
         if (!form_as_) return false;
         if (!form_as_->IsMedicine()) return false;
@@ -215,7 +115,7 @@ void OverrideMGEFFs(RE::BSTArray<RE::Effect*>& effect_array, const std::vector<F
 {
     size_t some_index = 0;
     for (auto* effect : effect_array) {
-        if (auto* other_eff = GetFormByID<RE::EffectSetting>(new_effects[some_index]); !other_eff){
+        if (auto* other_eff = FormReader::GetFormByID<RE::EffectSetting>(new_effects[some_index]); !other_eff){
             effect->effectItem.duration = 0;
             effect->effectItem.magnitude = 0;
         }
@@ -1302,7 +1202,7 @@ std::int32_t Inventory::GetItemCount(RE::TESBoundObject* item, RE::TESObjectREFR
 bool Inventory::IsQuestItem(const FormID formid, RE::TESObjectREFR* inv_owner)
 {
     const auto inventory = inv_owner->GetInventory();
-    if (auto item = GetFormByID<RE::TESBoundObject>(formid)) {
+    if (auto item = FormReader::GetFormByID<RE::TESBoundObject>(formid)) {
         if (const auto it = inventory.find(item); it != inventory.end()) {
             if (it->second.second->IsQuestObject()) return true;
         }
