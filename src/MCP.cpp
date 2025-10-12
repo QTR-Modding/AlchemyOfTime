@@ -462,7 +462,7 @@ void UI::IniSettingToggle(bool& setting, const std::string& setting_name, const 
 {
     const bool previous_state = setting;
     ImGui::Checkbox(setting_name.c_str(), &setting);
-    if (Settings::disable_warnings != previous_state) {
+    if (setting != previous_state) {
         // save to INI
         Settings::INI_settings[section_name][setting_name] = setting;
         CSimpleIniA ini;
