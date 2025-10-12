@@ -783,8 +783,8 @@ bool WorldObject::AreClose(const RE::TESObjectREFR* a_obj1, const RE::TESObjectR
 
 
     const auto a_obj1_center = GetPosition(a_obj1);
-	const auto closest1 = GetClosestPoint(a_obj1_center, a_obj2);
-	const auto closest2 = GetClosestPoint(closest1, a_obj1);
+    const auto closest1 = GetClosestPoint(a_obj1_center, a_obj2);
+    const auto closest2 = GetClosestPoint(closest1, a_obj1);
 	if (closest1.GetDistance(closest2) < threshold) {
 #ifndef NDEBUG
         draw_line(closest1, closest2, 3,glm::vec4(1.f,1.f,1.f,1.f));
