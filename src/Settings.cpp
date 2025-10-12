@@ -40,6 +40,10 @@ bool Settings::IsQFormType(const FormID formid, const std::string& qformtype) {
     return false;*/
 
     const auto* form = FormReader::GetFormByID(formid);
+    if (!form) {
+        logger::warn("IsQFormType: Form not found.");
+        return false;
+	}
     const auto it = qformCheckers.find(qformtype);
     return (it != qformCheckers.end()) ? it->second(form) : false;
 }
@@ -467,98 +471,115 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config)
 
     // delayers
     int n_warnings = 0;
-    for (const auto& modulator : config["timeModulators"]) {
-        if (auto temp_formid = parse_formid(modulator, "FormEditorID")) {
-			auto a_formid = *temp_formid;
-			// allowed_stages
+    if (config["timeModulators"] && !config["timeModulators"].IsNull()) {
+        for (const auto& modulator : config["timeModulators"]) {
+            if (!modulator["FormEditorID"] || modulator["FormEditorID"].IsNull()) {
+                if (n_warnings < warnings_limit) {
+                    logger::warn("timeModulators: FormEditorID field has error.");
+                    n_warnings++;
+                }
+                continue;
+            }
+            // allowed_stages
             std::vector<StageNo> a_asv;
             if (modulator["allowed_stages"] && !modulator["allowed_stages"].IsNull()) {
                 a_asv = PresetHelpers::YAML_Helpers::CollectFrom<StageNo>(modulator, "allowed_stages");
-			}
-		    settings.delayer_allowed_stages[a_formid] = std::unordered_set(a_asv.begin(), a_asv.end());
+		    }
 		    // delayer magnitude
-            settings.delayers[a_formid] = !modulator["magnitude"].IsNull() ? modulator["magnitude"].as<float>() : 1;
-            // delayer (order)
-		    settings.delayers_order.insert(a_formid);
+            const auto delayer_magnitude = !modulator["magnitude"].IsNull() ? modulator["magnitude"].as<float>() : 1.f;
             // colors
-            if (auto a_color = parse_color(modulator, "color")) settings.delayer_colors[a_formid] = *a_color ;
+		    auto a_color = parse_color(modulator, "color");
 		    // sounds
-		    if (auto a_sound = parse_formid(modulator, "sound")) settings.delayer_sounds[a_formid] = *a_sound;
+		    auto a_sound = parse_formid(modulator, "sound");
 		    // art_objects
-		    if (auto a_art_object = parse_formid(modulator, "art_object")) settings.delayer_artobjects[a_formid] = *a_art_object;
+		    auto a_art_object = parse_formid(modulator, "art_object");
 		    // effect_shaders
-		    if (auto a_effect_shader = parse_formid(modulator, "effect_shader")) settings.delayer_effect_shaders[a_formid] = *a_effect_shader;
+		    auto a_effect_shader = parse_formid(modulator, "effect_shader");
 		    // containers
-            auto containers = parse_formid_vec(modulator, "containers");
-		    settings.delayer_containers[a_formid].insert(containers.begin(), containers.end());
-        }
-        else if (n_warnings < warnings_limit) {
-			logger::warn("timeModulators: Formid is 0");
-			n_warnings++;
+		    auto containers = parse_formid_vec(modulator, "containers");
+
+            for (auto a_formid : parse_formid_vec(modulator, "FormEditorID")) {
+		        settings.delayer_allowed_stages[a_formid] = std::unordered_set(a_asv.begin(), a_asv.end());
+                settings.delayers[a_formid] = delayer_magnitude;
+                // delayer (order)
+		        settings.delayers_order.insert(a_formid);
+                if (a_color) settings.delayer_colors[a_formid] = *a_color;
+		        if (a_sound) settings.delayer_sounds[a_formid] = *a_sound;
+		        if (a_art_object) settings.delayer_artobjects[a_formid] = *a_art_object;
+		        if (a_effect_shader) settings.delayer_effect_shaders[a_formid] = *a_effect_shader;
+		        settings.delayer_containers[a_formid].insert(containers.begin(), containers.end());
+            }
         }
     }
 
 	// transformers
 	n_warnings = 0;
-    for (const auto& transformer : config["transformers"]) {
+    if (config["transformers"] && !config["transformers"].IsNull()) {
+        for (const auto& transformer : config["transformers"]) {
 
-        FormID a_formid; FormID a_formid2;
-		if (auto temp_formid = parse_formid(transformer, "FormEditorID"); !temp_formid) {
-            if (n_warnings < warnings_limit) {
-                logger::warn("transformers: Formid is 0");
-            }
-            n_warnings++;
-            continue;
-        } else {
-            a_formid = *temp_formid;
-        }
+            FormID a_formid2;
 
-        if (auto temp_finalFormEditorID = parse_formid(transformer, "finalFormEditorID"); !temp_finalFormEditorID) {
-            if (n_warnings < warnings_limit) {
-                logger::warn("transformers: Final FormEditorID is missing.");
-            }
-            n_warnings++;
-            continue;
-		}
-		else {
-            a_formid2 = *temp_finalFormEditorID;
-		} 
-
-		// duration
-		if (auto temp_duration = parse_type<float>(transformer, "duration"); !temp_duration) {
-			if (n_warnings < warnings_limit) {
-				logger::warn("transformers: Duration is missing");
+            if (auto temp_finalFormEditorID = parse_formid(transformer, "finalFormEditorID"); !temp_finalFormEditorID) {
+                if (n_warnings < warnings_limit) {
+                    logger::warn("transformers: Final FormEditorID is missing.");
+                }
                 n_warnings++;
+                continue;
+		    }
+		    else {
+                a_formid2 = *temp_finalFormEditorID;
+		    }
+
+            if (!transformer["FormEditorID"] || transformer["FormEditorID"].IsNull()) {
+                if (n_warnings < warnings_limit) {
+                    logger::warn("transformers: FormEditorID field has error.");
+                    n_warnings++;
+                }
+                continue;
             }
-			continue;
-        }
-        else {
-            settings.transformers[a_formid] = {a_formid2,*temp_duration};
-        }
 
-		// transformers (order)
-		settings.transformers_order.insert(a_formid);
+		    // duration
+		    float a_duration;
+		    if (auto temp_duration = parse_type<float>(transformer, "duration"); !temp_duration) {
+			    if (n_warnings < warnings_limit) {
+				    logger::warn("transformers: Duration is missing");
+                    n_warnings++;
+                }
+			    continue;
+            }
+            else {
+                a_duration = *temp_duration;
+            }
+		    // allowed_stages
+		    std::vector<StageNo> a_asv;
+            if (transformer["allowed_stages"] && !transformer["allowed_stages"].IsNull()) {
+                a_asv = PresetHelpers::YAML_Helpers::CollectFrom<StageNo>(transformer, "allowed_stages");
+            }
+		    // colors
+		    auto a_color = parse_color(transformer, "color");
+		    // sounds
+		    auto a_sound = parse_formid(transformer, "sound");
+		    // art_objects
+		    auto a_art_object = parse_formid(transformer, "art_object");
+		    // effect_shaders
+		    auto a_effect_shader = parse_formid(transformer, "effect_shader");
+		    // containers
+		    auto containers = parse_formid_vec(transformer, "containers");
 
-		// allowed_stages
-		std::vector<StageNo> a_asv;
-        if (!transformer["allowed_stages"] || transformer["allowed_stages"].IsNull()) {
-            a_asv = PresetHelpers::YAML_Helpers::CollectFrom<StageNo>(transformer, "allowed_stages");
+		    for (auto a_formid : parse_formid_vec(transformer, "FormEditorID")) {
+                settings.transformers[a_formid] = {a_formid2,a_duration};
+		        // transformers (order)
+		        settings.transformers_order.insert(a_formid);
+		        settings.transformer_allowed_stages[a_formid] = std::unordered_set(a_asv.begin(), a_asv.end());
+		        if (a_color) settings.transformer_colors[a_formid] = *a_color;
+		        if (a_sound) settings.transformer_sounds[a_formid] = *a_sound;
+		        if (a_art_object) settings.transformer_artobjects[a_formid] = *a_art_object;
+		        if (a_effect_shader) settings.transformer_effect_shaders[a_formid] = *a_effect_shader;
+		        settings.transformer_containers[a_formid].insert(containers.begin(), containers.end());
+            }
         }
-		settings.transformer_allowed_stages[a_formid] = std::unordered_set(a_asv.begin(), a_asv.end());
-		// colors
-		if (auto a_color = parse_color(transformer, "color"); a_color) settings.transformer_colors[a_formid] = *a_color;
-		// sounds
-		if (auto a_sound = parse_formid(transformer, "sound"); a_sound) settings.transformer_sounds[a_formid] = *a_sound;
-		// art_objects
-		if (auto a_art_object = parse_formid(transformer, "art_object"); a_art_object) settings.transformer_artobjects[a_formid] = *a_art_object;
-		// effect_shaders
-		if (auto a_effect_shader = parse_formid(transformer, "effect_shader"); a_effect_shader) settings.transformer_effect_shaders[a_formid] = *a_effect_shader;
-		// containers
-		auto containers = parse_formid_vec(transformer, "containers");
-		settings.transformer_containers[a_formid].insert(containers.begin(), containers.end());
     }
 
-        
     if (!settings.CheckIntegrity()) logger::critical("Settings integrity check failed.");
 
     return settings;
