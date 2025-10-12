@@ -1,6 +1,7 @@
 #pragma once
 #include "Events.h"
 #include "SKSEMCP/SKSEMenuFramework.hpp"
+#include "Logger.h"
 
 
 static void HelpMarker(const char* desc);

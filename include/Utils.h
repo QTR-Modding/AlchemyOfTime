@@ -24,10 +24,6 @@ const auto po3_err_msgbox = std::format(
 const auto general_err_msgbox = std::format("{}: Something went wrong. Please contact the mod author.", mod_name);
 const auto init_err_msgbox = std::format("{}: The mod failed to initialize and will be terminated.", mod_name);
 
-void SetupLog();
-std::filesystem::path GetLogPath();
-std::vector<std::string> ReadLogFile();
-
 std::string DecodeTypeCode(std::uint32_t typeCode);
 
 bool FileIsEmpty(const std::string& filename);

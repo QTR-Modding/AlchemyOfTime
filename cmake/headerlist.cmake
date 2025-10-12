@@ -13,4 +13,5 @@ set(headers ${headers}
 	include/DynamicFormTracker.h
 	include/Data.h
 	include/Threading.h
+	include/Logger.h
 )
