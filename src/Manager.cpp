@@ -83,22 +83,44 @@ void Manager::UpdateLoop()
         // make copy with only stops
         const auto curr_time = cal->GetHoursPassed();
 		std::vector<RefID> ref_stops_copy2;
+		std::vector<RefID> to_apply;
 		for (
             auto lock = std::shared_lock(queueMutex_);
             const auto& key : ref_stops_copy) {
 			if (!_ref_stops_.contains(key)) continue;
             if (auto& val = _ref_stops_.at(key); val.IsDue(curr_time)) {
 		        ref_stops_copy2.push_back(key);
+            } else {
+                to_apply.push_back(key);
             }
-			else if (const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(key)) {
-				if (const auto obj3d = ref->Get3D()) {
-					val.ApplyTint(obj3d);
-				}
-				val.ApplyArtObject(ref);
-				val.ApplyShader(ref);
-				val.ApplySound();
-			}
 		}
+        for (const auto key : to_apply) {
+            if (const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(key)) {
+                const auto obj3d = ref->Get3D();
+                // Snapshot under lock
+                RefStop local;
+                {
+                    std::unique_lock lk(queueMutex_);
+                    const auto it = _ref_stops_.find(key);
+                    if (it == _ref_stops_.end()) continue;
+                    local = it->second; // copy
+                }
+
+                // Do heavy work without holding queueMutex_
+                if (obj3d) local.ApplyTint(obj3d);
+                local.ApplyArtObject(ref);
+                local.ApplyShader(ref);
+                local.ApplySound();
+
+                // Commit back under lock (if still present)
+                {
+                    std::unique_lock lk(queueMutex_);
+                    if (const auto it = _ref_stops_.find(key); it != _ref_stops_.end()) {
+                        it->second = std::move(local);
+                    }
+                }
+            }
+        }
         WoUpdateLoop(ref_stops_copy2);
     }
     Start();
@@ -998,14 +1020,19 @@ void Manager::SwapWithStage(RE::TESObjectREFR* wo_ref)
         logger::critical("Ref is null.");
         return;
     }
-	std::shared_lock lock(sourceMutex_);
-    const auto* st_inst = GetWOStageInstance(wo_ref);
-	lock.unlock();
-    if (!st_inst) {
-        logger::warn("SwapWithStage: Source not found.");
-        return;
+
+    RE::TESBoundObject* toSwap;
+    {
+        std::shared_lock lock(sourceMutex_);
+        if (const auto* st_inst = GetWOStageInstance(wo_ref)) {
+            toSwap = st_inst->GetBound();
+        } else {
+            logger::warn("SwapWithStage: Source not found.");
+            return;
+        }
     }
-    WorldObject::SwapObjects(wo_ref, st_inst->GetBound(), false);
+
+    WorldObject::SwapObjects(wo_ref, toSwap, false);
 }
 
 void Manager::Reset()
@@ -1078,6 +1105,8 @@ void Manager::SendData()
 
 void Manager::HandleLoc(RE::TESObjectREFR* loc_ref)
 {
+    std::unique_lock lk(sourceMutex_);
+
     if (!loc_ref) {
         logger::error("Loc ref is null.");
         return;
@@ -1092,9 +1121,7 @@ void Manager::HandleLoc(RE::TESObjectREFR* loc_ref)
     if (!loc_ref->HasContainer()) {
         logger::trace("Does not have container");
         // remove the loc refid key from locs_to_be_handled map
-        if (const auto it = locs_to_be_handled.find(loc_refid); it != locs_to_be_handled.end()) {
-            locs_to_be_handled.erase(it);
-        }
+        locs_to_be_handled.erase(loc_refid);
         return;
     }
 
@@ -1106,10 +1133,7 @@ void Manager::HandleLoc(RE::TESObjectREFR* loc_ref)
     }
 
     SyncWithInventory(loc_ref);
-
-    if (const auto it = locs_to_be_handled.find(loc_refid); it != locs_to_be_handled.end()) {
-        locs_to_be_handled.erase(it);
-    }
+    locs_to_be_handled.erase(loc_refid);
 
     logger::trace("HandleLoc: synced with loc {}.", loc_refid);
 }
@@ -1238,6 +1262,8 @@ void Manager::ReceiveData()
                             source_editorid);
             source_formid = source_form->GetFormID();
         }
+
+        std::unique_lock lock(sourceMutex_);
         for (const auto& st_plain : rhs) {
             if (st_plain.is_fake) locs_to_be_handled[loc].push_back(st_plain.form_id);
             if (const auto* inserted_instance = RegisterAtReceiveData(source_formid, loc, st_plain); !inserted_instance) {
@@ -1265,9 +1291,8 @@ void Manager::ReceiveData()
             "JUST DO IT! NOW! BEFORE DOING ANYTHING ELSE!");
     } else {
         HandleLoc(player_ref);
-        if (const auto it = locs_to_be_handled.find(player_refid); it != locs_to_be_handled.end()) {
-            locs_to_be_handled.erase(it);
-        }
+        std::unique_lock lk(sourceMutex_);
+        locs_to_be_handled.erase(player_refid);
         Print();
     }
 
