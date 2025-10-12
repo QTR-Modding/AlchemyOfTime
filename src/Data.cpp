@@ -936,11 +936,11 @@ bool Source::CheckIntegrity() {
 }
 
 float Source::GetDecayTime(const StageInstance& st_inst) {
-    if (const auto slope = st_inst.GetDelaySlope(); slope <= 0) return -1;
+    if (const auto slope = st_inst.GetDelaySlope(); slope <= 0) return -1.f;
     StageNo curr_stageno = st_inst.no;
     if (!IsStageNo(curr_stageno)) {
         logger::error("Stage {} does not exist.", curr_stageno);
-        return true;
+        return -1.f;
     }
     const auto last_stage_no = GetLastStageNo();
     float total_duration = 0;
