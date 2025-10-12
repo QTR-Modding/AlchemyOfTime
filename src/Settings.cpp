@@ -3,7 +3,8 @@
 #include <utility>
 #include "SimpleIni.h"
 #include "Threading.h"
-
+#include "CLibUtilsQTR/PresetHelpers/PresetHelpersTXT.hpp"
+#include "CLibUtilsQTR/PresetHelpers/PresetHelpersYAML.hpp"
 
 using QFormChecker = bool(*)(const RE::TESForm*);
 
@@ -246,19 +247,6 @@ namespace {
 
     constexpr int warnings_limit = 5;
 
-    template <typename T>
-    std::vector<T> parse_vector(const YAML::Node& node, const char* key)
-    {
-        std::vector<T> results;
-        if (node[key]) {
-            if (node[key].IsScalar()) {
-                results.push_back(node[key].as<StageNo>());
-            } 
-            else results = node[key].as<std::vector<StageNo>>();
-        }
-        return results;
-    }
-
     void mergeCustomSettings(CustomSettings& dest, const CustomSettings& src) {
         for (const auto& [owners, settings] : src) {
             dest[owners] = settings;
@@ -288,22 +276,10 @@ namespace {
 			    return;
 		    }
             // we have list of owners at each node or a scalar owner
-            if (Node_["owners"].IsScalar()) {
-                const auto ownerName = Node_["owners"].as<std::string>();
-                if (auto temp_settings = PresetParse::parseDefaults_(Node_); temp_settings.CheckIntegrity()) {
-                    fileResult[std::vector{ownerName}] = temp_settings;
-                }
-		    } 
-            else {
-			    std::vector<std::string> owners;
-                for (const auto& owner : Node_["owners"]) {
-				    owners.push_back(owner.as<std::string>());
-			    }
-
-                if (auto temp_settings = PresetParse::parseDefaults_(Node_); temp_settings.CheckIntegrity()) {
-                    fileResult[owners] = temp_settings;
-                }
-		    }
+            if (auto temp_settings = PresetParse::parseDefaults_(Node_); temp_settings.CheckIntegrity()) {
+			    std::vector<std::string> owners = PresetHelpers::YAML_Helpers::CollectFrom<std::string>(Node_, "owners");
+                fileResult[owners] = temp_settings;
+            }
         }
 
         if (!fileResult.empty()) {
@@ -351,21 +327,6 @@ namespace {
         return combinedSettings;
     }
 
-    CustomSettings parseCustoms(const std::string& _type)
-    {
-        CustomSettings _custom_settings;
-        const auto folder_path = "Data/SKSE/Plugins/AlchemyOfTime/" + _type + "/custom";
-        std::filesystem::create_directories(folder_path);
-            
-        for (const auto& entry : std::filesystem::directory_iterator(folder_path)) {
-            if (entry.is_regular_file() && entry.path().extension() == ".yml") {
-                const auto filename = entry.path().string();
-                processCustomFile(filename,_custom_settings);
-            }
-        }
-        return _custom_settings;
-    }
-
     void mergeAddOnSettings(std::unordered_map<FormID, AddOnSettings>& dest, const std::unordered_map<FormID, AddOnSettings>& src)
     {
 	    for (const auto& [formID, settings] : src) {
@@ -395,43 +356,22 @@ namespace {
         }
 
         for (const auto& Node_ : config["formsLists"]){
-		    if (!Node_["forms"]) {
+		    if (!Node_["forms"] || Node_["forms"].IsNull()) {
 			    logger::warn("Forms not found in {}", filename);
 			    return;
 		    }
             // we have list of owners at each node or a scalar owner
-            if (Node_["forms"].IsScalar()) {
-                const auto ownerName = Node_["forms"].as<std::string>();
-                if (auto temp_settings = PresetParse::parseAddOns_(Node_); temp_settings.CheckIntegrity()) {
-				    if (const auto formID = FormReader::GetFormEditorIDFromString(ownerName)) {
-					    fileResult[formID] = temp_settings;
-				    }
-				    else {
-                        logger::error("Formid could not be obtained for {}", ownerName);
-                    }
-                }
-                else {
-				    logger::error("Settings integrity check failed for {}", ownerName);
-                }
-            } 
+            if (auto temp_settings = PresetParse::parseAddOns_(Node_); temp_settings.CheckIntegrity()) {
+                for (const auto owner : PresetHelpers::YAML_Helpers::CollectFrom<FormID, std::string>(Node_, "forms")) {
+					fileResult[owner] = temp_settings;
+				}
+            }
             else {
-			    std::set<FormID> owners;
-                for (const auto& owner : Node_["forms"]) {
-                    if (const auto formID = FormReader::GetFormEditorIDFromString(owner.as<std::string>())) {
-                        owners.insert(formID);
-                    }
-				    else logger::error("Formid could not be obtained for {}", owner.as<std::string>());
-			    }
-
-                if (auto temp_settings = PresetParse::parseAddOns_(Node_); temp_settings.CheckIntegrity()) {
-				    for (const auto owner : owners) {
-					    fileResult[owner] = temp_settings;
-				    }
-			    }
-			    else {
-				    logger::error("Settings integrity check failed for forms starting with {}", *owners.begin());
-                }
-		    }
+				logger::error("Settings integrity check failed for forms starting with {}",
+                              Node_["forms"].IsScalar()
+                                  ? Node_["forms"].as<std::string>()
+                                  : Node_["forms"].begin()->as<std::string>());
+            }
         }
 
 	    if (!fileResult.empty()) {
@@ -503,16 +443,7 @@ namespace {
     };
 
     auto parse_formid_vec = [](const YAML::Node& node, const char* key) -> std::vector<FormID> {
-        std::vector<FormID> formids;
-        if (node[key] && !node[key].IsNull()) {
-            const auto temps = node[key].IsScalar() ? std::vector{ node[key].as<std::string>() } : node[key].as<std::vector<std::string>>();
-            for (const auto& a_temp : temps) {
-				if (const FormID container_formid = FormReader::GetFormEditorIDFromString(a_temp)) {
-					formids.push_back(container_formid);
-				}
-            }
-        }
-		return formids;
+		return PresetHelpers::YAML_Helpers::CollectFrom<FormID, std::string>(node, key);
     };
 
 	template <typename T>
@@ -530,12 +461,8 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config)
 
     // containers
     if (config["containers"] && !config["containers"].IsNull()) {
-		const auto temp_containers = config["containers"].IsScalar() ? std::vector{config["containers"].as<std::string>()} : config["containers"].as<std::vector<std::string>>();
-		for (const auto& container : temp_containers) {
-			if (const FormID temp_formid = FormReader::GetFormEditorIDFromString(container)) {
-				settings.containers.insert(temp_formid);
-			}
-		}
+		auto containers = parse_formid_vec(config, "containers");
+        settings.containers.insert(containers.begin(), containers.end());
     }
 
     // delayers
@@ -544,8 +471,11 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config)
         if (auto temp_formid = parse_formid(modulator, "FormEditorID")) {
 			auto a_formid = *temp_formid;
 			// allowed_stages
-            auto a_asv = parse_vector<StageNo>(modulator, "allowed_stages");
-		    settings.delayer_allowed_stages[a_formid] = std::unordered_set<StageNo>(a_asv.begin(), a_asv.end());
+            std::vector<StageNo> a_asv;
+            if (modulator["allowed_stages"] && !modulator["allowed_stages"].IsNull()) {
+                a_asv = PresetHelpers::YAML_Helpers::CollectFrom<StageNo>(modulator, "allowed_stages");
+			}
+		    settings.delayer_allowed_stages[a_formid] = std::unordered_set(a_asv.begin(), a_asv.end());
 		    // delayer magnitude
             settings.delayers[a_formid] = !modulator["magnitude"].IsNull() ? modulator["magnitude"].as<float>() : 1;
             // delayer (order)
@@ -610,8 +540,11 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config)
 		settings.transformers_order.insert(a_formid);
 
 		// allowed_stages
-		auto a_asv = parse_vector<StageNo>(transformer, "allowed_stages");
-		settings.transformer_allowed_stages[a_formid] = std::unordered_set<StageNo>(a_asv.begin(), a_asv.end());
+		std::vector<StageNo> a_asv;
+        if (!transformer["allowed_stages"] || transformer["allowed_stages"].IsNull()) {
+            a_asv = PresetHelpers::YAML_Helpers::CollectFrom<StageNo>(transformer, "allowed_stages");
+        }
+		settings.transformer_allowed_stages[a_formid] = std::unordered_set(a_asv.begin(), a_asv.end());
 		// colors
 		if (auto a_color = parse_color(transformer, "color"); a_color) settings.transformer_colors[a_formid] = *a_color;
 		// sounds
@@ -893,72 +826,9 @@ void PresetParse::LoadJSONSettings()
 	Settings::ticker_speed = Settings::Ticker::from_string(ticker["speed"].GetString());
 }
 
-void PresetParse::LoadSettings() {
-    logger::info("Loading settings.");
-    try {
-        LoadINISettings();
-    } catch (const std::exception& ex) {
-		logger::critical("Failed to load ini settings: {}", ex.what());
-		Settings::failed_to_load = true;
-		return;
-	}
-    if (!Settings::INI_settings.contains("Modules")) {
-        logger::critical("Modules section not found in ini settings.");
-		Settings::failed_to_load = true;
-		return;
-	}
-    for (const auto& [key,val]: Settings::INI_settings["Modules"]) {
-        if (val) Settings::QFORMS.push_back(key);
-	}
-
-    for (const auto& _qftype: Settings::QFORMS) {
-        try {
-            logger::info("Loading defaultsettings for {}", _qftype);
-			if (auto temp_default_settings = parseDefaults(_qftype); !temp_default_settings.IsEmpty()) {
-                Settings::defaultsettings[_qftype] = temp_default_settings;
-			}
-        } catch (const std::exception& ex) {
-            logger::critical("Failed to load default settings for {}: {}", _qftype, ex.what());
-            Settings::failed_to_load = true;
-            return;
-        }
-        try {
-            logger::info("Loading custom settings for {}", _qftype);
-			if (auto temp_custom_settings = parseCustoms(_qftype); !temp_custom_settings.empty()) {
-                Settings::custom_settings[_qftype] = temp_custom_settings;
-			}
-        } catch (const std::exception& ex) {
-			logger::critical("Failed to load custom settings for {}: {}", _qftype, ex.what());
-			Settings::failed_to_load = true;
-            return;
-        }
-        try {
-			logger::info("Loading exclude list for {}", _qftype);
-            Settings::exclude_list[_qftype] = PresetParse::LoadExcludeList(_qftype);
-        } catch (const std::exception& ex) {
-			logger::critical("Failed to load exclude list for {}: {}", _qftype, ex.what());
-            Settings::failed_to_load = true;
-            return;
-        }
-		try {
-			logger::info("Loading addons for {}", _qftype);
-		    Settings::addon_settings[_qftype] = parseAddOns(_qftype);
-		}
-		catch (const std::exception& ex) {
-			logger::critical("Failed to load addons for {}: {}", _qftype, ex.what());
-			Settings::failed_to_load = true;
-			return;
-		}
-	}
-
-	try {
-		LoadJSONSettings();
-	}
-	catch (const std::exception& ex) {
-		logger::critical("Failed to load json settings: {}", ex.what());
-		Settings::failed_to_load = true;
-		return;
-	}
+void PresetParse::LoadFormGroups() {
+    const auto folder_path = std::format("Data/SKSE/Plugins/{}", mod_name) + "/formGroups";
+    PresetHelpers::TXT_Helpers::GatherForms(folder_path);
 }
 
 void PresetParse::LoadSettingsParallel()
@@ -989,6 +859,8 @@ void PresetParse::LoadSettingsParallel()
 	std::mutex excludeListMutex;
 	std::mutex addonsettingsMutex;
 
+    logger::info("Loading form groups");
+    LoadFormGroups();
 
     for (const auto& _qftype: Settings::QFORMS) {
         typeFutures.push_back(typePool.enqueue([_qftype,&defaultsettingsMutex,&customsettingsMutex,&excludeListMutex,&addonsettingsMutex]() {

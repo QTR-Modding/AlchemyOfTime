@@ -1,7 +1,7 @@
 #pragma once
 #include "CustomObjects.h"
 #include <yaml-cpp/yaml.h>
-
+#include "rapidjson/document.h"
 
 
 namespace Settings {
@@ -155,7 +155,7 @@ namespace PresetParse {
 
     void LoadINISettings();
     void LoadJSONSettings();
-    [[maybe_unused]] void LoadSettings();
+    void LoadFormGroups();
     void LoadSettingsParallel();
     void SaveSettings();
 };

@@ -1,12 +1,9 @@
 #pragma once
 #include <windows.h>
 #include <shared_mutex>
-#include "rapidjson/document.h"
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/istreamwrapper.h>
-#include <rapidjson/error/en.h>
 #include <rapidjson/writer.h>
-
 #include "CLibUtilsQTR/FormReader.hpp"
 
 const auto mod_name = static_cast<std::string>(SKSE::PluginDeclaration::GetSingleton()->GetName());

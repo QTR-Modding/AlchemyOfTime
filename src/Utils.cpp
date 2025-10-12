@@ -154,7 +154,6 @@ void FavoriteItem(const RE::TESBoundObject* item, RE::TESObjectREFR* inventory_o
 				logger::trace("No extraLists");
                 no_extra_ = true;
 			}
-            logger::trace("asdasd");
             if (no_extra_) {
                 logger::trace("No extraLists");
                 //inventory_changes->SetFavorite((*it), nullptr);
