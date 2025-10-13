@@ -447,7 +447,10 @@ namespace {
     };
 
     auto parse_formid_vec = [](const YAML::Node& node, const char* key) -> std::vector<FormID> {
-		return PresetHelpers::YAML_Helpers::CollectFrom<FormID, std::string>(node, key);
+		if (node[key] && !node[key].IsNull()) {
+		    return PresetHelpers::YAML_Helpers::CollectFrom<FormID, std::string>(node, key);
+		}
+		return {};
     };
 
 	template <typename T>
