@@ -24,7 +24,7 @@ namespace Settings {
 														{"BOOK",false},
 														{"SLGM",false},
 														{"MISC",false},
-														{"NPC",false}
+														//{"NPC",false}
                                                         };
     const std::map<const char*, bool> otherkeysvals = {{"PlacedObjectsEvolve", false},{"UnOwnedObjectsEvolve", false},{"WorldObjectsEvolve", false}, {"bReset", false}, {"DisableWarnings",false}};
     const std::map<const char*, std::map<const char*, bool>> InISections = 

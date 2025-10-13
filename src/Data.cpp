@@ -75,7 +75,7 @@ void Source::Init(const DefaultSettings* defaultsettings) {
 	else if (qFormType == "BOOK") GatherStages<RE::TESObjectBOOK>();
 	else if (qFormType == "SLGM") GatherStages<RE::TESSoulGem>();
 	else if (qFormType == "MISC") GatherStages<RE::TESObjectMISC>();
-	else if (qFormType == "NPC") GatherStages<RE::TESNPC>();
+	//else if (qFormType == "NPC") GatherStages<RE::TESNPC>();
 	else {
 		logger::error("QFormType is not one of the predefined types.");
 		InitFailed();
