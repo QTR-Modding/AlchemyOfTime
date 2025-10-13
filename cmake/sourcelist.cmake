@@ -11,4 +11,5 @@ set(sources ${sources}
 	src/Ticker.cpp
 	src/CustomObjects.cpp
 	src/Data.cpp
+	src/Lorebox.cpp
 )
