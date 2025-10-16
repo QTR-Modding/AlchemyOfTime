@@ -308,7 +308,6 @@ struct RefStop {
 	void RemoveArtObject();
 	void RemoveShader();
 	void RemoveSound();
-	void RemoveAll(RE::NiAVObject* a_obj3d);
 
     static bool HasArtObject(RE::TESObjectREFR* a_ref, const RE::BGSArtObject* a_art);
 

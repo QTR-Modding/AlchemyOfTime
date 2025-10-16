@@ -609,14 +609,6 @@ void RefStop::RemoveSound()
 	sound.enabled.store(false);
 }
 
-void RefStop::RemoveAll(RE::NiAVObject* a_obj3d)
-{
-	RemoveTint(a_obj3d);
-	RemoveArtObject();
-	RemoveShader();
-	RemoveSound();
-}
-
 bool RefStop::HasArtObject(RE::TESObjectREFR* a_ref, const RE::BGSArtObject* a_art) {
 	uint32_t count=0;
 	if (const auto processLists = RE::ProcessLists::GetSingleton(); processLists) {
