@@ -354,8 +354,6 @@ namespace WorldObject {
 	std::array<RE::NiPoint3, 8> GetBoundingBox(const RE::TESObjectREFR* a_obj);
 	void DrawBoundingBox(const RE::TESObjectREFR* a_obj);
 	void DrawBoundingBox(const std::array<RE::NiPoint3, 8>& a_box);
-	bool IsInBoundingBox(const std::array<RE::NiPoint3, 8>& a_box, const RE::NiPoint3& a_point);
-    bool IsInTriangle(const RE::NiPoint3& A, const RE::NiPoint3& B, const RE::NiPoint3& C, const RE::NiPoint3& P);
 	RE::NiPoint3 GetClosestPoint(const RE::NiPoint3& a_point_from , const RE::TESObjectREFR* a_obj_to);
 
     bool AreClose(const RE::TESObjectREFR* a_obj1, const RE::TESObjectREFR* a_obj2, float threshold);

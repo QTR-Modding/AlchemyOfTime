@@ -1094,6 +1094,9 @@ FormID Source::SearchNearbyModulators(const RE::TESObjectREFR* a_obj, const std:
 }
 
 namespace {
+
+
+
     bool SearchModulatorInCell_Sub(const RE::TESObjectREFR* a_origin, const RE::TESObjectREFR* ref, const float proximity=Settings::proximity_range) {
 #ifndef NDEBUG
         draw_line(WorldObject::GetPosition(ref), WorldObject::GetPosition(RE::PlayerCharacter::GetSingleton()),3.f, glm::vec4(0.f, 0.f, 1.f, 1.f));
@@ -1102,9 +1105,7 @@ namespace {
         if (!WorldObject::AreClose(a_origin, ref, proximity)) {
 	        return false;
         }
-#ifndef NDEBUG
-        logger::info("Found modulator in proximity: {}", clib_util::editorID::get_editorID(ref->GetBaseObject()));
-#endif
+
         return true;
     }
 };

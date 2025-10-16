@@ -30,9 +30,6 @@ class Manager final : public Ticker, public SaveLoadData {
 
     std::unordered_set<FormID> do_not_register;
 
-    // [locks: queueMutex_]
-    void WoUpdateLoop(const std::vector<RefID>& refs);
-
     static void PreDeleteRefStop(RefStop& a_ref_stop, RE::NiAVObject* a_obj);
 
     // Ticker thread entry. [locks: queueMutex_]

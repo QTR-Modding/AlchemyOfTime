@@ -268,7 +268,7 @@ struct RefStopFeature {
 
 struct RefStop {
 
-    ~RefStop();
+	~RefStop() = default;
 
     bool operator<(const RefStop& other) const {
         return ref_id < other.ref_id;
@@ -301,14 +301,12 @@ struct RefStop {
     void ApplyArtObject(RE::TESObjectREFR* a_ref, float duration=-1.f);
 	void ApplyShader(RE::TESObjectREFR* a_ref, float duration=-1.f);
 	void ApplySound(float volume=200.f);
-    void ApplyAll(RE::TESObjectREFR* a_ref);
     [[nodiscard]] RE::BSSoundHandle& GetSoundHandle() const;
 
 	void RemoveTint(RE::NiAVObject* a_obj3d);
 	void RemoveArtObject();
 	void RemoveShader();
 	void RemoveSound();
-	void RemoveAll(RE::NiAVObject* a_obj3d);
 
     static bool HasArtObject(RE::TESObjectREFR* a_ref, const RE::BGSArtObject* a_art);
 
