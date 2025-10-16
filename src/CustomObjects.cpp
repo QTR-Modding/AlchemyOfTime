@@ -148,8 +148,6 @@ bool Stage::CheckIntegrity() const {
 bool DefaultSettings::CheckIntegrity() {
     if (items.empty() || durations.empty() || stage_names.empty() || effects.empty() || numbers.empty()) {
         logger::error("One of the maps is empty.");
-        logger::trace("Items size: {}, Durations size: {}, Stage names size: {}, Effects size: {}, Numbers size: {}",
-                      items.size(), durations.size(), stage_names.size(), effects.size(), numbers.size());
         init_failed = true;
         return false;
     }
@@ -388,11 +386,6 @@ RefStopFeature& RefStopFeature::operator=(const RefStopFeature& other)
 	return *this;
 }
 
-RefStop::~RefStop() {
-	//const auto soundhelper = SoundHelper::GetSingleton();
-	//soundhelper->DeleteHandle(ref_id);
-}
-
 RefStop& RefStop::operator=(const RefStop& other) {
 	if (this != &other) {
         ref_id = other.ref_id;
@@ -485,14 +478,13 @@ void RefStop::ApplyArtObject(RE::TESObjectREFR* a_ref, const float duration)
 		logger::error("Art object not found.");
 		return;
 	}
-	//if (applied_art_objects.contains(art_object.id)) return;
-	//if (HasArtObject(a_ref, a_art_obj)) return;
-	SKSE::GetTaskInterface()->AddTask([a_ref, a_art_obj, duration]() {
+
+    SKSE::GetTaskInterface()->AddTask([a_ref, a_art_obj, duration]() {
 		if (!a_ref || !a_art_obj) return;
 	    a_ref->ApplyArtObject(a_art_obj, duration);
 		});
-	//model_ref_eff = a_model_ref_eff_ptr;
-	applied_art_objects.insert(art_object.id);
+
+    applied_art_objects.insert(art_object.id);
 
 	art_object.enabled.store(true);
 }
@@ -523,16 +515,6 @@ void RefStop::ApplySound(const float volume)
 	const auto soundhelper = SoundHelper::GetSingleton();
 	soundhelper->Play(ref_id, sound.id, volume);
 	sound.enabled.store(true);
-}
-
-void RefStop::ApplyAll(RE::TESObjectREFR* a_ref)
-{
-	if (const auto a_obj3d = a_ref->Get3D()) {
-		ApplyTint(a_obj3d);
-	}
-	ApplyArtObject(a_ref);
-	ApplyShader(a_ref);
-	ApplySound();
 }
 
 RE::BSSoundHandle& RefStop::GetSoundHandle() const {
