@@ -370,7 +370,7 @@ void DefaultSettings::AddHelper(std::unordered_set<FormID>& dest, const std::uno
 	}
 }
 
-RefStopFeature::operator bool() const { return id > 0 && enabled.load(); }
+RefStopFeature::operator bool() const { return id > 0 && enabled; }
 
 RefStopFeature::RefStopFeature() {
 	id = 0;
@@ -381,7 +381,7 @@ RefStopFeature& RefStopFeature::operator=(const RefStopFeature& other)
 {
 	if (this != &other) {
 		id = other.id;
-		enabled = other.enabled.load();
+		enabled = other.enabled;
 	}
 	return *this;
 }
@@ -462,17 +462,17 @@ void RefStop::ApplyTint(RE::NiAVObject* a_obj3d) {
 	if (!tint_color.id) {
         return RemoveTint(a_obj3d);
 	}
-	if (tint_color.enabled.load()) return;
+	if (tint_color.enabled) return;
     RE::NiColorA color;
 	hexToRGBA(tint_color.id, color);
 	a_obj3d->TintScenegraph(color);
-	tint_color.enabled.store(true);
+	tint_color.enabled = true;
 }
 
 void RefStop::ApplyArtObject(RE::TESObjectREFR* a_ref, const float duration)
 {
 	if (!art_object.id) return RemoveArtObject();
-	if (art_object.enabled.load()) return;
+	if (art_object.enabled) return;
 	const auto a_art_obj = RE::TESForm::LookupByID<RE::BGSArtObject>(art_object.id);
 	if (!a_art_obj) {
 		logger::error("Art object not found.");
@@ -486,13 +486,13 @@ void RefStop::ApplyArtObject(RE::TESObjectREFR* a_ref, const float duration)
 
     applied_art_objects.insert(art_object.id);
 
-	art_object.enabled.store(true);
+	art_object.enabled = true;
 }
 
 void RefStop::ApplyShader(RE::TESObjectREFR* a_ref, const float duration)
 {
 	if (!effect_shader.id) return RemoveShader();
-	if (effect_shader.enabled.load()) return;
+	if (effect_shader.enabled) return;
 	const auto eff_shader = RE::TESForm::LookupByID<RE::TESEffectShader>(effect_shader.id);
 	if (!eff_shader) {
 		logger::error("Shader not found.");
@@ -504,7 +504,7 @@ void RefStop::ApplyShader(RE::TESObjectREFR* a_ref, const float duration)
 		});
 	//shader_ref_eff = a_shader_ref_eff_ptr;
 
-	effect_shader.enabled.store(true);
+	effect_shader.enabled = true;
 }
 
 void RefStop::ApplySound(const float volume)
@@ -514,7 +514,7 @@ void RefStop::ApplySound(const float volume)
 	}
 	const auto soundhelper = SoundHelper::GetSingleton();
 	soundhelper->Play(ref_id, sound.id, volume);
-	sound.enabled.store(true);
+	sound.enabled = true;
 }
 
 RE::BSSoundHandle& RefStop::GetSoundHandle() const {
@@ -527,7 +527,7 @@ void RefStop::RemoveTint(RE::NiAVObject* a_obj3d)
 {
     const auto color = RE::NiColorA(0.0f, 0.0f, 0.0f, 0.0f);
     a_obj3d->TintScenegraph(color);
-	tint_color.enabled.store(false);
+	tint_color.enabled = false;
 }
 
 void RefStop::RemoveArtObject()
@@ -552,7 +552,7 @@ void RefStop::RemoveArtObject()
 	}
 	applied_art_objects.clear();
 
-	art_object.enabled.store(false);
+	art_object.enabled = false;
 }
 
 void RefStop::RemoveShader()
@@ -581,14 +581,14 @@ void RefStop::RemoveShader()
 	    }
 	}
 	applied_effect_shaders.clear();
-	effect_shader.enabled.store(false);
+	effect_shader.enabled = false;
 }
 
 void RefStop::RemoveSound()
 {
 	const auto soundhelper = SoundHelper::GetSingleton();
 	soundhelper->Stop(ref_id);
-	sound.enabled.store(false);
+	sound.enabled = false;
 }
 
 bool RefStop::HasArtObject(RE::TESObjectREFR* a_ref, const RE::BGSArtObject* a_art) {

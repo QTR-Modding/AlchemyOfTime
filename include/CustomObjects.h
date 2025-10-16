@@ -255,7 +255,7 @@ public:
 
 struct RefStopFeature {
 	uint32_t id = 0;
-	std::atomic<bool> enabled = false;
+	bool enabled = false;
 
     explicit operator bool() const;
 
