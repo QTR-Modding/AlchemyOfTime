@@ -53,9 +53,6 @@ namespace Lorebox
 			    logger::error("Failed to add keyword to formid: {:x}", a_formid);
 			    return;
 		    }
-		    else {
-			    logger::info("Added keyword to formid: {:x}", a_formid);
-		    }
 		}
 
 		std::unique_lock ulock(kw_mutex);
