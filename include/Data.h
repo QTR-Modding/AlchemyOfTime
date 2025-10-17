@@ -1,5 +1,6 @@
 #pragma once
 #include "DynamicFormTracker.h"
+#include "Lorebox.h"
 
 struct Source {
     
@@ -135,6 +136,7 @@ private:
         
     }
 
+    // also adds keywords
     template <typename T>
     void GatherStages()  {
         for (StageNo stage_no: settings.numbers) {
@@ -151,10 +153,14 @@ private:
 
             if (stage_no == 0) RegisterStage(formid, stage_no);
 			else {
-                if (const auto stage_form = FormReader::GetFormByID(stage_formid, ""); !stage_form) {
+                if (auto stage_form = FormReader::GetFormByID<T>(stage_formid, ""); !stage_form) {
                     logger::error("Stage form {} not found.", stage_formid);
 					continue;
 				}
+                else {
+                    // Add keywords to the stage form
+                    Lorebox::AddKeyword<T>(stage_form);
+                }
                 RegisterStage(stage_formid, stage_no);
 			}
         }
@@ -189,7 +195,7 @@ private:
 	    }
         const FormID new_formid = DFT->FetchCreate<T>(formid, editorid, static_cast<uint32_t>(st_no));
 
-        if (const auto stage_form = FormReader::GetFormByID<T>(new_formid)) {
+        if (auto stage_form = FormReader::GetFormByID<T>(new_formid)) {
             RegisterStage(new_formid, st_no);
             if (!stages.contains(st_no)) {
                 logger::error("Stage {} not found in stages.", st_no);
@@ -218,6 +224,9 @@ private:
                 // change mgeff of fake form
                 ApplyMGEFFSettings(stage_form, settings.effects[st_no]);
             }
+
+			// add keyword
+			Lorebox::AddKeyword<T>(stage_form);
         } else {
 		    logger::error("Could not create copy form for source {}", editorid);
 		    return 0;

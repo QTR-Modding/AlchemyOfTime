@@ -18,6 +18,12 @@ namespace Hooks {
         static void InstallHook(const REL::VariantID& varID, Manager* mngr);
     };
 
+    struct ScaleformTranslatorHook {
+		static void Translate(RE::BSScaleformTranslator* a_this, RE::GFxTranslator::TranslateInfo* a_translateInfo);
+        static inline REL::Relocation<decltype(Translate)> Translate_;
+		static void Install();
+	};
+
     struct UpdateHook {
         static inline RE::TESObjectREFR* object = nullptr;
 		static void Update(RE::Actor* a_this, float a_delta);
