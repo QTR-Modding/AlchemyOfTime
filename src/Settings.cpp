@@ -24,22 +24,34 @@ static const std::unordered_map<std::string, QFormChecker> qformCheckers = {
 	//{"NPC", [](const auto form) {return FormIsOfType(form, RE::TESNPC::FORMTYPE); } }
 };
 
-bool Settings::IsQFormType(const FormID formid, const std::string& qformtype) {
-    // POPULATE THIS
-    /*const auto* form = GetFormByID(formid);
-    if (qformtype == "FOOD") return IsFoodItem(form);
-    if (qformtype == "INGR") return FormIsOfType(form, RE::IngredientItem::FORMTYPE);
-    if (qformtype == "MEDC") return IsMedicineItem(form);
-    if (qformtype == "POSN") return IsPoisonItem(form);
-    if (qformtype == "ARMO") return FormIsOfType(form,RE::TESObjectARMO::FORMTYPE);
-    if (qformtype == "WEAP") return FormIsOfType(form,RE::TESObjectWEAP::FORMTYPE);
-    if (qformtype == "SCRL") return FormIsOfType(form, RE::ScrollItem::FORMTYPE);
-	if (qformtype == "BOOK") return FormIsOfType(form,RE::TESObjectBOOK::FORMTYPE);
-    if (qformtype == "SLGM") return FormIsOfType(form, RE::TESSoulGem::FORMTYPE);
-	if (qformtype == "MISC") return FormIsOfType(form,RE::TESObjectMISC::FORMTYPE);
-	if (qformtype == "NPC") return FormIsOfType(form,RE::TESNPC::FORMTYPE);
-    return false;*/
+// Helper: convert std::wstring to UTF-8 std::string
+static std::string WideToUtf8(const std::wstring& ws)
+{
+	if (ws.empty()) return {};
+	int bytes = ::WideCharToMultiByte(CP_UTF8, 0, ws.c_str(), -1, nullptr, 0, nullptr, nullptr);
+	if (bytes <= 0) return {};
+	std::string out(static_cast<size_t>(bytes - 1), '\0');
+	::WideCharToMultiByte(CP_UTF8, 0, ws.c_str(), -1, out.data(), bytes - 1, nullptr, nullptr);
+	return out;
+}
 
+// Helper: encode wide to ASCII with backslash escapes (non-ASCII -> \uXXXX)
+static std::string EncodeEscapesToAscii(const std::wstring& ws)
+{
+    std::string out;
+    out.reserve(ws.size() * 6);
+    for (wchar_t wc : ws) {
+        if (wc == L'\\') out += "\\\\";
+        else if (wc == L'\n') out += "\\n";
+        else if (wc == L'\r') out += "\\r";
+        else if (wc == L'\t') out += "\\t";
+        else if (wc >= 0 && wc <= 0x7F) out.push_back(static_cast<char>(wc));
+        else out += std::format("\\u{:04X}", static_cast<unsigned>(wc & 0xFFFF));
+    }
+    return out;
+}
+
+bool Settings::IsQFormType(const FormID formid, const std::string& qformtype) {
     const auto* form = FormReader::GetFormByID(formid);
     if (!form) {
         logger::warn("IsQFormType: Form not found.");
@@ -852,6 +864,61 @@ void PresetParse::LoadINISettings()
     Lorebox::color_transform.store(readHex("ColorTransform", Lorebox::color_transform.load()));
     Lorebox::color_separator.store(readHex("ColorSeparator", Lorebox::color_separator.load()));
 
+    // Decode backslash escape sequences like \\uXXXX and \\xHH
+    auto decodeEscapes = [](std::string_view s) -> std::wstring {
+        auto hexVal = [](char ch) -> int {
+            if (ch >= '0' && ch <= '9') return ch - '0';
+            if (ch >= 'a' && ch <= 'f') return 10 + (ch - 'a');
+            if (ch >= 'A' && ch <= 'F') return 10 + (ch - 'A');
+            return -1;
+        };
+        std::wstring out;
+        for (size_t i = 0; i < s.size();) {
+            char c = s[i++];
+            if (c == '\\' && i < s.size()) {
+                char t = s[i++];
+                switch (t) {
+                case 'n': out.push_back(L'\n'); break;
+                case 'r': out.push_back(L'\r'); break;
+                case 't': out.push_back(L'\t'); break;
+                case '\\': out.push_back(L'\\'); break;
+                case 'x': {
+                    int val = 0, digits = 0; 
+                    while (i < s.size()) { int hv = hexVal(s[i]); if (hv < 0) break; val = (val << 4) | hv; ++i; ++digits; if (digits >= 2) break; }
+                    if (digits > 0) out.push_back(static_cast<wchar_t>(val));
+                    else { out.push_back(L'x'); }
+                    break; }
+                case 'u': {
+                    int val = 0, digits = 0;
+                    while (i < s.size() && digits < 4) { int hv = hexVal(s[i]); if (hv < 0) break; val = (val << 4) | hv; ++i; ++digits; }
+                    if (digits == 4) out.push_back(static_cast<wchar_t>(val));
+                    else { out.push_back(L'u'); }
+                    break; }
+                default:
+                    out.push_back(static_cast<unsigned char>(t));
+                    break;
+                }
+            } else {
+                out.push_back(static_cast<unsigned char>(c));
+            }
+        }
+        return out;
+    };
+
+    // Symbols (allow raw ASCII, HTML entities, or backslash-escapes)
+    if (const char* sep = ini.GetValue("LoreBox", "SeparatorSymbol", nullptr)) {
+        auto ws = decodeEscapes(sep);
+        if (!ws.empty()) Lorebox::separator_symbol = ws;
+    }
+    if (const char* ar = ini.GetValue("LoreBox", "ArrowRight", nullptr)) {
+        auto ws = decodeEscapes(ar);
+        if (!ws.empty()) Lorebox::arrow_right = ws;
+    }
+    if (const char* al = ini.GetValue("LoreBox", "ArrowLeft", nullptr)) {
+        auto ws = decodeEscapes(al);
+        if (!ws.empty()) Lorebox::arrow_left = ws;
+    }
+
     // Ensure keys exist with defaults if they were missing
     ini.SetBoolValue("LoreBox", "ShowTitle", lb_title);
     ini.SetBoolValue("LoreBox", "ShowPercentage", lb_pct);
@@ -869,6 +936,11 @@ void PresetParse::LoadINISettings()
     writeHex("ColorFast", Lorebox::color_fast.load());
     writeHex("ColorTransform", Lorebox::color_transform.load());
     writeHex("ColorSeparator", Lorebox::color_separator.load());
+
+    // Write symbol defaults only if missing; preserve user's raw codes/entities (use escaped ASCII)
+    if (!ini.KeyExists("LoreBox", "SeparatorSymbol")) ini.SetValue("LoreBox", "SeparatorSymbol", EncodeEscapesToAscii(Lorebox::separator_symbol).c_str());
+    if (!ini.KeyExists("LoreBox", "ArrowRight")) ini.SetValue("LoreBox", "ArrowRight", EncodeEscapesToAscii(Lorebox::arrow_right).c_str());
+    if (!ini.KeyExists("LoreBox", "ArrowLeft")) ini.SetValue("LoreBox", "ArrowLeft", EncodeEscapesToAscii(Lorebox::arrow_left).c_str());
 		
     ini.SaveFile(Settings::INI_path);
 }

@@ -43,23 +43,23 @@ namespace {
             const auto tr = st.GetDelayerFormID();
             if (tr && src.settings.transformers.contains(tr)) {
                 const auto endForm = src.settings.transformers.at(tr).first;
-                // ASCII fallback instead of Unicode arrow
-                return std::format(L"-> {}", FormNameW(endForm));
+                // Use configured arrow
+                return std::format(L"{} {}", Lorebox::arrow_right, FormNameW(endForm));
             }
-            return L"-> (transform)";
+            return std::format(L"{} (transform)", Lorebox::arrow_right);
         }
         const auto slope = st.GetDelaySlope();
         if (std::abs(slope) < EPSILON) return L"Frozen";
         if (slope > 0) {
             if (src.IsStageNo(st.no + 1)) {
-                return std::format(L"-> {}", StageNameOrW(src, st.no + 1, std::format(L"Stage {}", st.no + 1)));
+                return std::format(L"{} {}", Lorebox::arrow_right, StageNameOrW(src, st.no + 1, std::format(L"Stage {}", st.no + 1)));
             }
-            return L"-> Final";
+            return std::format(L"{} Final", Lorebox::arrow_right);
         }
         if (st.no > 0 && src.IsStageNo(st.no - 1)) {
-            return std::format(L"<- {}", StageNameOrW(src, st.no - 1, std::format(L"Stage {}", st.no - 1)));
+            return std::format(L"{} {}", Lorebox::arrow_left, StageNameOrW(src, st.no - 1, std::format(L"Stage {}", st.no - 1)));
         }
-        return L"<- Initial";
+        return std::format(L"{} Initial", Lorebox::arrow_left);
     }
 
     struct Row {
@@ -209,7 +209,6 @@ std::wstring Lorebox::BuildLoreForHover()
     constexpr int MAX_ROWS = 8;
     bool firstLine = true;
     const auto HEX_SEP = HexColor(Lorebox::color_separator.load());
-    constexpr wchar_t SEP_BULLET[] = L"\u2022"; // bullet character
     for (const auto& r : rows) {
         if (printed >= MAX_ROWS) break;
 
@@ -226,8 +225,8 @@ std::wstring Lorebox::BuildLoreForHover()
         }
 
         if (!firstLine) {
-            // Insert a bullet separator between lines
-            out += std::format(L"<br><font color=\"{}\">{}</font><br>", HEX_SEP, SEP_BULLET);
+            // Insert a separator symbol between lines
+            out += std::format(L"<br><font color=\"{}\">{}</font><br>", HEX_SEP, Lorebox::separator_symbol);
         }
         firstLine = false;
 

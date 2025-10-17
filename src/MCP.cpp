@@ -2,6 +2,10 @@
 #include "SimpleIni.h"
 #include "Lorebox.h"
 
+#ifndef IM_ARRAYSIZE
+#define IM_ARRAYSIZE(_ARR) ((int)(sizeof(_ARR) / sizeof(*(_ARR))))
+#endif
+
 void HelpMarker(const char* desc)
 {
 	ImGui::TextDisabled("(?)");
@@ -11,6 +15,70 @@ void HelpMarker(const char* desc)
         ImGui::PopTextWrapPos();
         ImGui::EndTooltip();
     }
+}
+
+// Decode basic C-style escapes in ASCII buffer to wide string (\n, \r, \t, \\, \xHH, \uXXXX)
+static std::wstring DecodeEscapesFromAscii(const char* s)
+{
+    auto hexVal = [](char ch) -> int {
+        if (ch >= '0' && ch <= '9') return ch - '0';
+        if (ch >= 'a' && ch <= 'f') return 10 + (ch - 'a');
+        if (ch >= 'A' && ch <= 'F') return 10 + (ch - 'A');
+        return -1;
+    };
+
+    std::wstring out;
+    for (size_t i = 0; s && s[i];) {
+        char c = s[i++];
+        if (c == '\\' && s[i]) {
+            char t = s[i++];
+            switch (t) {
+            case 'n': out.push_back(L'\n'); break;
+            case 'r': out.push_back(L'\r'); break;
+            case 't': out.push_back(L'\t'); break;
+            case '\\': out.push_back(L'\\'); break;
+            case 'x': {
+                int val = 0, digits = 0; 
+                while (s[i]) { int hv = hexVal(s[i]); if (hv < 0) break; val = (val << 4) | hv; ++i; ++digits; if (digits >= 2) break; }
+                if (digits > 0) out.push_back(static_cast<wchar_t>(val));
+                else out.push_back(L'x');
+                break; }
+            case 'u': {
+                int val = 0, digits = 0; 
+                while (s[i] && digits < 4) { int hv = hexVal(s[i]); if (hv < 0) break; val = (val << 4) | hv; ++i; ++digits; }
+                if (digits == 4) out.push_back(static_cast<wchar_t>(val));
+                else out.push_back(L'u');
+                break; }
+            default:
+                out.push_back(static_cast<unsigned char>(t));
+                break;
+            }
+        } else {
+            out.push_back(static_cast<unsigned char>(c));
+        }
+    }
+    return out;
+}
+
+// Encode wide string to ASCII with C-style escapes for non-ASCII (e.g., L"\u2022").
+static std::string EncodeEscapesToAscii(const std::wstring& ws)
+{
+    std::string out;
+    out.reserve(ws.size() * 6);
+    auto pushHex4 = [&](wchar_t wc){
+        char buf[7]{}; // \uXXXX + null
+        std::snprintf(buf, sizeof(buf), "\\u%04X", static_cast<unsigned>(wc & 0xFFFF));
+        out += buf;
+    };
+    for (wchar_t wc : ws) {
+        if (wc == L'\\') { out += "\\\\"; }
+        else if (wc == L'\n') { out += "\\n"; }
+        else if (wc == L'\r') { out += "\\r"; }
+        else if (wc == L'\t') { out += "\\t"; }
+        else if (wc >= 0 && wc <= 0x7F) { out.push_back(static_cast<char>(wc)); }
+        else { pushHex4(wc); }
+    }
+    return out;
 }
 
 void __stdcall UI::RenderSettings()
@@ -104,6 +172,9 @@ void __stdcall UI::RenderLoreBox()
     // Init UI toggles from runtime once
     static bool initialized = false;
     static ImVec4 col_title, col_neutral, col_slow, col_fast, col_transform, col_separator;
+    static char sep_symbol[16] = {0};
+    static char arrow_right_buf[16] = {0};
+    static char arrow_left_buf[16] = {0};
     if (!initialized) {
         lorebox_show_title = Lorebox::show_title.load();
         lorebox_show_percentage = Lorebox::show_percentage.load();
@@ -119,6 +190,14 @@ void __stdcall UI::RenderLoreBox()
         col_fast      = cvt(Lorebox::color_fast.load());
         col_transform = cvt(Lorebox::color_transform.load());
         col_separator = cvt(Lorebox::color_separator.load());
+        // copy current symbols to buffers, encoding non-ASCII as \uXXXX so they show up in MCP UI
+        auto w2esc_to_buf = [](const std::wstring& ws, char* dst, size_t cap){
+            std::string s = EncodeEscapesToAscii(ws);
+            if (cap) { strncpy_s(dst, cap, s.c_str(), _TRUNCATE); }
+        };
+        w2esc_to_buf(Lorebox::separator_symbol, sep_symbol, sizeof(sep_symbol));
+        w2esc_to_buf(Lorebox::arrow_right, arrow_right_buf, sizeof(arrow_right_buf));
+        w2esc_to_buf(Lorebox::arrow_left, arrow_left_buf, sizeof(arrow_left_buf));
         initialized = true;
     }
 
@@ -168,17 +247,36 @@ void __stdcall UI::RenderLoreBox()
         };
 
         ImGui::TableNextRow(); ImGui::TableNextColumn(); colorEdit4RGB("Title color", col_title); ImGui::TableNextColumn();
-        ImGui::Text("#%02X%02X%02X", (int)(col_title.x*255), (int)(col_title.y*255), (int)(col_title.z*255));
+        ImGui::Text("#%02X%02X%02X", static_cast<int>(col_title.x * 255), static_cast<int>(col_title.y * 255), static_cast<int>(col_title.z * 255));
         ImGui::TableNextRow(); ImGui::TableNextColumn(); colorEdit4RGB("Neutral color", col_neutral); ImGui::TableNextColumn();
-        ImGui::Text("#%02X%02X%02X", (int)(col_neutral.x*255), (int)(col_neutral.y*255), (int)(col_neutral.z*255));
+        ImGui::Text("#%02X%02X%02X", static_cast<int>(col_neutral.x * 255), static_cast<int>(col_neutral.y * 255), static_cast<int>(col_neutral.z * 255));
         ImGui::TableNextRow(); ImGui::TableNextColumn(); colorEdit4RGB("Slow color", col_slow); ImGui::TableNextColumn();
-        ImGui::Text("#%02X%02X%02X", (int)(col_slow.x*255), (int)(col_slow.y*255), (int)(col_slow.z*255));
+        ImGui::Text("#%02X%02X%02X", static_cast<int>(col_slow.x * 255), static_cast<int>(col_slow.y * 255), static_cast<int>(col_slow.z * 255));
         ImGui::TableNextRow(); ImGui::TableNextColumn(); colorEdit4RGB("Fast color", col_fast); ImGui::TableNextColumn();
-        ImGui::Text("#%02X%02X%02X", (int)(col_fast.x*255), (int)(col_fast.y*255), (int)(col_fast.z*255));
+        ImGui::Text("#%02X%02X%02X", static_cast<int>(col_fast.x * 255), static_cast<int>(col_fast.y * 255), static_cast<int>(col_fast.z * 255));
         ImGui::TableNextRow(); ImGui::TableNextColumn(); colorEdit4RGB("Transform color", col_transform); ImGui::TableNextColumn();
-        ImGui::Text("#%02X%02X%02X", (int)(col_transform.x*255), (int)(col_transform.y*255), (int)(col_transform.z*255));
+        ImGui::Text("#%02X%02X%02X", static_cast<int>(col_transform.x * 255), static_cast<int>(col_transform.y * 255), static_cast<int>(col_transform.z * 255));
         ImGui::TableNextRow(); ImGui::TableNextColumn(); colorEdit4RGB("Separator color", col_separator); ImGui::TableNextColumn();
-        ImGui::Text("#%02X%02X%02X", (int)(col_separator.x*255), (int)(col_separator.y*255), (int)(col_separator.z*255));
+        ImGui::Text("#%02X%02X%02X", static_cast<int>(col_separator.x * 255), static_cast<int>(col_separator.y * 255), static_cast<int>(col_separator.z * 255));
+
+        // Symbol editors
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::InputText("Separator symbol", sep_symbol, IM_ARRAYSIZE(sep_symbol));
+        ImGui::TableNextColumn();
+        HelpMarker("ASCII or escape codes (e.g., \\u2022) recommended for compatibility. Example: *, -, \\u2022");
+
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::InputText("Arrow right", arrow_right_buf, IM_ARRAYSIZE(arrow_right_buf));
+        ImGui::TableNextColumn();
+        HelpMarker("Default '->'. You can use escapes like \\u2192.");
+
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::InputText("Arrow left", arrow_left_buf, IM_ARRAYSIZE(arrow_left_buf));
+        ImGui::TableNextColumn();
+        HelpMarker("Default '<-'. You can use escapes like \\u2190.");
 
         ImGui::EndTable();
 
@@ -191,7 +289,7 @@ void __stdcall UI::RenderLoreBox()
         Lorebox::colorize_rows.store(colorize, std::memory_order_relaxed);
 
         if (ImGui::Button("Save##lorebox_save")) {
-            // persist toggles + colors
+            // persist toggles + colors + symbols
             CSimpleIniA ini;
             ini.SetUnicode();
             ini.LoadFile(Settings::INI_path);
@@ -203,9 +301,9 @@ void __stdcall UI::RenderLoreBox()
             ini.SetBoolValue("LoreBox", "ColorizeRows", colorize);
 
             auto toHex = [](const ImVec4& c) {
-                const uint32_t R = (uint32_t)std::round(c.x * 255.f);
-                const uint32_t G = (uint32_t)std::round(c.y * 255.f);
-                const uint32_t B = (uint32_t)std::round(c.z * 255.f);
+                const uint32_t R = static_cast<uint32_t>(std::round(c.x * 255.f));
+                const uint32_t G = static_cast<uint32_t>(std::round(c.y * 255.f));
+                const uint32_t B = static_cast<uint32_t>(std::round(c.z * 255.f));
                 return std::format("{:02X}{:02X}{:02X}", R, G, B);
             };
             ini.SetValue("LoreBox", "ColorTitle", toHex(col_title).c_str());
@@ -214,13 +312,17 @@ void __stdcall UI::RenderLoreBox()
             ini.SetValue("LoreBox", "ColorFast", toHex(col_fast).c_str());
             ini.SetValue("LoreBox", "ColorTransform", toHex(col_transform).c_str());
             ini.SetValue("LoreBox", "ColorSeparator", toHex(col_separator).c_str());
+
+            ini.SetValue("LoreBox", "SeparatorSymbol", sep_symbol);
+            ini.SetValue("LoreBox", "ArrowRight", arrow_right_buf);
+            ini.SetValue("LoreBox", "ArrowLeft", arrow_left_buf);
             ini.SaveFile(Settings::INI_path);
 
             // update runtime atomics
             auto fromCol = [](const ImVec4& c) -> uint32_t {
-                const uint32_t R = (uint32_t)std::round(c.x * 255.f);
-                const uint32_t G = (uint32_t)std::round(c.y * 255.f);
-                const uint32_t B = (uint32_t)std::round(c.z * 255.f);
+                const uint32_t R = static_cast<uint32_t>(std::round(c.x * 255.f));
+                const uint32_t G = static_cast<uint32_t>(std::round(c.y * 255.f));
+                const uint32_t B = static_cast<uint32_t>(std::round(c.z * 255.f));
                 return (R << 16) | (G << 8) | B;
             };
             Lorebox::color_title.store(fromCol(col_title));
@@ -229,6 +331,11 @@ void __stdcall UI::RenderLoreBox()
             Lorebox::color_fast.store(fromCol(col_fast));
             Lorebox::color_transform.store(fromCol(col_transform));
             Lorebox::color_separator.store(fromCol(col_separator));
+
+            // update symbols: decode backslash escapes into wide
+            Lorebox::separator_symbol = DecodeEscapesFromAscii(sep_symbol);
+            Lorebox::arrow_right = DecodeEscapesFromAscii(arrow_right_buf);
+            Lorebox::arrow_left = DecodeEscapesFromAscii(arrow_left_buf);
         }
     }
 }
