@@ -13,17 +13,17 @@ namespace Lorebox
 	inline std::unordered_set<FormID> kw_added;
 
 	// UI toggle: show a title before rows in lorebox
-	inline std::atomic<bool> show_title{ true };
+	inline std::atomic show_title{ true };
 	// UI toggle: show progress percentage per instance (default true)
-	inline std::atomic<bool> show_percentage{ true };
+	inline std::atomic show_percentage{ true };
 	// UI toggle: show delayer (time modulator) name
-	inline std::atomic<bool> show_modulator_name{ true };
+	inline std::atomic show_modulator_name{ true };
 	// UI toggle: show transformer name
-	inline std::atomic<bool> show_transformer_name{ true };
+	inline std::atomic show_transformer_name{ true };
 	// UI toggle: colorize each row based on modulation/transform state
-	inline std::atomic<bool> colorize_rows{ true };
+	inline std::atomic colorize_rows{ true };
 	// UI toggle: append multiplier to modulator tag (e.g., ": x0.5")
-	inline std::atomic<bool> show_multiplier{ true };
+	inline std::atomic show_multiplier{ true };
 
 	// Configurable colors (0xRRGGBB)
 	inline std::atomic<uint32_t> color_title{ 0x9654FF };      // title accent

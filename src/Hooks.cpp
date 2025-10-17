@@ -4,8 +4,101 @@
 #include "Lorebox.h"
 #include "ClibUtilsQTR/Tasker.hpp"
 
-
 using namespace Hooks;
+
+
+namespace {
+
+    
+    std::string wide_to_utf8(const wchar_t* w) {
+        if (!w) return {};
+        int len = WideCharToMultiByte(CP_UTF8, 0, w, -1, nullptr, 0, nullptr, nullptr);
+        if (len <= 1) return {};
+        std::string out(len - 1, '\0');                 // drop the trailing NUL
+        WideCharToMultiByte(CP_UTF8, 0, w, -1, out.data(), len, nullptr, nullptr);
+        return out;
+    }
+
+    using TranslateFn = void (*)(RE::GFxTranslator*, RE::GFxTranslator::TranslateInfo*);
+
+    TranslateFn g_OrigTranslateAny = nullptr;
+    void**      g_TranslatorVTable = nullptr;  // remembers which vtable we patched
+
+    std::string utf8_from_w(const wchar_t* w)
+    {
+        return wide_to_utf8(w);
+    }
+
+    // Generic hook for any GFxTranslator::Translate (vanilla or custom)
+    void AnyTranslator_Translate_Hook(RE::GFxTranslator* a_this, RE::GFxTranslator::TranslateInfo* a_info)
+    {
+        // Always fall through to original unless we actually handle a specific key
+        if (g_OrigTranslateAny) {
+            // Optionally: inspect key before calling original
+            const auto keyUtf8 = utf8_from_w(a_info->GetKey());
+
+            // Let the current translator do its work first
+            g_OrigTranslateAny(a_this, a_info);
+
+            if (is_menu_open && keyUtf8 == Lorebox::aot_kw_name_lorebox) {
+                const std::wstring body = Lorebox::BuildLoreForHover();
+                if (!body.empty()) {
+                    a_info->SetResult(body.c_str(), body.size());
+                    return;
+                }
+            }
+        }
+    }
+
+    bool InstallTranslatorVtableHook()
+    {
+        const auto sfm    = RE::BSScaleformManager::GetSingleton();
+        const auto loader = sfm ? sfm->loader : nullptr;
+        // Use GetState<T>() which returns GPtr<T>
+        const auto tr     = loader ? loader->GetState<RE::GFxTranslator>(RE::GFxState::StateType::kTranslator) : RE::GPtr<RE::GFxTranslator>{};
+
+        if (!tr) {
+            logger::warn("Translator not available yet; will skip vtable hook.");
+            return false;
+        }
+
+        // vtable of the active translator instance
+        auto** vtbl = *reinterpret_cast<void***>(tr.get());
+
+        // Resolve the vanilla BSScaleformTranslator vtable pointer for comparison
+        REL::Relocation<std::uintptr_t> baseVtblRel{ RE::BSScaleformTranslator::VTABLE[0] };
+        auto** baseVtbl = reinterpret_cast<void**>(baseVtblRel.address());
+
+        // Choose the vtable we will patch: if it's the vanilla class vtable, patch that one; otherwise, patch the instance's
+        auto** targetVtbl = (vtbl == baseVtbl) ? baseVtbl : vtbl;
+
+        // Already patched?
+        if (g_TranslatorVTable == targetVtbl && g_OrigTranslateAny) {
+            logger::info("Translator vtable already hooked {:p}", static_cast<void*>(targetVtbl));
+            return true;
+        }
+
+        // Patch vtable slot 0x2 (Translate)
+        DWORD oldProt{};
+        if (!VirtualProtect(&targetVtbl[2], sizeof(void*), PAGE_EXECUTE_READWRITE, &oldProt)) {
+            logger::error("VirtualProtect failed while preparing to patch translator vtable.");
+            return false;
+        }
+
+        g_OrigTranslateAny = reinterpret_cast<TranslateFn>(targetVtbl[2]);
+        targetVtbl[2] = reinterpret_cast<void*>(&AnyTranslator_Translate_Hook);
+
+        DWORD dummy{};
+        VirtualProtect(&targetVtbl[2], sizeof(void*), oldProt, &dummy);
+
+        g_TranslatorVTable = targetVtbl;
+
+        logger::info("Installed Translate vtable hook on translator {:p}", static_cast<void*>(targetVtbl));
+        return true;
+    }
+} // namespace
+
+
 
 template <typename MenuType>
 void MenuHook<MenuType>::InstallHook(const REL::VariantID& varID, Manager* mngr) {
@@ -40,6 +133,8 @@ RE::UI_MESSAGE_RESULTS MenuHook<MenuType>::ProcessMessage_Hook(RE::UIMessage& a_
             }
 
 			is_menu_open = true;
+            // Re-evaluate and (re)install translator hook in case another mod swapped it
+            InstallTranslatorVtableHook();
         }
 		else if (msg_type == 3) {
 			is_menu_open = false;
@@ -58,8 +153,6 @@ void Hooks::Install(Manager* mngr){
     UpdateHook::Install();
 #endif
 
-    ScaleformTranslatorHook::Install();
-
     MoveItemHooks<RE::PlayerCharacter>::install();
 	MoveItemHooks<RE::TESObjectREFR>::install(false);
 	MoveItemHooks<RE::Character>::install();
@@ -71,45 +164,9 @@ void Hooks::Install(Manager* mngr){
 
 	const REL::Relocation<std::uintptr_t> add_item_functor_hook{ RELOCATION_ID(55946, 56490) };
 	add_item_functor_ = trampoline.write_call<5>(add_item_functor_hook.address() + 0x15D, add_item_functor);
-}
 
-inline std::string wide_to_utf8(const wchar_t* w) {
-    if (!w) return {};
-    int len = WideCharToMultiByte(CP_UTF8, 0, w, -1, nullptr, 0, nullptr, nullptr);
-    if (len <= 1) return {};
-    std::string out(len - 1, '\0');                 // drop the trailing NUL
-    WideCharToMultiByte(CP_UTF8, 0, w, -1, out.data(), len, nullptr, nullptr);
-    return out;
-}
-
-void ScaleformTranslatorHook::Translate(RE::BSScaleformTranslator* a_this, RE::GFxTranslator::TranslateInfo* a_translateInfo) {
-
-    if (!is_menu_open) {
-        return Translate_(a_this, a_translateInfo);
-    }
-
-    auto key = wide_to_utf8(a_translateInfo->GetKey());
-    if (a_translateInfo && key == Lorebox::aot_kw_name_lorebox) {
-        Translate_(a_this, a_translateInfo);
-
-        const std::wstring body = Lorebox::BuildLoreForHover();
-        if (!body.empty()) {
-            const size_t len = body.size() + 1;
-            auto* buffer = new wchar_t[len];
-            wmemset(buffer, 0, len);
-            wcsncpy_s(buffer, len, body.c_str(), body.size());
-            a_translateInfo->SetResult(buffer);
-            delete[] buffer;
-            return;
-        }
-    }
-
-    Translate_(a_this, a_translateInfo);
-}
-
-void ScaleformTranslatorHook::Install() {
-    REL::Relocation<std::uintptr_t> ScaleformTranslatorVtbl{ RE::BSScaleformTranslator::VTABLE[0] };
-	Translate_ = ScaleformTranslatorVtbl.write_vfunc(0x2, Translate);
+    // Install a Translate hook for whatever translator is currently active (vanilla or custom)
+    InstallTranslatorVtableHook();
 }
 
 void UpdateHook::Update(RE::Actor* a_this, float a_delta)
