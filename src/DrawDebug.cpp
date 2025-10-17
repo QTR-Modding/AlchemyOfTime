@@ -259,11 +259,11 @@ namespace DebugAPI_IMPL {
     void DebugAPI::DrawCircle(const glm::vec3 origin, const float radius, const glm::vec3 eulerAngles, const int liftetimeMS,
                               const glm::vec4& color, const float lineThickness) {
         glm::vec3 lastEndPos =
-            GetPointOnRotatedCircle(origin, radius, CIRCLE_NUM_SEGMENTS, (float)(CIRCLE_NUM_SEGMENTS - 1), eulerAngles);
+            GetPointOnRotatedCircle(origin, radius, CIRCLE_NUM_SEGMENTS, static_cast<float>(CIRCLE_NUM_SEGMENTS - 1), eulerAngles);
 
         for (int i = 0; i <= CIRCLE_NUM_SEGMENTS; i++) {
             glm::vec3 currEndPos =
-                GetPointOnRotatedCircle(origin, radius, (float)i, (float)(CIRCLE_NUM_SEGMENTS - 1), eulerAngles);
+                GetPointOnRotatedCircle(origin, radius, static_cast<float>(i), static_cast<float>(CIRCLE_NUM_SEGMENTS - 1), eulerAngles);
 
             DrawLineForMS(lastEndPos, currEndPos, liftetimeMS, color, lineThickness);
 

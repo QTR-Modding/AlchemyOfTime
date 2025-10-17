@@ -26,12 +26,17 @@ namespace Lorebox
 	inline std::atomic show_multiplier{ true };
 
 	// Configurable colors (0xRRGGBB)
-	inline std::atomic<uint32_t> color_title{ 0x9654FF };      // title accent
+	inline std::atomic<uint32_t> color_title{ 0xA86CCD };      // title accent
 	inline std::atomic<uint32_t> color_neutral{ 0xE8EAED };    // default light text
 	inline std::atomic<uint32_t> color_slow{ 0xFF8A80 };       // light red for x>1 (slower)
 	inline std::atomic<uint32_t> color_fast{ 0x80D8FF };       // light blue for x<1 (faster)
 	inline std::atomic<uint32_t> color_transform{ 0xFFCC80 };  // light orange for transform
 	inline std::atomic<uint32_t> color_separator{ 0x9AA0A6 };  // bullet/separator color
+
+	// Configurable symbols (ASCII recommended for maximum font support)
+	inline std::wstring separator_symbol = L"\u2022"; // bullet default
+	inline std::wstring arrow_right = L"->";          // forward arrow
+	inline std::wstring arrow_left  = L"<-";          // backward arrow
 
     inline bool Load_KW_AoT() {
 	    aot_kw = RE::BGSKeyword::CreateKeyword(aot_kw_name);

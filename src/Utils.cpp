@@ -59,10 +59,10 @@ bool Types::FormEditorIDX::operator==(const FormEditorIDX& other) const
 std::string DecodeTypeCode(const std::uint32_t typeCode)
 {
     char buf[4];
-    buf[3] = char(typeCode);
-    buf[2] = char(typeCode >> 8);
-    buf[1] = char(typeCode >> 16);
-    buf[0] = char(typeCode >> 24);
+    buf[3] = static_cast<char>(typeCode);
+    buf[2] = static_cast<char>(typeCode >> 8);
+    buf[1] = static_cast<char>(typeCode >> 16);
+    buf[0] = static_cast<char>(typeCode >> 24);
     return std::string(buf, buf + 4);
 }
 
@@ -236,21 +236,21 @@ void EquipItem(const RE::TESBoundObject* item, const bool unequip)
                 if ((*it)->extraLists->empty()) {
                     RE::ActorEquipManager::GetSingleton()->UnequipObject(
                         player_ref, (*it)->object, nullptr, 1,
-                        (const RE::BGSEquipSlot*)nullptr, true, false, false);
+                        nullptr, true, false, false);
                 } else if ((*it)->extraLists->front()) {
                     RE::ActorEquipManager::GetSingleton()->UnequipObject(
                         player_ref, (*it)->object, (*it)->extraLists->front(), 1,
-                        (const RE::BGSEquipSlot*)nullptr, true, false, false);
+                        nullptr, true, false, false);
                 }
             } else {
                 if ((*it)->extraLists->empty()) {
                     RE::ActorEquipManager::GetSingleton()->EquipObject(
                         player_ref, (*it)->object, nullptr, 1,
-                        (const RE::BGSEquipSlot*)nullptr, true, false, false, false);
+                        nullptr, true, false, false, false);
                 } else if ((*it)->extraLists->front()) {
                     RE::ActorEquipManager::GetSingleton()->EquipObject(
                         player_ref, (*it)->object, (*it)->extraLists->front(), 1,
-                        (const RE::BGSEquipSlot*)nullptr, true, false, false, false);
+                        nullptr, true, false, false, false);
                 }
             }
             return;

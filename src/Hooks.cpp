@@ -44,7 +44,6 @@ namespace {
                 const std::wstring body = Lorebox::BuildLoreForHover();
                 if (!body.empty()) {
                     a_info->SetResult(body.c_str(), body.size());
-                    return;
                 }
             }
         }
@@ -54,7 +53,6 @@ namespace {
     {
         const auto sfm    = RE::BSScaleformManager::GetSingleton();
         const auto loader = sfm ? sfm->loader : nullptr;
-        // Use GetState<T>() which returns GPtr<T>
         const auto tr     = loader ? loader->GetState<RE::GFxTranslator>(RE::GFxState::StateType::kTranslator) : RE::GPtr<RE::GFxTranslator>{};
 
         if (!tr) {
@@ -96,7 +94,7 @@ namespace {
         logger::info("Installed Translate vtable hook on translator {:p}", static_cast<void*>(targetVtbl));
         return true;
     }
-} // namespace
+}
 
 
 
@@ -133,8 +131,6 @@ RE::UI_MESSAGE_RESULTS MenuHook<MenuType>::ProcessMessage_Hook(RE::UIMessage& a_
             }
 
 			is_menu_open = true;
-            // Re-evaluate and (re)install translator hook in case another mod swapped it
-            InstallTranslatorVtableHook();
         }
 		else if (msg_type == 3) {
 			is_menu_open = false;
