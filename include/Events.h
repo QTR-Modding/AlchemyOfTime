@@ -1,52 +1,26 @@
 #pragma once
 #include "Hooks.h"
+#include "ClibUtil/singleton.hpp"
 
 // MP <3
-class OurEventSink final : public RE::BSTEventSink<RE::TESEquipEvent>,
-                           public RE::BSTEventSink<RE::TESActivateEvent>,
-                           public RE::BSTEventSink<SKSE::CrosshairRefEvent>,
-                           public RE::BSTEventSink<RE::TESFurnitureEvent>,
-                           public RE::BSTEventSink<RE::TESContainerChangedEvent>,
-                           public RE::BSTEventSink<RE::TESSleepStopEvent>,
-                           public RE::BSTEventSink<RE::TESWaitStopEvent>,
-                           public RE::BSTEventSink<RE::BGSActorCellEvent>,
-                           public RE::BSTEventSink<RE::TESFormDeleteEvent> {
-
-    OurEventSink() = default;
-    OurEventSink(const OurEventSink&) = delete;
-    OurEventSink(OurEventSink&&) = delete;
-    OurEventSink& operator=(const OurEventSink&) = delete;
-    OurEventSink& operator=(OurEventSink&&) = delete;
-
-
-    RE::UI* ui = RE::UI::GetSingleton();
+class OurEventSink final :  public clib_util::singleton::ISingleton<OurEventSink>,
+                            public RE::BSTEventSink<RE::TESEquipEvent>,
+                            public RE::BSTEventSink<RE::TESActivateEvent>,
+                            public RE::BSTEventSink<SKSE::CrosshairRefEvent>,
+                            public RE::BSTEventSink<RE::TESFurnitureEvent>,
+                            public RE::BSTEventSink<RE::TESSleepStopEvent>,
+                            public RE::BSTEventSink<RE::TESWaitStopEvent>,
+                            public RE::BSTEventSink<RE::BGSActorCellEvent>,
+                            public RE::BSTEventSink<RE::TESFormDeleteEvent> {
 
     std::atomic<bool> listen_cellchange = true;
-
-    FormID consume_equipped_id;  // set in equip event only when equipped and used in container event (consume)
-    RefID picked_up_refid;
 
     bool furniture_entered = false;
     RE::NiPointer<RE::TESObjectREFR> furniture = nullptr;
 
-	/*const float min_last_crosshair_update_time = 0.0003f;
-	std::pair<RefID, float> last_crosshair_ref_update = { 0,0.f };*/
-
     void HandleWO(RE::TESObjectREFR* ref) const;
 
 public:
-    Manager* M = nullptr;
-    
-    OurEventSink(Manager* mngr)
-        :  M(mngr){}
-
-    static OurEventSink* GetSingleton(Manager* manager) {
-        static OurEventSink singleton(manager);
-        return &singleton;
-    }
-
-    std::atomic<bool> block_eventsinks = false;
-
 
     void HandleWOsInCell() const;
 
@@ -62,8 +36,6 @@ public:
     RE::BSEventNotifyControl ProcessEvent(const RE::TESFurnitureEvent* event,
                                           RE::BSTEventSource<RE::TESFurnitureEvent>*) override;
 
-    RE::BSEventNotifyControl ProcessEvent(const RE::TESContainerChangedEvent* event,
-                                                                   RE::BSTEventSource<RE::TESContainerChangedEvent>*) override;
     
     RE::BSEventNotifyControl ProcessEvent(const RE::TESSleepStopEvent*,
                                           RE::BSTEventSource<RE::TESSleepStopEvent>*) override;

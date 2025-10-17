@@ -269,7 +269,8 @@ StageInstance* Source::InsertNewInstance(const StageInstance& stage_instance, co
     if (!data.contains(loc)) {
         data[loc] = {};
     }
-    data[loc].push_back(stage_instance);
+
+    data.at(loc).push_back(stage_instance);
 
     // fillout the xtra of the emplaced instance
     // get the emplaced instance
@@ -279,7 +280,7 @@ StageInstance* Source::InsertNewInstance(const StageInstance& stage_instance, co
     emplaced_instance.xtra.crafting_allowed = stages[n].crafting_allowed;
     if (IsFakeStage(n)) emplaced_instance.xtra.is_fake = true;*/
 
-	return &data[loc].back();
+	return &data.at(loc).back();
 }
 
 StageInstance* Source::InitInsertInstanceWO(StageNo n, const Count c, const RefID l, const Duration t_0)
@@ -962,7 +963,7 @@ void Source::RegisterStage(const FormID stage_formid, const StageNo stage_no)
 {
     for (const auto& value : stages | std::views::values) {
         if (stage_formid == value.formid) {
-            logger::error("stage_formid is already in the stages.");
+            logger::error("stage_formid {:x} intended for stage {} is already in stage {}.", stage_formid, stage_no, value.no);
             return;
         }
     }
