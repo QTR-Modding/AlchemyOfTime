@@ -69,8 +69,6 @@ void Hooks::Install(Manager* mngr){
 	add_item_functor_ = trampoline.write_call<5>(add_item_functor_hook.address() + 0x15D, add_item_functor);
 
     ScaleformTranslatorHook::Install();
-
-    UpdateHook::Install();
 }
 
 inline std::string wide_to_utf8(const wchar_t* w) {
