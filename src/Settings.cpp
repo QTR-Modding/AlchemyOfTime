@@ -5,6 +5,7 @@
 #include "Threading.h"
 #include "CLibUtilsQTR/PresetHelpers/PresetHelpersTXT.hpp"
 #include "CLibUtilsQTR/PresetHelpers/PresetHelpersYAML.hpp"
+#include "Lorebox.h"
 
 using QFormChecker = bool(*)(const RE::TESForm*);
 
@@ -359,7 +360,7 @@ namespace {
 		    return;
         }
 
-        for (const auto& Node_ : config["formsLists"]){
+        for (const auto& Node_ : config["formsLists"]) {
 		    if (!Node_["forms"] || Node_["forms"].IsNull()) {
 			    logger::warn("Forms not found in {}", filename);
 			    return;
@@ -818,6 +819,56 @@ void PresetParse::LoadINISettings()
     Settings::world_objects_evolve = ini.GetBoolValue("Other Settings", "WorldObjectsEvolve", Settings::world_objects_evolve);
 	Settings::placed_objects_evolve = ini.GetBoolValue("Other Settings", "PlacedObjectsEvolve", Settings::placed_objects_evolve);
 	Settings::unowned_objects_evolve = ini.GetBoolValue("Other Settings", "UnOwnedObjectsEvolve", Settings::unowned_objects_evolve);
+
+    // LoreBox settings (defaults true)
+    const bool lb_title = ini.GetBoolValue("LoreBox", "ShowTitle", true);
+    const bool lb_pct   = ini.GetBoolValue("LoreBox", "ShowPercentage", true);
+    const bool lb_mod   = ini.GetBoolValue("LoreBox", "ShowModName", true);
+    const bool lb_trn   = ini.GetBoolValue("LoreBox", "ShowTransformerName", true);
+    const bool lb_col   = ini.GetBoolValue("LoreBox", "ColorizeRows", true);
+    const bool lb_mul   = ini.GetBoolValue("LoreBox", "ShowMultiplier", true);
+    Lorebox::show_title.store(lb_title);
+    Lorebox::show_percentage.store(lb_pct);
+    Lorebox::show_modulator_name.store(lb_mod);
+    Lorebox::show_transformer_name.store(lb_trn);
+    Lorebox::colorize_rows.store(lb_col);
+    Lorebox::show_multiplier.store(lb_mul);
+
+    // Colors
+    auto readHex = [&](const char* key, uint32_t def) {
+        const char* s = ini.GetValue("LoreBox", key, nullptr);
+        if (!s) return def;
+        try {
+            return static_cast<uint32_t>(std::stoul(s, nullptr, 16));
+        } catch (...) {
+            return def;
+        }
+    };
+
+    Lorebox::color_title.store(readHex("ColorTitle", Lorebox::color_title.load()));
+    Lorebox::color_neutral.store(readHex("ColorNeutral", Lorebox::color_neutral.load()));
+    Lorebox::color_slow.store(readHex("ColorSlow", Lorebox::color_slow.load()));
+    Lorebox::color_fast.store(readHex("ColorFast", Lorebox::color_fast.load()));
+    Lorebox::color_transform.store(readHex("ColorTransform", Lorebox::color_transform.load()));
+    Lorebox::color_separator.store(readHex("ColorSeparator", Lorebox::color_separator.load()));
+
+    // Ensure keys exist with defaults if they were missing
+    ini.SetBoolValue("LoreBox", "ShowTitle", lb_title);
+    ini.SetBoolValue("LoreBox", "ShowPercentage", lb_pct);
+    ini.SetBoolValue("LoreBox", "ShowModName", lb_mod);
+    ini.SetBoolValue("LoreBox", "ShowTransformerName", lb_trn);
+    ini.SetBoolValue("LoreBox", "ColorizeRows", lb_col);
+    ini.SetBoolValue("LoreBox", "ShowMultiplier", lb_mul);
+
+    auto writeHex = [&](const char* key, uint32_t val) {
+        ini.SetValue("LoreBox", key, std::format("{:06X}", val).c_str());
+    };
+    writeHex("ColorTitle", Lorebox::color_title.load());
+    writeHex("ColorNeutral", Lorebox::color_neutral.load());
+    writeHex("ColorSlow", Lorebox::color_slow.load());
+    writeHex("ColorFast", Lorebox::color_fast.load());
+    writeHex("ColorTransform", Lorebox::color_transform.load());
+    writeHex("ColorSeparator", Lorebox::color_separator.load());
 		
     ini.SaveFile(Settings::INI_path);
 }

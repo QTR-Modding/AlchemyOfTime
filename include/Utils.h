@@ -6,7 +6,7 @@
 #include <rapidjson/writer.h>
 #include "CLibUtilsQTR/FormReader.hpp"
 
-const auto mod_name = static_cast<std::string>(SKSE::PluginDeclaration::GetSingleton()->GetName());
+const auto mod_name = std::string(SKSE::PluginDeclaration::GetSingleton()->GetName());
 const auto plugin_version = SKSE::PluginDeclaration::GetSingleton()->GetVersion();
 constexpr auto po3path = "Data/SKSE/Plugins/po3_Tweaks.dll";
 constexpr auto po3_UoTpath = "Data/SKSE/Plugins/po3_UseOrTake.dll";

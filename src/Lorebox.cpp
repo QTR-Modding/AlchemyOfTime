@@ -6,6 +6,10 @@ namespace {
 
     std::wstring Widen(const std::string& s) { return { s.begin(), s.end() }; }
 
+    std::wstring HexColor(uint32_t rgb) {
+        return std::format(L"#{:06X}", rgb & 0xFFFFFF);
+    }
+
     std::wstring FormNameW(FormID fid) {
         if (!fid) return L"None";
         if (auto f = RE::TESForm::LookupByID(fid)) {
@@ -65,6 +69,9 @@ namespace {
         FormID mod{0};
         bool transforming{false};
         std::wstring next;
+        // percentage in range [0,100]
+        int pct{-1};
+        std::wstring tag; // bracketed name (and optional multiplier)
     };
 }
 
@@ -72,12 +79,12 @@ std::wstring Lorebox::BuildLoreForHover()
 {
     std::string menu_name;
     auto item_data = Menu::GetSelectedItemDataInMenu(menu_name);
-	if (!item_data) {
-		logger::error("No selected item data in menu '{}'.", menu_name);
-		return L"";
-	}
+    if (!item_data) {
+        logger::error("No selected item data in menu '{}'.", menu_name);
+        return L"";
+    }
 
-	const FormID hovered = item_data->objDesc->GetObject()->GetFormID();
+    const FormID hovered = item_data->objDesc->GetObject()->GetFormID();
     if (!hovered) return L"";
 
     // Snapshot sources safely
@@ -93,11 +100,11 @@ std::wstring Lorebox::BuildLoreForHover()
     RE::NiPointer<RE::TESObjectREFR> owner;
     if (!LookupReferenceByHandle(item_data->owner,owner)) {
         logger::error("Could not find owner reference for item data.");
-		return L"";
+        return L"";
     }
     const auto ownerId = owner ? owner->GetFormID() : 0;
     if (!ownerId || !src->data.contains(ownerId)) {
-		logger::error("No data for owner {:08X} in source {:08X}.", ownerId, src->formid);
+        logger::error("No data for owner {:08X} in source {:08X}.", ownerId, src->formid);
         return L"";
     }
 
@@ -122,54 +129,137 @@ std::wstring Lorebox::BuildLoreForHover()
         r.minutes = (std::abs(r.slope) < EPSILON) ? -1
                    : (nextT > 0.f ? static_cast<int>(std::round((nextT - now) * 60.f)) : -1);
 
+        // Compute percentage
+        if (Lorebox::show_percentage.load(std::memory_order_relaxed)) {
+            float pct = -1.f;
+            if (st.xtra.is_transforming) {
+                // Transform progress = elapsed since transform / total transform duration
+                const auto tr = st.GetDelayerFormID();
+                if (tr && src->settings.transformers.contains(tr)) {
+                    const float elapsed = st.GetTransformElapsed(now);
+                    const float total = std::get<1>(src->settings.transformers.at(tr));
+                    if (total > 0.f) pct = std::clamp((elapsed / total) * 100.f, 0.f, 100.f);
+                }
+            } else {
+                // Regular stage progress = elapsed / current stage duration
+                if (src->IsStageNo(st.no)) {
+                    const float elapsed = st.GetElapsed(now);
+                    const float total = src->GetStageDuration(st.no);
+                    if (total > 0.f) pct = std::clamp((elapsed / total) * 100.f, 0.f, 100.f);
+                }
+            }
+            if (pct >= 0.f) r.pct = static_cast<int>(std::round(pct));
+        }
+
+        // Collect mod/transformer name for separate line if enabled
+        if (r.transforming) {
+            if (Lorebox::show_transformer_name.load(std::memory_order_relaxed)) {
+                if (r.mod) {
+                    const auto nm = FormNameW(r.mod);
+                    r.tag = std::format(L"[{}]", nm);
+                }
+            }
+        } else {
+            if (r.mod && Lorebox::show_modulator_name.load(std::memory_order_relaxed)) {
+                std::wstring nm = FormNameW(r.mod);
+                if (Lorebox::show_multiplier.load(std::memory_order_relaxed)) {
+                    // Append multiplier if known; fall back to slope if not found in settings
+                    float mult = r.slope;
+                    if (src->settings.delayers.contains(r.mod)) {
+                        mult = src->settings.delayers.at(r.mod);
+                    }
+                    nm += std::format(L": x{:.2f}", mult);
+                }
+                r.tag = std::format(L"[{}]", nm);
+            }
+        }
+
         rows.push_back(std::move(r));
     }
 
     if (rows.empty()) return L"";
 
     // Sort by ETA (frozen/unknown at the end), then by target label
-    std::sort(rows.begin(), rows.end(), [](const Row& a, const Row& b) {
+    std::ranges::sort(rows, [](const Row& a, const Row& b) {
         const int am = a.minutes < 0 ? INT_MAX : a.minutes;
         const int bm = b.minutes < 0 ? INT_MAX : b.minutes;
         if (am != bm) return am < bm;
         if (a.transforming != b.transforming) return a.transforming > b.transforming; // transforming first
         return a.next < b.next;
     });
-
-    // Build multi-line body (each StageInstance on a separate line) without trailing <br>
+        
+    // Build multi-line body (each StageInstance on a separate line) with a bullet between rows
     std::wstring out;
     out.reserve(512);
+
+    // Optional title
+    if (Lorebox::show_title.load(std::memory_order_relaxed)) {
+        const auto titleHex = HexColor(Lorebox::color_title.load());
+        out += std::format(L"<b><font color=\"{}\">Alchemy of Time</font></b>", titleHex);
+        out += L"<br>";
+    }
+
+    // Colors
+    const auto HEX_NEUTRAL   = HexColor(Lorebox::color_neutral.load());
+    const auto HEX_SLOW      = HexColor(Lorebox::color_slow.load());
+    const auto HEX_FAST      = HexColor(Lorebox::color_fast.load());
+    const auto HEX_TRANSFORM = HexColor(Lorebox::color_transform.load());
 
     int printed = 0;
     constexpr int MAX_ROWS = 8;
     bool firstLine = true;
+    const auto HEX_SEP = HexColor(Lorebox::color_separator.load());
+    constexpr wchar_t SEP_BULLET[] = L"\u2022"; // bullet character
     for (const auto& r : rows) {
         if (printed >= MAX_ROWS) break;
 
         const auto eta = (r.minutes < 0) ? L"now" : HrsMinsW(r.minutes / 60.f);
 
-        std::wstring modTag;
-        if (r.transforming) {
-            if (r.mod) modTag = std::format(L" [T: {}]", FormNameW(r.mod));
-        } else if (r.mod) {
-            if (src->settings.delayers.contains(r.mod)) {
-                modTag = std::format(L" [x{:.2f}]", r.slope);
-            }
-        } else if (std::abs(r.slope - 1.f) > 0.01f) {
-            modTag = std::format(L" [x{:.2f}]", r.slope);
+        // choose color if enabled
+        const bool doColors = Lorebox::colorize_rows.load(std::memory_order_relaxed);
+        const std::wstring* rowColor = &HEX_NEUTRAL;
+        if (doColors) {
+            if (r.transforming) rowColor = &HEX_TRANSFORM;
+            else if (std::abs(r.slope - 1.f) < 0.01f) rowColor = &HEX_NEUTRAL;
+            else if (r.slope > 1.f) rowColor = &HEX_SLOW;
+            else if (r.slope < 1.f) rowColor = &HEX_FAST;
         }
 
-        if (!firstLine) out += L"<br>";
+        if (!firstLine) {
+            // Insert a bullet separator between lines
+            out += std::format(L"<br><font color=\"{}\">{}</font><br>", HEX_SEP, SEP_BULLET);
+        }
         firstLine = false;
 
-        out += std::format(L"{}x {} {}", r.count, r.next, eta);
-        out += modTag;
+        std::wstring line;
+        if (Lorebox::show_percentage.load(std::memory_order_relaxed) && r.pct >= 0) {
+            line = std::format(L"{}x {} {} ({}%)", r.count, r.next, eta, r.pct);
+        } else {
+            line = std::format(L"{}x {} {}", r.count, r.next, eta);
+        }
+
+        if (doColors) {
+            out += std::format(L"<font color=\"{}\">{}</font>", *rowColor, line);
+        } else {
+            out += line;
+        }
+
+        // Optional second row for modulator/transformer name
+        if (!r.tag.empty()) {
+            out += L"<br>";
+            if (doColors) {
+                out += std::format(L"<font color=\"{}\">{}</font>", *rowColor, r.tag);
+            } else {
+                out += r.tag;
+            }
+        }
+
         ++printed;
     }
 
     const auto remaining = static_cast<int>(rows.size()) - printed;
     if (remaining > 0) {
-        if (!firstLine) out += L"<br>";
+        out += L"<br>";
         out += std::format(L"+{}...", remaining);
     }
 
