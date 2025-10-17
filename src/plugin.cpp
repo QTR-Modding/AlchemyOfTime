@@ -2,9 +2,6 @@
 #include "MCP.h"
 #include "Threading.h"
 
-Manager* M = nullptr;
-OurEventSink* eventSink = nullptr;
-
 void OnMessage(SKSE::MessagingInterface::Message* message) {
     if (message->type == SKSE::MessagingInterface::kDataLoaded) {
         
@@ -34,16 +31,15 @@ void OnMessage(SKSE::MessagingInterface::Message* message) {
         }
 
 		// 3) Initialize Manager
-        const auto sources = std::vector<Source>();
+        constexpr auto sources = std::vector<Source>();
         M = Manager::GetSingleton(sources);
         if (!M) return;
         
         // 4) Register event sinks
-        eventSink = OurEventSink::GetSingleton(M);
+        const auto eventSink = OurEventSink::GetSingleton();
         auto* eventSourceHolder = RE::ScriptEventSourceHolder::GetSingleton();
         eventSourceHolder->AddEventSink<RE::TESEquipEvent>(eventSink);
         eventSourceHolder->AddEventSink<RE::TESActivateEvent>(eventSink);
-        eventSourceHolder->AddEventSink<RE::TESContainerChangedEvent>(eventSink);
         eventSourceHolder->AddEventSink<RE::TESFurnitureEvent>(eventSink);
         eventSourceHolder->AddEventSink<RE::TESSleepStopEvent>(eventSink);
         eventSourceHolder->AddEventSink<RE::TESWaitStopEvent>(eventSink);
@@ -70,8 +66,7 @@ void OnMessage(SKSE::MessagingInterface::Message* message) {
 		}
         if (!M || M->isUninstalled.load()) return;
 		M->Update(RE::PlayerCharacter::GetSingleton());
-        if (!eventSink) return;
-        eventSink->HandleWOsInCell();
+        OurEventSink::GetSingleton()->HandleWOsInCell();
     }
 };
 
@@ -92,7 +87,7 @@ void SaveCallback(SKSE::SerializationInterface* serializationInterface) {
 void LoadCallback(SKSE::SerializationInterface* serializationInterface) {
     DISABLE_IF_UNINSTALLED
 
-	eventSink->block_eventsinks.store(true);
+	M->isLoading.store(true);
     logger::info("Loading Data from skse co-save.");
 
 
@@ -146,7 +141,7 @@ void LoadCallback(SKSE::SerializationInterface* serializationInterface) {
         logger::info("Data loaded from skse co-save.");
     } else logger::info("No cosave data found.");
 
-	eventSink->block_eventsinks.store(false);
+	M->isLoading.store(false);
 
 }
 #undef DISABLE_IF_UNINSTALLED

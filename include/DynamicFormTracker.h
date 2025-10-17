@@ -510,10 +510,12 @@ public:
             const auto new_formid = GetByCustomID(customID.value(), baseFormID, baseEditorID);
             if (const auto dyn_form = _yield(new_formid, base_form)) return dyn_form->GetFormID();
         } 
-        if (const auto formset = GetFormSet(baseFormID, baseEditorID); !formset.empty()) {
-            for (const auto _formid : formset) {
-                if (IsActive(_formid)) continue;
-                if (const auto dyn_form = _yield(_formid, base_form)) return dyn_form->GetFormID();
+        else if (const auto formset = GetFormSet(baseFormID, baseEditorID); !formset.empty()) {
+            std::shared_lock lock(customIDforms_mutex);
+            for (const auto dyn_formid : formset) {
+                if (IsActive(dyn_formid)) continue;
+				if (customIDforms.contains(dyn_formid)) continue;
+                if (const auto dyn_form = _yield(dyn_formid, base_form)) return dyn_form->GetFormID();
             }
         }
 

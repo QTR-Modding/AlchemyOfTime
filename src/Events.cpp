@@ -30,7 +30,7 @@ void OurEventSink::HandleWOsInCell() const
 
 RE::BSEventNotifyControl OurEventSink::ProcessEvent(const RE::TESEquipEvent* event, RE::BSTEventSource<RE::TESEquipEvent>*)
 {
-    if (block_eventsinks.load()) return RE::BSEventNotifyControl::kContinue;
+    if (M->isLoading.load()) return RE::BSEventNotifyControl::kContinue;
     if (!M->listen_equip.load()) return RE::BSEventNotifyControl::kContinue;
     if (!event) return RE::BSEventNotifyControl::kContinue;
     if (!event->actor->IsPlayerRef()) return RE::BSEventNotifyControl::kContinue;
@@ -53,7 +53,7 @@ RE::BSEventNotifyControl OurEventSink::ProcessEvent(const RE::TESEquipEvent* eve
 
 RE::BSEventNotifyControl OurEventSink::ProcessEvent(const RE::TESActivateEvent* event, RE::BSTEventSource<RE::TESActivateEvent>*)
 {
-    if (block_eventsinks.load()) return RE::BSEventNotifyControl::kContinue;
+    if (M->isLoading.load()) return RE::BSEventNotifyControl::kContinue;
     if (!event) return RE::BSEventNotifyControl::kContinue;
     if (!event->objectActivated) return RE::BSEventNotifyControl::kContinue;
     if (event->objectActivated == RE::PlayerCharacter::GetSingleton()->GetGrabbedRef()) return RE::BSEventNotifyControl::kContinue;
@@ -70,11 +70,6 @@ RE::BSEventNotifyControl OurEventSink::ProcessEvent(const RE::TESActivateEvent* 
         }
     }*/
 
-	if (event->actionRef && event->actionRef->IsPlayerRef()) {
-        picked_up_refid = event->objectActivated->GetFormID();
-        logger::trace("Picked up: {}, count: {}", picked_up_refid, event->objectActivated->extraList.GetCount());
-	}
-
     M->SwapWithStage(event->objectActivated.get());
 
     return RE::BSEventNotifyControl::kContinue;
@@ -82,7 +77,7 @@ RE::BSEventNotifyControl OurEventSink::ProcessEvent(const RE::TESActivateEvent* 
 
 RE::BSEventNotifyControl OurEventSink::ProcessEvent(const SKSE::CrosshairRefEvent* event, RE::BSTEventSource<SKSE::CrosshairRefEvent>*)
 {
-    if (block_eventsinks.load()) return RE::BSEventNotifyControl::kContinue;
+    if (M->isLoading.load()) return RE::BSEventNotifyControl::kContinue;
     if (!event) return RE::BSEventNotifyControl::kContinue;
     if (!event->crosshairRef) return RE::BSEventNotifyControl::kContinue;
 
@@ -100,7 +95,7 @@ RE::BSEventNotifyControl OurEventSink::ProcessEvent(const SKSE::CrosshairRefEven
 
 RE::BSEventNotifyControl OurEventSink::ProcessEvent(const RE::TESFurnitureEvent* event, RE::BSTEventSource<RE::TESFurnitureEvent>*)
 {
-    if (block_eventsinks.load()) return RE::BSEventNotifyControl::kContinue;
+    if (M->isLoading.load()) return RE::BSEventNotifyControl::kContinue;
     if (!event) return RE::BSEventNotifyControl::kContinue;
     if (!event->actor->IsPlayerRef()) return RE::BSEventNotifyControl::kContinue;
     if (furniture_entered && event->type == RE::TESFurnitureEvent::FurnitureEventType::kEnter)
@@ -137,45 +132,9 @@ RE::BSEventNotifyControl OurEventSink::ProcessEvent(const RE::TESFurnitureEvent*
     return RE::BSEventNotifyControl::kContinue;
 }
 
-RE::BSEventNotifyControl OurEventSink::ProcessEvent(const RE::TESContainerChangedEvent* event, RE::BSTEventSource<RE::TESContainerChangedEvent>*)
-{
-    if (block_eventsinks.load()) return RE::BSEventNotifyControl::kContinue;
-    if (!M->listen_container_change.load()) return RE::BSEventNotifyControl::kContinue;
-    if (furniture_entered && event->newContainer!=player_refid) return RE::BSEventNotifyControl::kContinue;
-    if (!event) return RE::BSEventNotifyControl::kContinue;
-    if (!event->itemCount) return RE::BSEventNotifyControl::kContinue;
-    if (!event->baseObj) return RE::BSEventNotifyControl::kContinue;
-    if (event->oldContainer==event->newContainer) return RE::BSEventNotifyControl::kContinue;
-
-    auto reference_ = event->reference;
-    const auto item = RE::TESForm::LookupByID(event->baseObj);
-	auto from_ref = event->oldContainer ? RE::TESObjectREFR::LookupByID<RE::TESObjectREFR>(event->oldContainer) : WorldObject::TryToGetRefFromHandle(reference_);
-	auto to_ref = event->newContainer ? RE::TESObjectREFR::LookupByID<RE::TESObjectREFR>(event->newContainer) : WorldObject::TryToGetRefFromHandle(reference_);
-	if (!from_ref) {
-		if (RE::UI::GetSingleton()->IsMenuOpen(RE::BarterMenu::MENU_NAME)) {
-			from_ref = Menu::GetVendorChestFromMenu();
-		}
-		else if (picked_up_refid) {
-		    logger::info("Using picked up refid: {}", picked_up_refid);
-			from_ref = RE::TESObjectREFR::LookupByID<RE::TESObjectREFR>(picked_up_refid);
-			picked_up_refid = 0;
-		}
-	}
-    if (!to_ref){
-		if (RE::UI::GetSingleton()->IsMenuOpen(RE::BarterMenu::MENU_NAME)) {
-			to_ref = Menu::GetVendorChestFromMenu();
-        }
-		//else to_ref = WorldObject::TryToGetRefInCell(event->baseObj,event->itemCount);
-    }
-
-	M->Update(from_ref, to_ref, item, event->itemCount);
-
-	return RE::BSEventNotifyControl::kContinue;
-}
-
 RE::BSEventNotifyControl OurEventSink::ProcessEvent(const RE::TESSleepStopEvent*, RE::BSTEventSource<RE::TESSleepStopEvent>*)
 {
-    if (block_eventsinks.load()) return RE::BSEventNotifyControl::kContinue;
+    if (M->isLoading.load()) return RE::BSEventNotifyControl::kContinue;
     logger::trace("Sleep stop event.");
     HandleWOsInCell();
     return RE::BSEventNotifyControl::kContinue;
@@ -183,7 +142,7 @@ RE::BSEventNotifyControl OurEventSink::ProcessEvent(const RE::TESSleepStopEvent*
 
 RE::BSEventNotifyControl OurEventSink::ProcessEvent(const RE::TESWaitStopEvent*, RE::BSTEventSource<RE::TESWaitStopEvent>*)
 {
-    if (block_eventsinks.load()) return RE::BSEventNotifyControl::kContinue;
+    if (M->isLoading.load()) return RE::BSEventNotifyControl::kContinue;
     logger::trace("Wait stop event.");
     HandleWOsInCell();
     return RE::BSEventNotifyControl::kContinue;
@@ -191,7 +150,7 @@ RE::BSEventNotifyControl OurEventSink::ProcessEvent(const RE::TESWaitStopEvent*,
 
 RE::BSEventNotifyControl OurEventSink::ProcessEvent(const RE::BGSActorCellEvent* a_event, RE::BSTEventSource<RE::BGSActorCellEvent>*)
 {
-	if (block_eventsinks.load()) return RE::BSEventNotifyControl::kContinue;
+	if (M->isLoading.load()) return RE::BSEventNotifyControl::kContinue;
     if (!listen_cellchange.load()) return RE::BSEventNotifyControl::kContinue;
     if (!a_event) return RE::BSEventNotifyControl::kContinue;
     const auto eventActorHandle = a_event->actor;

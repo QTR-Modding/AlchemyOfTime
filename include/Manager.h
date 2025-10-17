@@ -116,6 +116,7 @@ public:
     std::atomic<bool> listen_container_change = true;
 
     std::atomic<bool> isUninstalled = false;
+    std::atomic<bool> isLoading = false;
 
 	const char* GetType() override { return "Manager"; }
 
@@ -140,7 +141,7 @@ public:
 	void HandleCraftingExit();
 
     // External entry point. Handles queue + source locking internally.
-    void Update(RE::TESObjectREFR* from, RE::TESObjectREFR* to=nullptr, const RE::TESForm* what=nullptr, Count count=0);
+    void Update(RE::TESObjectREFR* from, RE::TESObjectREFR* to=nullptr, const RE::TESForm* what=nullptr, Count count=0, RefID from_refid=0);
 
 	// Swap based on stage instance. Requires sourceMutex_ held for pointer lifetime.
     void SwapWithStage(RE::TESObjectREFR* wo_ref);
@@ -192,3 +193,6 @@ public:
 	}
 
 };
+
+
+inline Manager* M = nullptr;

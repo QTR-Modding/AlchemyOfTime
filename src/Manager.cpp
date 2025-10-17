@@ -887,9 +887,8 @@ void Manager::HandleCraftingExit()
 	Update(player_ref);
 }
 
-void Manager::Update(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::TESForm* what, Count count)
+void Manager::Update(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::TESForm* what, Count count, RefID from_refid)
 {
-
     const bool to_is_world_object = to && !to->HasContainer();
     if (to_is_world_object) count = to->extraList.GetCount();
 
@@ -911,7 +910,7 @@ void Manager::Update(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::T
     if (what && count > 0) {
 		std::unique_lock lock(sourceMutex_);
         if (const auto src = GetSource(what->GetFormID())) {
-	        const auto from_refid = from ? from->GetFormID() : 0;
+	        from_refid = from ? from->GetFormID() : from_refid;
 	        const auto to_refid = to ? to->GetFormID() : 0;
 			auto what_formid = what->GetFormID();
 
@@ -1108,7 +1107,7 @@ StageInstance* Manager::RegisterAtReceiveData(const FormID source_formid, const 
 
         auto* src = ForceGetSource(source_formid);
         if (!src) {
-            logger::warn("Source could not be obtained.");
+            logger::warn("Source could not be obtained for formid {:x}.", source_formid);
             return nullptr;
         }
 
@@ -1134,11 +1133,14 @@ StageInstance* Manager::RegisterAtReceiveData(const FormID source_formid, const 
         new_instance.SetDelay(st_plain);
         new_instance.xtra.is_transforming = st_plain.is_transforming;
 
-        if (!src->InsertNewInstance(new_instance, loc)) {
+		const auto instance = src->InsertNewInstance(new_instance, loc);
+
+        if (!instance) {
             logger::warn("RegisterAtReceiveData: InsertNewInstance failed.");
             return nullptr;
         }
-        return &src->data[loc].back();
+
+		return instance;
     }
 }
 
@@ -1176,6 +1178,7 @@ void Manager::ReceiveData()
     /////////////////////////////////
 
     int n_instances = 0;
+
     for (const auto& [lhs, rhs] : m_Data) {
         const auto& [form_id, editor_id] = lhs.first;
         auto source_formid = form_id;
@@ -1191,12 +1194,12 @@ void Manager::ReceiveData()
         }
         const auto source_form = FormReader::GetFormByID(0, source_editorid);
         if (!source_form) {
-            logger::critical("ReceiveData: Source form not found. Saved formid: {}, editorid: {}", source_formid,
+            logger::critical("ReceiveData: Source form not found. Saved formid: {:x}, editorid: {}", source_formid,
                                 source_editorid);
             continue;
         }
         if (source_form->GetFormID() != source_formid) {
-            logger::warn("ReceiveData: Source formid does not match. Saved formid: {}, editorid: {}", source_formid,
+            logger::warn("ReceiveData: Source formid does not match. Saved formid: {:x}, editorid: {}", source_formid,
                             source_editorid);
             source_formid = source_form->GetFormID();
         }
@@ -1205,7 +1208,7 @@ void Manager::ReceiveData()
         for (const auto& st_plain : rhs) {
             if (st_plain.is_fake) locs_to_be_handled[loc].push_back(st_plain.form_id);
             if (const auto* inserted_instance = RegisterAtReceiveData(source_formid, loc, st_plain); !inserted_instance) {
-                logger::warn("ReceiveData: could not insert instance: formid: {}, loc: {}", source_formid, loc);
+                logger::warn("ReceiveData: could not insert instance: formid: {:x}, loc: {:x}", source_formid, loc);
                 continue;
             }
             n_instances++;
@@ -1226,12 +1229,14 @@ void Manager::ReceiveData()
             "3. Restart the game."
             "4. Load the saved game."
             "JUST DO IT! NOW! BEFORE DOING ANYTHING ELSE!");
-    } else {
-        HandleLoc(player_ref);
-        std::unique_lock lk(sourceMutex_);
-        locs_to_be_handled.erase(player_refid);
-        Print();
+
+        return;
     }
+
+    HandleLoc(player_ref);
+    std::unique_lock lk(sourceMutex_);
+    locs_to_be_handled.erase(player_refid);
+    Print();
 
     logger::info("--------Data received. Number of instances: {}---------", n_instances);
 }
