@@ -171,7 +171,7 @@ std::unordered_map<RefID, std::vector<StageUpdate>> Source::UpdateAllStages(
     return updated_instances;
 }
 
-bool Source::IsStage(const FormID some_formid) {
+bool Source::IsStage(const FormID some_formid) const {
     return std::ranges::any_of(stages | std::views::values, [&](const auto& stage) {
         return stage.formid == some_formid;
     });
@@ -213,7 +213,7 @@ const Stage& Source::GetStage(const StageNo no)
     return empty_stage;
 }
 
-const Stage* Source::GetStageSafe(const StageNo no) const
+const Stage* Source::GetStage(const StageNo no) const
 {
 	if (stages.contains(no)) return &stages.at(no);
     return nullptr;
@@ -582,6 +582,41 @@ float Source::GetNextUpdateTime(StageInstance* st_inst) {
     }
 
     const auto schranke = delay_slope > 0 ? GetStage(st_inst->no).duration : 0.f;
+
+    return st_inst->GetHittingTime(schranke);
+}
+
+float Source::GetNextUpdateTime(StageInstance* st_inst) const
+{
+    if (!st_inst) {
+        logger::error("Stage instance is null.");
+        return 0;
+    }
+    if (!IsHealthy()) {
+        logger::critical("GetNextUpdateTime: Source is not healthy.");
+        logger::critical("GetNextUpdateTime: Source formid: {}, qformtype: {}", formid, qFormType);
+        return 0;
+    }
+    if (st_inst->xtra.is_decayed) return 0;
+    if (!IsStageNo(st_inst->no)) {
+        logger::error("Stage {} does not exist.", st_inst->no);
+        return 0;
+    }
+
+    const auto delay_slope = st_inst->GetDelaySlope();
+    if (std::abs(delay_slope) < EPSILON) {
+		//logger::warn("Delay slope is 0.");
+		return 0;
+    }
+
+    if (st_inst->xtra.is_transforming) {
+        const auto transformer_form_id = st_inst->GetDelayerFormID();
+        if (!settings.transformers.contains(transformer_form_id)) return 0.0f;
+        const auto trnsfrm_duration = std::get<1>(settings.transformers.at(transformer_form_id));
+		return st_inst->GetTransformHittingTime(trnsfrm_duration);
+    }
+
+    const auto schranke = delay_slope > 0 ? GetStage(st_inst->no)->duration : 0.f;
 
     return st_inst->GetHittingTime(schranke);
 }
@@ -978,7 +1013,8 @@ void Source::RegisterStage(const FormID stage_formid, const StageNo stage_no)
         return;
     }
 
-    if (const auto stage_form = FormReader::GetFormByID(stage_formid); !stage_form) {
+    const auto stage_form = FormReader::GetFormByID(stage_formid);
+    if (!stage_form) {
         logger::error("Could not create copy form for stage {}", stage_no);
         return;
     }
@@ -993,6 +1029,8 @@ void Source::RegisterStage(const FormID stage_formid, const StageNo stage_no)
         logger::error("Could not insert stage");
         return;
     }
+
+    Lorebox::AddKeyword(stage_form->As<RE::BGSKeywordForm>(),stage_formid);
 }
 
 FormID Source::FetchFake(const StageNo st_no) {
