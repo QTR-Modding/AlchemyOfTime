@@ -1107,7 +1107,7 @@ StageInstance* Manager::RegisterAtReceiveData(const FormID source_formid, const 
 
         auto* src = ForceGetSource(source_formid);
         if (!src) {
-            logger::warn("Source could not be obtained.");
+            logger::warn("Source could not be obtained for formid {:x}.", source_formid);
             return nullptr;
         }
 
