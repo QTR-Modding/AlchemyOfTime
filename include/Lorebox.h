@@ -4,28 +4,36 @@
 
 namespace Lorebox
 {
-	static std::string aot_kw_name = "KW_quantAoT";
+	static std::string aot_kw_name = "LoreBox_quantAoT";
+	static std::string aot_kw_name_lorebox = "$LoreBox_quantAoT";
 	inline RE::BGSKeyword* aot_kw = nullptr;
 
 	inline std::shared_mutex kw_mutex;
 	inline std::unordered_set<FormID> kw_added;
 
-	bool Load_KW_AoT();
+    inline bool Load_KW_AoT() {
+	    aot_kw = RE::BGSKeyword::CreateKeyword(aot_kw_name);
+		return aot_kw != nullptr;
+	}
 
-	template <typename T>
-	void AddKeyword(T* a_form)
+    inline void AddKeyword(RE::BGSKeywordForm* a_form, FormID a_formid)
 	{
-		auto a_formid = a_form->GetFormID();
 		if (std::shared_lock lock(kw_mutex);
 			kw_added.contains(a_formid)) return;  // already added
-		// Add the keyword to the form
-		if (!a_form->AddKeyword(aot_kw)) {
-			logger::error("Failed to add keyword to formid: {:x}", a_formid);
-			return;
+
+        if (!a_form->HasKeyword(aot_kw)) {
+		    if (!a_form->AddKeyword(aot_kw)) {
+			    logger::error("Failed to add keyword to formid: {:x}", a_formid);
+			    return;
+		    }
+		    else {
+			    logger::info("Added keyword to formid: {:x}", a_formid);
+		    }
 		}
 
-		// Keep track of added keywords
 		std::unique_lock ulock(kw_mutex);
 		kw_added.insert(a_formid);
 	}
+
+	std::wstring BuildLoreForHover();
 }

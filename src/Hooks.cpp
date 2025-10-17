@@ -20,15 +20,12 @@ RE::UI_MESSAGE_RESULTS MenuHook<MenuType>::ProcessMessage_Hook(RE::UIMessage& a_
     if (const std::string_view menuname = MenuType::MENU_NAME; a_message.menu==menuname) {
         if (const auto msg_type = static_cast<int>(a_message.type.get()); msg_type == 1) {
             if (menuname == RE::FavoritesMenu::MENU_NAME) {
-                logger::trace("Favorites menu is open.");
                 M->Update(RE::PlayerCharacter::GetSingleton());
             }
             else if (menuname == RE::InventoryMenu::MENU_NAME) {
-                logger::trace("Inventory menu is open.");
                 M->Update(RE::PlayerCharacter::GetSingleton());
             }
             else if (menuname == RE::BarterMenu::MENU_NAME){
-                logger::trace("Barter menu is open.");
                 M->Update(RE::PlayerCharacter::GetSingleton());
                 //if (const auto vendor_chest = Menu::GetVendorChestFromMenu()) {
                 //    M->Update(vendor_chest);
@@ -56,19 +53,22 @@ void Hooks::Install(Manager* mngr){
     UpdateHook::Install();
 #endif
 
+    ScaleformTranslatorHook::Install();
+
     MoveItemHooks<RE::PlayerCharacter>::install();
 	MoveItemHooks<RE::TESObjectREFR>::install(false);
 	MoveItemHooks<RE::Character>::install();
 
 	auto& trampoline = SKSE::GetTrampoline();
     constexpr size_t size_per_hook = 14;
-    constexpr size_t NUM_TRAMPOLINE_HOOKS = 1;
+    constexpr size_t NUM_TRAMPOLINE_HOOKS = 2;
 	trampoline.create(size_per_hook * NUM_TRAMPOLINE_HOOKS);
 
 	const REL::Relocation<std::uintptr_t> add_item_functor_hook{ RELOCATION_ID(55946, 56490) };
 	add_item_functor_ = trampoline.write_call<5>(add_item_functor_hook.address() + 0x15D, add_item_functor);
 
-    ScaleformTranslatorHook::Install();
+    const REL::Relocation<std::uintptr_t> function{REL::RelocationID(51019, 51897)};
+    InventoryHoverHook::originalFunction = trampoline.write_call<5>(function.address() + REL::Relocate(0x114, 0x22c), InventoryHoverHook::thunk);
 }
 
 inline std::string wide_to_utf8(const wchar_t* w) {
@@ -80,31 +80,28 @@ inline std::string wide_to_utf8(const wchar_t* w) {
     return out;
 }
 
-static bool safe_cstr(const char* p, size_t max = 4096) {
-    // MSVC CRT has strnlen_s that won’t crash on bad ptrs (uses SEH).
-    // Fallback still risks AV; use only if you trust the pointer domain.
-#ifdef _MSC_VER
-    size_t len = strnlen_s(p, max);
-    return len > 0 && len < max;
-#else
-    if (!p) return false;
-    for (size_t i = 0; i < max; ++i) {
-        volatile char c = p[i];          // force a read
-        if (c == '\0') return true;
-    }
-    return false; // no terminator within limit
-#endif
-}
-
 void ScaleformTranslatorHook::Translate(RE::BSScaleformTranslator* a_this, RE::GFxTranslator::TranslateInfo* a_translateInfo) {
-    if (a_translateInfo && wide_to_utf8(a_translateInfo->GetKey()) == "$LoreBox_DBArmor") {
-        Translate_(a_this, a_translateInfo);
-		wchar_t* buffer = new wchar_t[256];
-		swprintf_s(buffer, 256, L"ASDASD");
-        a_translateInfo->SetResult(buffer);
-		delete[] buffer;
-        return;
+
+    if (!allow_translation_hook) {
+        return Translate_(a_this, a_translateInfo);
     }
+
+    auto key = wide_to_utf8(a_translateInfo->GetKey());
+    if (a_translateInfo && key == Lorebox::aot_kw_name_lorebox) {
+        Translate_(a_this, a_translateInfo);
+
+        const std::wstring body = Lorebox::BuildLoreForHover();
+        if (!body.empty()) {
+            const size_t len = body.size() + 1;
+            auto* buffer = new wchar_t[len];
+            wmemset(buffer, 0, len);
+            wcsncpy_s(buffer, len, body.c_str(), body.size());
+            a_translateInfo->SetResult(buffer);
+            delete[] buffer;
+            return;
+        }
+    }
+
     Translate_(a_this, a_translateInfo);
 }
 
@@ -175,4 +172,19 @@ void Hooks::MoveItemHooks<RefType>::addObjectToContainer(RefType* a_this, RE::TE
     add_object_to_container_(a_this, a_object, a_extraList, a_count, a_fromRefr);
 
     M->Update(a_fromRefr, a_this, a_object, a_count);
+}
+
+int64_t Hooks::InventoryHoverHook::thunk(RE::InventoryEntryData* a1)
+{
+	if (M->isUninstalled.load() || M->isLoading.load()) {
+		return originalFunction(a1);
+    }
+
+    const auto obj = a1 ? a1->GetObject() : nullptr;
+    const FormID fid = obj ? obj->GetFormID() : 0;
+
+    hovered_formid.store(fid, std::memory_order_relaxed);
+
+    allow_translation_hook = fid && M->IsStageItem(fid);
+	return originalFunction(a1);
 }

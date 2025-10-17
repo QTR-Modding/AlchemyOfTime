@@ -30,6 +30,8 @@ class Manager final : public Ticker, public SaveLoadData {
 
     std::unordered_set<FormID> do_not_register;
 
+    std::unordered_set<FormID> stages_fast_lookup;
+
     static void PreDeleteRefStop(RefStop& a_ref_stop, RE::NiAVObject* a_obj);
 
     // Ticker thread entry. [locks: queueMutex_]
@@ -192,7 +194,25 @@ public:
 	    return isRunning();
 	}
 
+    bool IsStageItem(FormID a_formid);
+
 };
+
+inline bool Manager::IsStageItem(FormID a_formid) {
+	if (const auto it = stages_fast_lookup.find(a_formid); it != stages_fast_lookup.end()) {
+		return true;
+	}
+
+	std::shared_lock lock(sourceMutex_);
+    for (const auto& src : sources) {
+		if (src.IsStage(a_formid)) {
+			stages_fast_lookup.insert(a_formid);
+			return true;
+        }
+    }
+
+	return false;
+}
 
 
 inline Manager* M = nullptr;
