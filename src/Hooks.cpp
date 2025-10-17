@@ -38,6 +38,11 @@ RE::UI_MESSAGE_RESULTS MenuHook<MenuType>::ProcessMessage_Hook(RE::UIMessage& a_
                     M->Update(container);
                 } else logger::error("Could not get container.");
             }
+
+			is_menu_open = true;
+        }
+		else if (msg_type == 3) {
+			is_menu_open = false;
         }
     }
     return _ProcessMessage(this, a_message);
@@ -61,14 +66,11 @@ void Hooks::Install(Manager* mngr){
 
 	auto& trampoline = SKSE::GetTrampoline();
     constexpr size_t size_per_hook = 14;
-    constexpr size_t NUM_TRAMPOLINE_HOOKS = 2;
+    constexpr size_t NUM_TRAMPOLINE_HOOKS = 1;
 	trampoline.create(size_per_hook * NUM_TRAMPOLINE_HOOKS);
 
 	const REL::Relocation<std::uintptr_t> add_item_functor_hook{ RELOCATION_ID(55946, 56490) };
 	add_item_functor_ = trampoline.write_call<5>(add_item_functor_hook.address() + 0x15D, add_item_functor);
-
-    const REL::Relocation<std::uintptr_t> function{REL::RelocationID(51019, 51897)};
-    InventoryHoverHook::originalFunction = trampoline.write_call<5>(function.address() + REL::Relocate(0x114, 0x22c), InventoryHoverHook::thunk);
 }
 
 inline std::string wide_to_utf8(const wchar_t* w) {
@@ -82,7 +84,7 @@ inline std::string wide_to_utf8(const wchar_t* w) {
 
 void ScaleformTranslatorHook::Translate(RE::BSScaleformTranslator* a_this, RE::GFxTranslator::TranslateInfo* a_translateInfo) {
 
-    if (!allow_translation_hook) {
+    if (!is_menu_open) {
         return Translate_(a_this, a_translateInfo);
     }
 
@@ -174,17 +176,3 @@ void Hooks::MoveItemHooks<RefType>::addObjectToContainer(RefType* a_this, RE::TE
     M->Update(a_fromRefr, a_this, a_object, a_count);
 }
 
-int64_t Hooks::InventoryHoverHook::thunk(RE::InventoryEntryData* a1)
-{
-	if (M->isUninstalled.load() || M->isLoading.load()) {
-		return originalFunction(a1);
-    }
-
-    const auto obj = a1 ? a1->GetObject() : nullptr;
-    const FormID fid = obj ? obj->GetFormID() : 0;
-
-    hovered_formid.store(fid, std::memory_order_relaxed);
-
-    allow_translation_hook = fid && M->IsStageItem(fid);
-	return originalFunction(a1);
-}

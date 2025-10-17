@@ -1383,6 +1383,24 @@ RE::TESObjectREFR* Menu::GetVendorChestFromMenu()
     return nullptr;
 }
 
+RE::StandardItemData* Menu::GetSelectedItemDataInMenu(std::string& a_menuOut) {
+    if (const auto ui = RE::UI::GetSingleton()) {
+        if (ui->IsMenuOpen(RE::InventoryMenu::MENU_NAME)) {
+            a_menuOut = RE::InventoryMenu::MENU_NAME;
+            return GetSelectedItemData<RE::InventoryMenu>();
+        }
+        if (ui->IsMenuOpen(RE::ContainerMenu::MENU_NAME)) {
+            a_menuOut = RE::ContainerMenu::MENU_NAME;
+            return GetSelectedItemData<RE::ContainerMenu>();
+        }
+        if (ui->IsMenuOpen(RE::BarterMenu::MENU_NAME)) {
+            a_menuOut = RE::BarterMenu::MENU_NAME;
+            return GetSelectedItemData<RE::BarterMenu>();
+        }
+    }
+    return nullptr;
+}
+
 float Math::Round(const float value, const int n)
 {
     const float factor = std::powf(10.0f, static_cast<float>(n));

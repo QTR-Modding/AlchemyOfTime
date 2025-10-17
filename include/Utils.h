@@ -401,6 +401,23 @@ namespace Menu {
             } else logger::info("Inventory menu is null.");
         } else logger::info("Inventory menu is not open.");
     }
+
+	template <typename MenuType>
+    RE::StandardItemData* GetSelectedItemData() {
+        if (const auto ui = RE::UI::GetSingleton()) {
+            if (const auto menu = ui->GetMenu<MenuType>()) {
+	            if (RE::ItemList* a_itemList = menu->GetRuntimeData().itemList) {
+		            if (auto* item = a_itemList->GetSelectedItem()) {
+			            return &item->data;
+		            }
+	            }
+            }
+        }
+		return nullptr;
+    }
+
+	RE::StandardItemData* GetSelectedItemDataInMenu(std::string& a_menuOut);
+
 };
 namespace DynamicForm {
 
