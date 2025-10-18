@@ -20,7 +20,7 @@ void HelpMarker(const char* desc)
 // Decode basic C-style escapes in ASCII buffer to wide string (\n, \r, \t, \\, \xHH, \uXXXX)
 static std::wstring DecodeEscapesFromAscii(const char* s)
 {
-    auto hexVal = [](char ch) -> int {
+    auto hexVal = [](const char ch) -> int {
         if (ch >= '0' && ch <= '9') return ch - '0';
         if (ch >= 'a' && ch <= 'f') return 10 + (ch - 'a');
         if (ch >= 'A' && ch <= 'F') return 10 + (ch - 'A');
@@ -65,7 +65,7 @@ static std::string EncodeEscapesToAscii(const std::wstring& ws)
 {
     std::string out;
     out.reserve(ws.size() * 6);
-    auto pushHex4 = [&](wchar_t wc){
+    auto pushHex4 = [&](const wchar_t wc){
         char buf[7]{}; // \uXXXX + null
         std::snprintf(buf, sizeof(buf), "\\u%04X", static_cast<unsigned>(wc & 0xFFFF));
         out += buf;
@@ -178,7 +178,7 @@ void __stdcall UI::RenderLoreBox()
     if (!initialized) {
         lorebox_show_title = Lorebox::show_title.load();
         lorebox_show_percentage = Lorebox::show_percentage.load();
-        auto cvt = [](uint32_t c) -> ImVec4 {
+        auto cvt = [](const uint32_t c) -> ImVec4 {
             const float r = ((c >> 16) & 0xFF) / 255.0f;
             const float g = ((c >> 8) & 0xFF) / 255.0f;
             const float b = (c & 0xFF) / 255.0f;
@@ -191,7 +191,7 @@ void __stdcall UI::RenderLoreBox()
         col_transform = cvt(Lorebox::color_transform.load());
         col_separator = cvt(Lorebox::color_separator.load());
         // copy current symbols to buffers, encoding non-ASCII as \uXXXX so they show up in MCP UI
-        auto w2esc_to_buf = [](const std::wstring& ws, char* dst, size_t cap){
+        auto w2esc_to_buf = [](const std::wstring& ws, char* dst, const size_t cap){
             std::string s = EncodeEscapesToAscii(ws);
             if (cap) { strncpy_s(dst, cap, s.c_str(), _TRUNCATE); }
         };
