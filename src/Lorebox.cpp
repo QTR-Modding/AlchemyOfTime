@@ -13,15 +13,12 @@ namespace {
     }
 
     std::wstring FormNameW(FormID fid) {
-        if (!fid) return L"None";
+        if (!fid) return L"";
         if (auto f = RE::TESForm::LookupByID(fid)) {
             const char* nm = f->GetName();
             if (nm && std::strlen(nm) > 0) return Widen(nm);
-            auto ed = clib_util::editorID::get_editorID(f);
-            if (!ed.empty()) return Widen(ed);
-            return std::format(L"{:08X}", fid);
         }
-        return std::format(L"{:08X}", fid);
+        return std::format(L"");
     }
 
     std::wstring HrsMinsW(const float hours) {
@@ -70,7 +67,8 @@ namespace {
             if (src.IsStageNo(st.no + 1)) {
                 return std::format(L"{} {}", Lorebox::arrow_right, StageNameOrW(src, st.no + 1, std::format(L"Stage {}", st.no + 1)));
             }
-			return std::format(L"{} Final", Lorebox::arrow_right); // TODO: give custom name for final stage
+			auto decayed_form = RE::TESForm::LookupByID(src.settings.decayed_id);
+			return std::format(L"{} {}", Lorebox::arrow_right,Widen(decayed_form->GetName())); // TODO: give custom name for final stage
         }
         if (st.no > 0 && src.IsStageNo(st.no - 1)) {
             return std::format(L"{} {}", Lorebox::arrow_left, StageNameOrW(src, st.no - 1, std::format(L"Stage {}", st.no - 1)));
@@ -177,25 +175,25 @@ std::wstring Lorebox::BuildLoreForHover()
             }
 
             // Collect mod/transformer name for separate line if enabled
-            if (r.transforming) {
-                if (Lorebox::show_modulator_name.load(std::memory_order_relaxed)) {
-                    if (r.mod) {
-                        const auto nm = FormNameW(r.mod);
+            if (auto nm = FormNameW(r.mod); !nm.empty()) {
+                if (r.transforming) {
+                    if (Lorebox::show_modulator_name.load(std::memory_order_relaxed)) {
+                        if (r.mod) {
+                            r.tag = std::format(L"[{}]", nm);
+                        }
+                    }
+                } else {
+                    if (r.mod && Lorebox::show_modulator_name.load(std::memory_order_relaxed)) {
+                        if (Lorebox::show_multiplier.load(std::memory_order_relaxed)) {
+                            // Append multiplier if known; fall back to slope if not found in settings
+                            float mult = r.slope;
+                            if (src->settings.delayers.contains(r.mod)) {
+                                mult = src->settings.delayers.at(r.mod);
+                            }
+                            nm += std::format(L": x{:.2f}", mult);
+                        }
                         r.tag = std::format(L"[{}]", nm);
                     }
-                }
-            } else {
-                if (r.mod && Lorebox::show_modulator_name.load(std::memory_order_relaxed)) {
-                    std::wstring nm = FormNameW(r.mod);
-                    if (Lorebox::show_multiplier.load(std::memory_order_relaxed)) {
-                        // Append multiplier if known; fall back to slope if not found in settings
-                        float mult = r.slope;
-                        if (src->settings.delayers.contains(r.mod)) {
-                            mult = src->settings.delayers.at(r.mod);
-                        }
-                        nm += std::format(L": x{:.2f}", mult);
-                    }
-                    r.tag = std::format(L"[{}]", nm);
                 }
             }
 
@@ -258,9 +256,9 @@ std::wstring Lorebox::BuildLoreForHover()
 
         std::wstring line;
         if (Lorebox::show_percentage.load(std::memory_order_relaxed) && r.pct >= 0) {
-            line = std::format(L"{}x {} {} ({}%)", r.count, r.next, eta, r.pct);
+            line = std::format(L"{}x {} | {} ({}%)", r.count, r.next, eta, r.pct);
         } else {
-            line = std::format(L"{}x {} {}", r.count, r.next, eta);
+            line = std::format(L"{}x {} | {}", r.count, r.next, eta);
         }
 
         if (doColors) {
