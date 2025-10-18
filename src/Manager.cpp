@@ -555,7 +555,7 @@ void Manager::SyncWithInventory(RE::TESObjectREFR* ref)
             if (bound->IsDynamicForm()) {
                 const auto a_formID = bound->GetFormID();
                 auto* name = bound->GetName();
-                const auto nameLen = (name != nullptr) ? std::strlen(name) : 0;
+                const auto nameLen = name != nullptr ? std::strlen(name) : 0;
                 if (nameLen == 0) {
                     RemoveItem(ref, a_formID, std::max(1, entry.first));
                 }

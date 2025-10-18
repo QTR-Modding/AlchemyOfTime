@@ -41,7 +41,7 @@ void OverrideMGEFFs(RE::BSTArray<RE::Effect*>& effect_array, const std::vector<F
 
 inline bool IsDynamicFormID(const FormID a_formID) { return a_formID >= 0xFF000000; }
 
-void FavoriteItem(const RE::TESBoundObject* item, RE::TESObjectREFR* inventory_owner);
+void FavoriteItem(RE::TESBoundObject* item, RE::TESObjectREFR* inventory_owner);
 
 [[nodiscard]] bool IsFavorited(RE::TESBoundObject* item, RE::TESObjectREFR* inventory_owner);
 
@@ -57,7 +57,7 @@ inline void FavoriteItem(const FormID formid, const FormID refid) {
     return IsFavorited(item, RE::PlayerCharacter::GetSingleton()->AsReference());
 }
 
-void EquipItem(const RE::TESBoundObject* item, bool unequip = false);
+void EquipItem(RE::TESBoundObject* item, bool unequip = false);
 
 inline void EquipItem(const FormID formid, const bool unequip = false) {
 	EquipItem(FormReader::GetFormByID<RE::TESBoundObject>(formid), unequip);
@@ -195,6 +195,12 @@ namespace String {
     std::string trim(const std::string& str);
 
     bool includesWord(const std::string& input, const std::vector<std::string>& strings);
+
+    // Encode wide string to ASCII with C-style escapes for non-ASCII (e.g., L"\u2022").
+    std::string EncodeEscapesToAscii(const std::wstring& ws);
+
+    // Decode basic C-style escapes in ASCII buffer to wide string (\n, \r, \t, \\, \xHH, \uXXXX)
+    std::wstring DecodeEscapesFromAscii(const char* s);
 };
 
 namespace MsgBoxesNotifs {
@@ -417,6 +423,8 @@ namespace Menu {
     }
 
 	RE::StandardItemData* GetSelectedItemDataInMenu(std::string& a_menuOut);
+
+    RE::TESObjectREFR* GetOwnerOfItem(const RE::StandardItemData* a_itemdata);
 
 };
 namespace DynamicForm {

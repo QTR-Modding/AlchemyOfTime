@@ -17,70 +17,6 @@ void HelpMarker(const char* desc)
     }
 }
 
-// Decode basic C-style escapes in ASCII buffer to wide string (\n, \r, \t, \\, \xHH, \uXXXX)
-static std::wstring DecodeEscapesFromAscii(const char* s)
-{
-    auto hexVal = [](const char ch) -> int {
-        if (ch >= '0' && ch <= '9') return ch - '0';
-        if (ch >= 'a' && ch <= 'f') return 10 + (ch - 'a');
-        if (ch >= 'A' && ch <= 'F') return 10 + (ch - 'A');
-        return -1;
-    };
-
-    std::wstring out;
-    for (size_t i = 0; s && s[i];) {
-        char c = s[i++];
-        if (c == '\\' && s[i]) {
-            char t = s[i++];
-            switch (t) {
-            case 'n': out.push_back(L'\n'); break;
-            case 'r': out.push_back(L'\r'); break;
-            case 't': out.push_back(L'\t'); break;
-            case '\\': out.push_back(L'\\'); break;
-            case 'x': {
-                int val = 0, digits = 0; 
-                while (s[i]) { int hv = hexVal(s[i]); if (hv < 0) break; val = (val << 4) | hv; ++i; ++digits; if (digits >= 2) break; }
-                if (digits > 0) out.push_back(static_cast<wchar_t>(val));
-                else out.push_back(L'x');
-                break; }
-            case 'u': {
-                int val = 0, digits = 0; 
-                while (s[i] && digits < 4) { int hv = hexVal(s[i]); if (hv < 0) break; val = (val << 4) | hv; ++i; ++digits; }
-                if (digits == 4) out.push_back(static_cast<wchar_t>(val));
-                else out.push_back(L'u');
-                break; }
-            default:
-                out.push_back(static_cast<unsigned char>(t));
-                break;
-            }
-        } else {
-            out.push_back(static_cast<unsigned char>(c));
-        }
-    }
-    return out;
-}
-
-// Encode wide string to ASCII with C-style escapes for non-ASCII (e.g., L"\u2022").
-static std::string EncodeEscapesToAscii(const std::wstring& ws)
-{
-    std::string out;
-    out.reserve(ws.size() * 6);
-    auto pushHex4 = [&](const wchar_t wc){
-        char buf[7]{}; // \uXXXX + null
-        std::snprintf(buf, sizeof(buf), "\\u%04X", static_cast<unsigned>(wc & 0xFFFF));
-        out += buf;
-    };
-    for (wchar_t wc : ws) {
-        if (wc == L'\\') { out += "\\\\"; }
-        else if (wc == L'\n') { out += "\\n"; }
-        else if (wc == L'\r') { out += "\\r"; }
-        else if (wc == L'\t') { out += "\\t"; }
-        else if (wc >= 0 && wc <= 0x7F) { out.push_back(static_cast<char>(wc)); }
-        else { pushHex4(wc); }
-    }
-    return out;
-}
-
 void __stdcall UI::RenderSettings()
 {
 
@@ -179,8 +115,8 @@ void __stdcall UI::RenderLoreBox()
         lorebox_show_title = Lorebox::show_title.load();
         lorebox_show_percentage = Lorebox::show_percentage.load();
         auto cvt = [](const uint32_t c) -> ImVec4 {
-            const float r = ((c >> 16) & 0xFF) / 255.0f;
-            const float g = ((c >> 8) & 0xFF) / 255.0f;
+            const float r = (c >> 16 & 0xFF) / 255.0f;
+            const float g = (c >> 8 & 0xFF) / 255.0f;
             const float b = (c & 0xFF) / 255.0f;
             return ImVec4(r,g,b,1.0f);
         };
@@ -192,7 +128,7 @@ void __stdcall UI::RenderLoreBox()
         col_separator = cvt(Lorebox::color_separator.load());
         // copy current symbols to buffers, encoding non-ASCII as \uXXXX so they show up in MCP UI
         auto w2esc_to_buf = [](const std::wstring& ws, char* dst, const size_t cap){
-            std::string s = EncodeEscapesToAscii(ws);
+            std::string s = String::EncodeEscapesToAscii(ws);
             if (cap) { strncpy_s(dst, cap, s.c_str(), _TRUNCATE); }
         };
         w2esc_to_buf(Lorebox::separator_symbol, sep_symbol, sizeof(sep_symbol));
@@ -323,7 +259,7 @@ void __stdcall UI::RenderLoreBox()
                 const uint32_t R = static_cast<uint32_t>(std::round(c.x * 255.f));
                 const uint32_t G = static_cast<uint32_t>(std::round(c.y * 255.f));
                 const uint32_t B = static_cast<uint32_t>(std::round(c.z * 255.f));
-                return (R << 16) | (G << 8) | B;
+                return R << 16 | G << 8 | B;
             };
             Lorebox::color_title.store(fromCol(col_title));
             Lorebox::color_neutral.store(fromCol(col_neutral));
@@ -333,9 +269,9 @@ void __stdcall UI::RenderLoreBox()
             Lorebox::color_separator.store(fromCol(col_separator));
 
             // update symbols: decode backslash escapes into wide
-            Lorebox::separator_symbol = DecodeEscapesFromAscii(sep_symbol);
-            Lorebox::arrow_right = DecodeEscapesFromAscii(arrow_right_buf);
-            Lorebox::arrow_left = DecodeEscapesFromAscii(arrow_left_buf);
+            Lorebox::separator_symbol = String::DecodeEscapesFromAscii(sep_symbol);
+            Lorebox::arrow_right = String::DecodeEscapesFromAscii(arrow_right_buf);
+            Lorebox::arrow_left = String::DecodeEscapesFromAscii(arrow_left_buf);
         }
     }
 }
@@ -375,7 +311,7 @@ void __stdcall UI::RenderInspect()
         if (ImGui::BeginCombo("##combo 2", sub_item_current.c_str())) {
             for (const auto& key : selectedItem | std::views::keys) {
                 if (filter2->PassFilter(key.c_str())) {
-                    const bool is_selected = (sub_item_current == key);
+                    const bool is_selected = sub_item_current == key;
                     if (ImGui::Selectable(key.c_str(), is_selected)) {
                         sub_item_current = key;
                     }

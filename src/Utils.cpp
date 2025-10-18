@@ -32,7 +32,7 @@ namespace {
     }
 
     float clampf(const float x, const float lo, const float hi) {
-        return x < lo ? lo : (x > hi ? hi : x);
+        return x < lo ? lo : x > hi ? hi : x;
     }
 };
 
@@ -159,7 +159,7 @@ void OverrideMGEFFs(RE::BSTArray<RE::Effect*>& effect_array, const std::vector<F
 	}     
 }
 
-void FavoriteItem(const RE::TESBoundObject* item, RE::TESObjectREFR* inventory_owner)
+void FavoriteItem(RE::TESBoundObject* item, RE::TESObjectREFR* inventory_owner)
 {
     if (!item) return;
     if (!inventory_owner) return;
@@ -215,7 +215,7 @@ bool IsFavorited(RE::TESBoundObject* item, RE::TESObjectREFR* inventory_owner) {
     return false;
 }
 
-void EquipItem(const RE::TESBoundObject* item, const bool unequip)
+void EquipItem(RE::TESBoundObject* item, const bool unequip)
 {
     logger::trace("EquipItem");
 
@@ -743,6 +743,69 @@ bool String::includesWord(const std::string& input, const std::vector<std::strin
         }
     }
     return false;  // None of the strings in 'strings' were found in the input string
+}
+
+std::string String::EncodeEscapesToAscii(const std::wstring& ws) {
+    std::string out;
+    for (const auto& wc : ws) {
+        switch (wc) {
+        case L'\n': out += "\\n"; break;
+        case L'\r': out += "\\r"; break;
+        case L'\t': out += "\\t"; break;
+        case L'\\': out += "\\\\"; break;
+        default:
+            if (wc < 0x20 || wc > 0x7E) {
+                char buffer[7];
+                snprintf(buffer, sizeof(buffer), "\\u%04x", static_cast<unsigned int>(wc));
+                out += buffer;
+            } else {
+                out += static_cast<char>(wc);
+            }
+            break;
+        }
+    }
+	return out;
+}
+
+std::wstring String::DecodeEscapesFromAscii(const char* s) {
+    auto hexVal = [](const char ch) -> int {
+        if (ch >= '0' && ch <= '9') return ch - '0';
+        if (ch >= 'a' && ch <= 'f') return 10 + (ch - 'a');
+        if (ch >= 'A' && ch <= 'F') return 10 + (ch - 'A');
+        return -1;
+    };
+
+    std::wstring out;
+    for (size_t i = 0; s && s[i];) {
+        char c = s[i++];
+        if (c == '\\' && s[i]) {
+            char t = s[i++];
+            switch (t) {
+            case 'n': out.push_back(L'\n'); break;
+            case 'r': out.push_back(L'\r'); break;
+            case 't': out.push_back(L'\t'); break;
+            case '\\': out.push_back(L'\\'); break;
+            case 'x': {
+                int val = 0, digits = 0;
+                while (s[i]) { int hv = hexVal(s[i]); if (hv < 0) break; val = val << 4 | hv; ++i; ++digits; if (digits >= 2) break; }
+                if (digits > 0) out.push_back(static_cast<wchar_t>(val));
+                else out.push_back(L'x');
+                break; }
+            case 'u': {
+                int val = 0, digits = 0;
+                while (s[i] && digits < 4) { int hv = hexVal(s[i]); if (hv < 0) break; val = val << 4 | hv; ++i; ++digits; }
+                if (digits == 4) out.push_back(static_cast<wchar_t>(val));
+                else out.push_back(L'u');
+                break; }
+            default:
+                out.push_back(static_cast<unsigned char>(t));
+                break;
+            }
+        } else {
+            out.push_back(static_cast<unsigned char>(c));
+        }
+    }
+    return out;
 }
 
 bool xData::UpdateExtras(RE::ExtraDataList* copy_from, RE::ExtraDataList* copy_to) {
@@ -1332,7 +1395,6 @@ RE::TESObjectREFR* Menu::GetContainerFromMenu()
 	}
     logger::trace("UI Reference id {}", ui_refid);
     if (const auto ui_ref = RE::TESObjectREFR::LookupByHandle(ui_refid)) {
-        logger::trace("UI Reference name {}", ui_ref->GetDisplayFullName());
         return ui_ref.get();
     }
     return nullptr;
@@ -1355,7 +1417,6 @@ RE::TESObjectREFR* Menu::GetVendorChestFromMenu()
 	if (const auto barter_actor = ui_ref->GetBaseObject()->As<RE::Actor>()) {
         if (const auto* faction = barter_actor->GetVendorFaction()) {
 			if (auto* merchant_chest = faction->vendorData.merchantContainer) {
-				logger::trace("Found chest with refid {}", merchant_chest->GetFormID());
 				return merchant_chest;
 			}
         }
@@ -1364,7 +1425,6 @@ RE::TESObjectREFR* Menu::GetVendorChestFromMenu()
 	if (const auto barter_npc = ui_ref->GetBaseObject()->As<RE::TESNPC>()) {
 	    for (const auto& faction_rank : barter_npc->factions) {
             if (const auto merchant_chest = faction_rank.faction->vendorData.merchantContainer) {
-                logger::trace("Found chest with refid {}", merchant_chest->GetFormID());
                 return merchant_chest;
             }
         }
@@ -1400,6 +1460,18 @@ RE::StandardItemData* Menu::GetSelectedItemDataInMenu(std::string& a_menuOut) {
     }
     return nullptr;
 }
+
+RE::TESObjectREFR* Menu::GetOwnerOfItem(const RE::StandardItemData* a_itemdata) {
+    auto& refHandle = a_itemdata->owner;
+    if (RE::NiPointer<RE::TESObjectREFR> owner; LookupReferenceByHandle(refHandle,owner)) {
+        return owner.get();
+    }
+    if (RE::NiPointer<RE::Actor> owner_actor; LookupReferenceByHandle(refHandle,owner_actor)) {
+		return owner_actor->AsReference();
+    }
+    return nullptr;
+}
+
 
 float Math::Round(const float value, const int n)
 {

@@ -6,7 +6,7 @@
 
 namespace DebugAPI_IMPL {
     glm::highp_mat4 GetRotationMatrix(const glm::vec3 eulerAngles) {
-        return glm::eulerAngleXYZ(-(eulerAngles.x), -(eulerAngles.y), -(eulerAngles.z));
+        return glm::eulerAngleXYZ(-eulerAngles.x, -eulerAngles.y, -eulerAngles.z);
     }
 
     glm::vec3 NormalizeVector(const glm::vec3 p) { return glm::normalize(p); }
@@ -136,7 +136,7 @@ namespace DebugAPI_IMPL {
 
     glm::vec3 VectorToEulerRotation(const glm::vec3 vecIn) {
         const float yaw = atan2(vecIn.x, vecIn.y);
-        const float pitch = atan2(vecIn.z, sqrt((vecIn.x * vecIn.x) + (vecIn.y * vecIn.y)));
+        const float pitch = atan2(vecIn.z, sqrt(vecIn.x * vecIn.x + vecIn.y * vecIn.y));
 
         return glm::vec3(pitch, 0.0f, yaw);
     }
@@ -174,9 +174,9 @@ namespace DebugAPI_IMPL {
     }
 
     glm::vec3 GetPointOnRotatedCircle(const glm::vec3 origin, const float radius, const float i, const float maxI, const glm::vec3 eulerAngles) {
-        const float currAngle = (i / maxI) * glm::two_pi<float>();
+        const float currAngle = i / maxI * glm::two_pi<float>();
 
-        const glm::vec3 targetPos((radius * cos(currAngle)), (radius * sin(currAngle)), 0.0f);
+        const glm::vec3 targetPos(radius * cos(currAngle), radius * sin(currAngle), 0.0f);
 
         const auto targetPosRotated = RotateVector(eulerAngles, targetPos);
 
@@ -372,9 +372,9 @@ namespace DebugAPI_IMPL {
         }
     }
 
-    float DebugAPI::ConvertComponentR(const float value) { return (value * 0xffff) + value; }
+    float DebugAPI::ConvertComponentR(const float value) { return value * 0xffff + value; }
 
-    float DebugAPI::ConvertComponentG(const float value) { return (value * 0xff) + value; }
+    float DebugAPI::ConvertComponentG(const float value) { return value * 0xff + value; }
 
     float DebugAPI::ConvertComponentB(const float value) { return value; }
 
@@ -454,7 +454,7 @@ namespace DebugAPI_IMPL {
     bool DebugAPI::IsOnScreen(const glm::vec2 from, const glm::vec2 to) { return IsOnScreen(from) || IsOnScreen(to); }
 
     bool DebugAPI::IsOnScreen(const glm::vec2 point) {
-        return (point.x <= ScreenResX && point.x >= 0.0 && point.y <= ScreenResY && point.y >= 0.0);
+        return point.x <= ScreenResX && point.x >= 0.0 && point.y <= ScreenResY && point.y >= 0.0;
     }
 
     void DebugOverlayMenu::AdvanceMovie(const float a_interval, const std::uint32_t a_currentTime) {

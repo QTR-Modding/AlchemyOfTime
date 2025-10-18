@@ -24,33 +24,6 @@ static const std::unordered_map<std::string, QFormChecker> qformCheckers = {
 	//{"NPC", [](const auto form) {return FormIsOfType(form, RE::TESNPC::FORMTYPE); } }
 };
 
-// Helper: convert std::wstring to UTF-8 std::string
-static std::string WideToUtf8(const std::wstring& ws)
-{
-	if (ws.empty()) return {};
-	int bytes = ::WideCharToMultiByte(CP_UTF8, 0, ws.c_str(), -1, nullptr, 0, nullptr, nullptr);
-	if (bytes <= 0) return {};
-	std::string out(static_cast<size_t>(bytes - 1), '\0');
-	::WideCharToMultiByte(CP_UTF8, 0, ws.c_str(), -1, out.data(), bytes - 1, nullptr, nullptr);
-	return out;
-}
-
-// Helper: encode wide to ASCII with backslash escapes (non-ASCII -> \uXXXX)
-static std::string EncodeEscapesToAscii(const std::wstring& ws)
-{
-    std::string out;
-    out.reserve(ws.size() * 6);
-    for (wchar_t wc : ws) {
-        if (wc == L'\\') out += "\\\\";
-        else if (wc == L'\n') out += "\\n";
-        else if (wc == L'\r') out += "\\r";
-        else if (wc == L'\t') out += "\\t";
-        else if (wc >= 0 && wc <= 0x7F) out.push_back(static_cast<char>(wc));
-        else out += std::format("\\u{:04X}", static_cast<unsigned>(wc & 0xFFFF));
-    }
-    return out;
-}
-
 bool Settings::IsQFormType(const FormID formid, const std::string& qformtype) {
     const auto* form = FormReader::GetFormByID(formid);
     if (!form) {
@@ -58,7 +31,7 @@ bool Settings::IsQFormType(const FormID formid, const std::string& qformtype) {
         return false;
 	}
     const auto it = qformCheckers.find(qformtype);
-    return (it != qformCheckers.end()) ? it->second(form) : false;
+    return it != qformCheckers.end() ? it->second(form) : false;
 }
 
 std::string Settings::GetQFormType(const FormID formid)
@@ -425,22 +398,6 @@ namespace {
 	    }
 	    return combinedSettings;
     }
-
-    std::unordered_map<FormID, AddOnSettings> parseAddOns(const std::string& _type)
-    {
-        const auto folder_path = "Data/SKSE/Plugins/AlchemyOfTime/" + _type + "/addon";
-        std::filesystem::create_directories(folder_path);
-
-	    std::unordered_map<FormID, AddOnSettings> _addon_settings;
-
-        for (const auto& entry : std::filesystem::directory_iterator(folder_path)) {
-            if (!entry.is_regular_file() || entry.path().extension() != ".yml") continue;
-            const auto filename = entry.path().string();
-            processAddOnFile(filename,_addon_settings);
-        }
-        return _addon_settings;
-    }
-
 
     auto parse_color = [](const YAML::Node& node, const char* key) -> std::optional<uint32_t> {
         if (node[key] && !node[key].IsNull())
@@ -884,13 +841,13 @@ void PresetParse::LoadINISettings()
                 case '\\': out.push_back(L'\\'); break;
                 case 'x': {
                     int val = 0, digits = 0; 
-                    while (i < s.size()) { int hv = hexVal(s[i]); if (hv < 0) break; val = (val << 4) | hv; ++i; ++digits; if (digits >= 2) break; }
+                    while (i < s.size()) { int hv = hexVal(s[i]); if (hv < 0) break; val = val << 4 | hv; ++i; ++digits; if (digits >= 2) break; }
                     if (digits > 0) out.push_back(static_cast<wchar_t>(val));
                     else { out.push_back(L'x'); }
                     break; }
                 case 'u': {
                     int val = 0, digits = 0;
-                    while (i < s.size() && digits < 4) { int hv = hexVal(s[i]); if (hv < 0) break; val = (val << 4) | hv; ++i; ++digits; }
+                    while (i < s.size() && digits < 4) { int hv = hexVal(s[i]); if (hv < 0) break; val = val << 4 | hv; ++i; ++digits; }
                     if (digits == 4) out.push_back(static_cast<wchar_t>(val));
                     else { out.push_back(L'u'); }
                     break; }
@@ -938,9 +895,9 @@ void PresetParse::LoadINISettings()
     writeHex("ColorSeparator", Lorebox::color_separator.load());
 
     // Write symbol defaults only if missing; preserve user's raw codes/entities (use escaped ASCII)
-    if (!ini.KeyExists("LoreBox", "SeparatorSymbol")) ini.SetValue("LoreBox", "SeparatorSymbol", EncodeEscapesToAscii(Lorebox::separator_symbol).c_str());
-    if (!ini.KeyExists("LoreBox", "ArrowRight")) ini.SetValue("LoreBox", "ArrowRight", EncodeEscapesToAscii(Lorebox::arrow_right).c_str());
-    if (!ini.KeyExists("LoreBox", "ArrowLeft")) ini.SetValue("LoreBox", "ArrowLeft", EncodeEscapesToAscii(Lorebox::arrow_left).c_str());
+    if (!ini.KeyExists("LoreBox", "SeparatorSymbol")) ini.SetValue("LoreBox", "SeparatorSymbol", String::EncodeEscapesToAscii(Lorebox::separator_symbol).c_str());
+    if (!ini.KeyExists("LoreBox", "ArrowRight")) ini.SetValue("LoreBox", "ArrowRight", String::EncodeEscapesToAscii(Lorebox::arrow_right).c_str());
+    if (!ini.KeyExists("LoreBox", "ArrowLeft")) ini.SetValue("LoreBox", "ArrowLeft", String::EncodeEscapesToAscii(Lorebox::arrow_left).c_str());
 		
     ini.SaveFile(Settings::INI_path);
 }
