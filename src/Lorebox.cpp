@@ -178,12 +178,10 @@ std::wstring Lorebox::BuildLoreForHover()
             if (auto nm = FormNameW(r.mod); !nm.empty()) {
                 if (r.transforming) {
                     if (Lorebox::show_modulator_name.load(std::memory_order_relaxed)) {
-                        if (r.mod) {
-                            r.tag = std::format(L"[{}]", nm);
-                        }
+                        r.tag = std::format(L"[{}]", nm);
                     }
                 } else {
-                    if (r.mod && Lorebox::show_modulator_name.load(std::memory_order_relaxed)) {
+                    if (Lorebox::show_modulator_name.load(std::memory_order_relaxed)) {
                         if (Lorebox::show_multiplier.load(std::memory_order_relaxed)) {
                             // Append multiplier if known; fall back to slope if not found in settings
                             float mult = r.slope;
