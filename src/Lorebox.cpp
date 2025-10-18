@@ -178,7 +178,7 @@ std::wstring Lorebox::BuildLoreForHover()
 
             // Collect mod/transformer name for separate line if enabled
             if (r.transforming) {
-                if (Lorebox::show_transformer_name.load(std::memory_order_relaxed)) {
+                if (Lorebox::show_modulator_name.load(std::memory_order_relaxed)) {
                     if (r.mod) {
                         const auto nm = FormNameW(r.mod);
                         r.tag = std::format(L"[{}]", nm);

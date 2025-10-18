@@ -789,17 +789,15 @@ void PresetParse::LoadINISettings()
 	Settings::placed_objects_evolve = ini.GetBoolValue("Other Settings", "PlacedObjectsEvolve", Settings::placed_objects_evolve);
 	Settings::unowned_objects_evolve = ini.GetBoolValue("Other Settings", "UnOwnedObjectsEvolve", Settings::unowned_objects_evolve);
 
-    // LoreBox settings (defaults true)
+    // LoreBox settings (defaults true, except ShowModulatorName and ShowMultiplier)
     const bool lb_title = ini.GetBoolValue("LoreBox", "ShowTitle", true);
     const bool lb_pct   = ini.GetBoolValue("LoreBox", "ShowPercentage", true);
-    const bool lb_mod   = ini.GetBoolValue("LoreBox", "ShowModName", true);
-    const bool lb_trn   = ini.GetBoolValue("LoreBox", "ShowTransformerName", true);
+    const bool lb_mod   = ini.GetBoolValue("LoreBox", "ShowModulatorName", false);
     const bool lb_col   = ini.GetBoolValue("LoreBox", "ColorizeRows", true);
-    const bool lb_mul   = ini.GetBoolValue("LoreBox", "ShowMultiplier", true);
+    const bool lb_mul   = ini.GetBoolValue("LoreBox", "ShowMultiplier", false);
     Lorebox::show_title.store(lb_title);
     Lorebox::show_percentage.store(lb_pct);
     Lorebox::show_modulator_name.store(lb_mod);
-    Lorebox::show_transformer_name.store(lb_trn);
     Lorebox::colorize_rows.store(lb_col);
     Lorebox::show_multiplier.store(lb_mul);
 
@@ -835,8 +833,7 @@ void PresetParse::LoadINISettings()
     // Ensure keys exist with defaults if they were missing
     ini.SetBoolValue("LoreBox", "ShowTitle", lb_title);
     ini.SetBoolValue("LoreBox", "ShowPercentage", lb_pct);
-    ini.SetBoolValue("LoreBox", "ShowModName", lb_mod);
-    ini.SetBoolValue("LoreBox", "ShowTransformerName", lb_trn);
+    ini.SetBoolValue("LoreBox", "ShowModulatorName", lb_mod);
     ini.SetBoolValue("LoreBox", "ColorizeRows", lb_col);
     ini.SetBoolValue("LoreBox", "ShowMultiplier", lb_mul);
 

@@ -18,14 +18,12 @@ namespace Lorebox
 	inline std::atomic show_title{ true };
 	// UI toggle: show progress percentage per instance (default true)
 	inline std::atomic show_percentage{ true };
-	// UI toggle: show delayer (time modulator) name
-	inline std::atomic show_modulator_name{ true };
-	// UI toggle: show transformer name
-	inline std::atomic show_transformer_name{ true };
+	// UI toggle: show delayer (time modulator) and transformer name
+	inline std::atomic show_modulator_name{ false };
 	// UI toggle: colorize each row based on modulation/transform state
 	inline std::atomic colorize_rows{ true };
 	// UI toggle: append multiplier to modulator tag (e.g., ": x0.5")
-	inline std::atomic show_multiplier{ true };
+	inline std::atomic show_multiplier{ false };
 
 	// Configurable colors (0xRRGGBB)
 	inline std::atomic<uint32_t> color_title{ 0xA86CCD };      // title accent
@@ -85,18 +83,24 @@ namespace Lorebox
 	}
 
 	inline void ReAddKWs() {
-        std::shared_lock lock(kw_mutex);
-        for (const auto& formid : kw_removed) {
-            if (const auto form = RE::TESForm::LookupByID(formid)) {
-                if (const auto kw_form = form->As<RE::BGSKeywordForm>()) {
-					lock.unlock();
-                    Lorebox::AddKeyword(kw_form, formid);
-					lock.lock();
+
+		std::vector<std::pair<RE::BGSKeywordForm*,FormID>> to_add;
+		{
+            std::unique_lock lock(kw_mutex);
+            for (const auto& formid : kw_removed) {
+                if (const auto form = RE::TESForm::LookupByID(formid)) {
+                    if (const auto kw_form = form->As<RE::BGSKeywordForm>()) {
+						to_add.push_back({ kw_form, formid });
+                    }
                 }
             }
-        }
-        kw_removed.clear();
-    }
+            kw_removed.clear();
+		}
+
+		for (const auto& [kw_form, formid] : to_add) {
+			AddKeyword(kw_form,formid);
+		}
+	}
 
 	inline bool HasKW(const RE::TESForm* a_form) {
 		std::shared_lock lock(kw_mutex);

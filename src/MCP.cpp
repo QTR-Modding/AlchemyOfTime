@@ -154,7 +154,7 @@ void __stdcall UI::RenderLoreBox()
         // New options
         static bool show_mod_name = Lorebox::show_modulator_name.load();
         static bool show_multiplier = Lorebox::show_multiplier.load();
-        static bool colorize      = Lorebox::colorize_rows.load();
+        static bool colorize = Lorebox::colorize_rows.load();
 
         ImGui::TableNextRow();
         ImGui::TableNextColumn();
@@ -220,7 +220,6 @@ void __stdcall UI::RenderLoreBox()
         Lorebox::show_title.store(lorebox_show_title, std::memory_order_relaxed);
         Lorebox::show_percentage.store(lorebox_show_percentage, std::memory_order_relaxed);
         Lorebox::show_modulator_name.store(show_mod_name, std::memory_order_relaxed);
-        Lorebox::show_transformer_name.store(show_mod_name, std::memory_order_relaxed);
         Lorebox::show_multiplier.store(show_multiplier, std::memory_order_relaxed);
         Lorebox::colorize_rows.store(colorize, std::memory_order_relaxed);
 
