@@ -34,7 +34,7 @@ namespace Lorebox
 	inline std::atomic<uint32_t> color_separator{ 0x9AA0A6 };  // bullet/separator color
 
 	// Configurable symbols (ASCII recommended for maximum font support)
-	inline std::wstring separator_symbol = L"\u2022"; // bullet default
+	inline std::wstring separator_symbol = L"-"; // bullet default
 	inline std::wstring arrow_right = L"->";          // forward arrow
 	inline std::wstring arrow_left  = L"<-";          // backward arrow
 

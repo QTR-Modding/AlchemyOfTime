@@ -847,7 +847,7 @@ void PresetParse::LoadINISettings()
     Lorebox::show_multiplier.store(lb_mul);
 
     // Colors
-    auto readHex = [&](const char* key, uint32_t def) {
+    auto readHex = [&](const char* key, const uint32_t def) {
         const char* s = ini.GetValue("LoreBox", key, nullptr);
         if (!s) return def;
         try {
@@ -865,8 +865,8 @@ void PresetParse::LoadINISettings()
     Lorebox::color_separator.store(readHex("ColorSeparator", Lorebox::color_separator.load()));
 
     // Decode backslash escape sequences like \\uXXXX and \\xHH
-    auto decodeEscapes = [](std::string_view s) -> std::wstring {
-        auto hexVal = [](char ch) -> int {
+    auto decodeEscapes = [](const std::string_view s) -> std::wstring {
+        auto hexVal = [](const char ch) -> int {
             if (ch >= '0' && ch <= '9') return ch - '0';
             if (ch >= 'a' && ch <= 'f') return 10 + (ch - 'a');
             if (ch >= 'A' && ch <= 'F') return 10 + (ch - 'A');

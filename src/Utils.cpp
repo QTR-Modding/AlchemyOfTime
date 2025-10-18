@@ -31,7 +31,7 @@ namespace {
         } 
     }
 
-    float clampf(float x, float lo, float hi) {
+    float clampf(const float x, const float lo, const float hi) {
         return x < lo ? lo : (x > hi ? hi : x);
     }
 };

@@ -6,7 +6,7 @@ namespace {
 
     std::wstring Widen(const std::string& s) { return { s.begin(), s.end() }; }
 
-    std::wstring HexColor(uint32_t rgb) {
+    std::wstring HexColor(const uint32_t rgb) {
         return std::format(L"#{:06X}", rgb & 0xFFFFFF);
     }
 
@@ -22,17 +22,31 @@ namespace {
         return std::format(L"{:08X}", fid);
     }
 
-    std::wstring HrsMinsW(float hours) {
+    std::wstring HrsMinsW(const float hours) {
         if (hours < 0.f) return L"now";
-        const int total = static_cast<int>(std::round(hours * 60.f));
-        const int h = total / 60;
-        const int m = total % 60;
+        const int totalM = static_cast<int>(std::round(hours * 60.f));
+        constexpr int minsPerDay = 24 * 60;
+        const int d = totalM / minsPerDay;
+        const int remAfterDays = totalM % minsPerDay;
+        const int h = remAfterDays / 60;
+        const int m = remAfterDays % 60;
+
+        if (d > 0) {
+            // Build "Xd Yh Zm" omitting zero parts
+            std::wstring out;
+            if (d > 0) out += std::format(L"{}d", d);
+            if (h > 0) out += (out.empty() ? L"" : L" ") + std::format(L"{}h", h);
+            if (m > 0) out += (out.empty() ? L"" : L" ") + std::format(L"{}m", m);
+            if (out.empty()) return L"0m"; // should not happen, but fallback
+            return out;
+        }
+
         if (h <= 0) return std::format(L"{}m", m);
         if (m == 0) return std::format(L"{}h", h);
         return std::format(L"{}h {}m", h, m);
     }
 
-    std::wstring StageNameOrW(const Source& src, StageNo no, std::wstring fallback) {
+    std::wstring StageNameOrW(const Source& src, const StageNo no, std::wstring fallback) {
         const auto n = src.GetStageName(no);
         if (!n.empty()) return Widen(n);
         return fallback;

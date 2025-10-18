@@ -782,7 +782,7 @@ void Manager::Register(const FormID some_formid, const Count count, const RefID 
     }
 }
 
-void Manager::HandleCraftingEnter(unsigned int bench_type)
+void Manager::HandleCraftingEnter(const unsigned int bench_type)
  {
     if (!handle_crafting_instances.empty()) {
         logger::warn("HandleCraftingEnter: Crafting instances already exist.");

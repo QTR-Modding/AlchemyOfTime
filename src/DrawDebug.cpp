@@ -1,8 +1,6 @@
 #include "DrawDebug.h"
-
 #include <glm/ext.hpp>
 #include <glm/glm.hpp>
-#include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/euler_angles.hpp>
 #include <glm/gtx/quaternion.hpp>
 
@@ -355,7 +353,7 @@ namespace DebugAPI_IMPL {
     // this is inaccurate. A more accurate solution would require finding the sub vector that overshoots the screen rect
     // between two points and scale the vector accordingly. Might implement that at some point, but the inaccuracy is
     // barely noticeable
-    const float CLAMP_MAX_OVERSHOOT = 10000.0f;
+    constexpr float CLAMP_MAX_OVERSHOOT = 10000.0f;
     void DebugAPI::FastClampToScreen(glm::vec2& point) {
         if (point.x < 0.0) {
             const float overshootX = abs(point.x);
