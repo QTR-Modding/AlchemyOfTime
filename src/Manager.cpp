@@ -988,6 +988,8 @@ void Manager::Reset()
         for (auto& src : sources) src.Reset();
         sources.clear();
     }
+    stages_fast_lookup.clear();
+
     // external_favs.clear();         // we will update this in ReceiveData
     handle_crafting_instances.clear();
     faves_list.clear();
@@ -996,6 +998,7 @@ void Manager::Reset()
     Clear();
 	listen_container_change.store(true);
 	isUninstalled.store(false);
+
     
     logger::info("Manager reset.");
 }

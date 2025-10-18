@@ -598,7 +598,7 @@ DefaultSettings PresetParse::parseDefaults_(const YAML::Node& config)
                 temp_name.empty() || std::ranges::all_of(temp_name, isspace)) {
 				settings.stage_names[a_stage_no] = "";
             }
-            else settings.stage_names[a_stage_no] = stageNode["name"].as<StageName>();
+            else settings.stage_names[a_stage_no] = temp_name;
         } else settings.stage_names[a_stage_no] = "";
         // add to costoverrides
         if (auto a_value = parse_type<int>(stageNode, "value"); a_value) {
