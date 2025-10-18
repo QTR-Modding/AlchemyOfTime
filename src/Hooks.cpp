@@ -12,7 +12,7 @@ namespace {
     
     std::string wide_to_utf8(const wchar_t* w) {
         if (!w) return {};
-        int len = WideCharToMultiByte(CP_UTF8, 0, w, -1, nullptr, 0, nullptr, nullptr);
+        const int len = WideCharToMultiByte(CP_UTF8, 0, w, -1, nullptr, 0, nullptr, nullptr);
         if (len <= 1) return {};
         std::string out(len - 1, '\0');                 // drop the trailing NUL
         WideCharToMultiByte(CP_UTF8, 0, w, -1, out.data(), len, nullptr, nullptr);
@@ -64,11 +64,11 @@ namespace {
         auto** vtbl = *reinterpret_cast<void***>(tr.get());
 
         // Resolve the vanilla BSScaleformTranslator vtable pointer for comparison
-        REL::Relocation<std::uintptr_t> baseVtblRel{ RE::BSScaleformTranslator::VTABLE[0] };
+        const REL::Relocation<std::uintptr_t> baseVtblRel{ RE::BSScaleformTranslator::VTABLE[0] };
         auto** baseVtbl = reinterpret_cast<void**>(baseVtblRel.address());
 
         // Choose the vtable we will patch: if it's the vanilla class vtable, patch that one; otherwise, patch the instance's
-        auto** targetVtbl = (vtbl == baseVtbl) ? baseVtbl : vtbl;
+        auto** targetVtbl = vtbl == baseVtbl ? baseVtbl : vtbl;
 
         // Already patched?
         if (g_TranslatorVTable == targetVtbl && g_OrigTranslateAny) {
@@ -121,6 +121,9 @@ RE::UI_MESSAGE_RESULTS MenuHook<MenuType>::ProcessMessage_Hook(RE::UIMessage& a_
                 //if (const auto vendor_chest = Menu::GetVendorChestFromMenu()) {
                 //    M->Update(vendor_chest);
                 //} else logger ::error("Could not get vendor chest.");
+                clib_utilsQTR::Tasker::GetSingleton()->PushTask([]() {
+				    is_barter_menu_open = true;
+					}, 500); // delay to allow the menu to fully initialize
             } 
             else if (menuname == RE::ContainerMenu::MENU_NAME) {
                 logger::trace("Container menu is open.");
@@ -134,6 +137,8 @@ RE::UI_MESSAGE_RESULTS MenuHook<MenuType>::ProcessMessage_Hook(RE::UIMessage& a_
         }
 		else if (msg_type == 3) {
 			is_menu_open = false;
+			is_barter_menu_open = false;
+            Lorebox::ReAddKWs();
         }
     }
     return _ProcessMessage(this, a_message);
@@ -160,6 +165,9 @@ void Hooks::Install(Manager* mngr){
 
 	const REL::Relocation<std::uintptr_t> add_item_functor_hook{ RELOCATION_ID(55946, 56490) };
 	add_item_functor_ = trampoline.write_call<5>(add_item_functor_hook.address() + 0x15D, add_item_functor);
+
+    /*const REL::Relocation<std::uintptr_t> function{REL::RelocationID(51019, 51897)};
+    InventoryHoverHook::originalFunction = trampoline.write_call<5>(function.address() + REL::Relocate(0x114, 0x22c), InventoryHoverHook::thunk);*/
 
     // Install a Translate hook for whatever translator is currently active (vanilla or custom)
     InstallTranslatorVtableHook();
@@ -229,3 +237,21 @@ void Hooks::MoveItemHooks<RefType>::addObjectToContainer(RefType* a_this, RE::TE
     M->Update(a_fromRefr, a_this, a_object, a_count);
 }
 
+int64_t Hooks::InventoryHoverHook::thunk(RE::InventoryEntryData* a1)
+{
+    if (is_barter_menu_open) {
+        if (const auto item_data = Menu::GetSelectedItemData<RE::BarterMenu>()) {
+			const auto a_bound = item_data->objDesc->GetObject();
+            if (!Lorebox::HasKW(a_bound)) {
+                if (const auto owner = Menu::GetOwnerOfItem(item_data); owner && owner->IsPlayerRef()) {
+                    if (const auto a_kw_form = a_bound->As<RE::BGSKeywordForm>()) {
+                        if (Lorebox::AddKeyword(a_kw_form, a_bound->GetFormID())) {
+                            RE::SendUIMessage::SendInventoryUpdateMessage(RE::PlayerCharacter::GetSingleton(), nullptr);
+                        }
+                    }
+                }
+            }
+        }
+    }
+	return originalFunction(a1);
+}

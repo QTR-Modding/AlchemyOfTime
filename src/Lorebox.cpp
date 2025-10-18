@@ -1,4 +1,6 @@
 ﻿#include "Lorebox.h"
+
+#include "Hooks.h"
 #include "Manager.h"
 #include "Utils.h"
 
@@ -63,12 +65,12 @@ namespace {
             return std::format(L"{} (transform)", Lorebox::arrow_right);
         }
         const auto slope = st.GetDelaySlope();
-        if (std::abs(slope) < EPSILON) return L"Frozen";
+        if (std::abs(slope) < EPSILON) return L"";
         if (slope > 0) {
             if (src.IsStageNo(st.no + 1)) {
                 return std::format(L"{} {}", Lorebox::arrow_right, StageNameOrW(src, st.no + 1, std::format(L"Stage {}", st.no + 1)));
             }
-            return std::format(L"{} Final", Lorebox::arrow_right);
+			return std::format(L"{} Final", Lorebox::arrow_right); // TODO: give custom name for final stage
         }
         if (st.no > 0 && src.IsStageNo(st.no - 1)) {
             return std::format(L"{} {}", Lorebox::arrow_left, StageNameOrW(src, st.no - 1, std::format(L"Stage {}", st.no - 1)));
@@ -91,15 +93,34 @@ namespace {
 
 std::wstring Lorebox::BuildLoreForHover()
 {
+	// in case it fails we return just the title
+
+	// prepare title in case of early return
+
+
+    auto return_str = L" ";
+
     std::string menu_name;
     auto item_data = Menu::GetSelectedItemDataInMenu(menu_name);
     if (!item_data) {
         logger::error("No selected item data in menu '{}'.", menu_name);
-        return L"";
+        return return_str;
     }
 
-    const FormID hovered = item_data->objDesc->GetObject()->GetFormID();
-    if (!hovered) return L"";
+    auto a_form = item_data->objDesc->GetObject();
+    const FormID hovered = a_form->GetFormID();
+    if (!hovered) return return_str;
+
+    if (Hooks::is_barter_menu_open) {
+        if (RemoveKeyword(a_form)) {
+            RE::SendUIMessage::SendInventoryUpdateMessage(RE::TESObjectREFR::LookupByHandle(RE::UI::GetSingleton()->GetMenu<RE::BarterMenu>()->GetTargetRefHandle()).get(),nullptr);
+        }
+		return return_str;
+    }
+
+
+    auto owner = Menu::GetOwnerOfItem(item_data);
+	FormID ownerId = owner ? owner->GetFormID() : 0;
 
     // Snapshot sources safely
     const auto sources = M->GetSources();
@@ -109,18 +130,7 @@ std::wstring Lorebox::BuildLoreForHover()
         if (!s.IsHealthy()) continue;
         if (s.IsStage(hovered)) { src = &s; break; }
     }
-    if (!src) return L"";
-
-    RE::NiPointer<RE::TESObjectREFR> owner;
-    if (!LookupReferenceByHandle(item_data->owner,owner)) {
-        logger::error("Could not find owner reference for item data.");
-        return L"";
-    }
-    const auto ownerId = owner ? owner->GetFormID() : 0;
-    if (!ownerId || !src->data.contains(ownerId)) {
-        logger::error("No data for owner {:08X} in source {:08X}.", ownerId, src->formid);
-        return L"";
-    }
+    if (!src) return return_str;
 
     const auto now = RE::Calendar::GetSingleton()->GetHoursPassed();
 
@@ -128,70 +138,72 @@ std::wstring Lorebox::BuildLoreForHover()
     std::vector<Row> rows;
     rows.reserve(16);
 
-    for (const auto& st : src->data.at(ownerId)) {
-        if (st.count <= 0 || st.xtra.is_decayed) continue;
-        if (st.xtra.form_id != hovered) continue;
+    if (ownerId > 0 && src->data.contains(ownerId)) {
+        for (const auto& st : src->data.at(ownerId)) {
+            if (st.count <= 0 || st.xtra.is_decayed) continue;
+            if (st.xtra.form_id != hovered) continue;
 
-        Row r;
-        r.count = st.count;
-        r.slope = st.GetDelaySlope();
-        r.mod = st.GetDelayerFormID();
-        r.transforming = st.xtra.is_transforming;
-        r.next = NextLabelW(*src, st);
+            Row r;
+            r.count = st.count;
+            r.slope = st.GetDelaySlope();
+            r.mod = st.GetDelayerFormID();
+            r.transforming = st.xtra.is_transforming;
+            r.next = NextLabelW(*src, st);
 
-        const float nextT = src->GetNextUpdateTime(const_cast<StageInstance*>(&st));
-        r.minutes = (std::abs(r.slope) < EPSILON) ? -1
-                   : (nextT > 0.f ? static_cast<int>(std::round((nextT - now) * 60.f)) : -1);
+            const float nextT = src->GetNextUpdateTime(const_cast<StageInstance*>(&st));
+            r.minutes = std::abs(r.slope) < EPSILON ? -1
+                       : nextT > 0.f ? static_cast<int>(std::round((nextT - now) * 60.f)) : -1;
 
-        // Compute percentage
-        if (Lorebox::show_percentage.load(std::memory_order_relaxed)) {
-            float pct = -1.f;
-            if (st.xtra.is_transforming) {
-                // Transform progress = elapsed since transform / total transform duration
-                const auto tr = st.GetDelayerFormID();
-                if (tr && src->settings.transformers.contains(tr)) {
-                    const float elapsed = st.GetTransformElapsed(now);
-                    const float total = std::get<1>(src->settings.transformers.at(tr));
-                    if (total > 0.f) pct = std::clamp((elapsed / total) * 100.f, 0.f, 100.f);
+            // Compute percentage
+            if (Lorebox::show_percentage.load(std::memory_order_relaxed)) {
+                float pct = -1.f;
+                if (st.xtra.is_transforming) {
+                    // Transform progress = elapsed since transform / total transform duration
+                    const auto tr = st.GetDelayerFormID();
+                    if (tr && src->settings.transformers.contains(tr)) {
+                        const float elapsed = st.GetTransformElapsed(now);
+                        const float total = std::get<1>(src->settings.transformers.at(tr));
+                        if (total > 0.f) pct = std::clamp(elapsed / total * 100.f, 0.f, 100.f);
+                    }
+                } else {
+                    // Regular stage progress = elapsed / current stage duration
+                    if (src->IsStageNo(st.no)) {
+                        const float elapsed = st.GetElapsed(now);
+                        const float total = src->GetStageDuration(st.no);
+                        if (total > 0.f) pct = std::clamp(elapsed / total * 100.f, 0.f, 100.f);
+                    }
+                }
+                if (pct >= 0.f) r.pct = static_cast<int>(std::round(pct));
+            }
+
+            // Collect mod/transformer name for separate line if enabled
+            if (r.transforming) {
+                if (Lorebox::show_transformer_name.load(std::memory_order_relaxed)) {
+                    if (r.mod) {
+                        const auto nm = FormNameW(r.mod);
+                        r.tag = std::format(L"[{}]", nm);
+                    }
                 }
             } else {
-                // Regular stage progress = elapsed / current stage duration
-                if (src->IsStageNo(st.no)) {
-                    const float elapsed = st.GetElapsed(now);
-                    const float total = src->GetStageDuration(st.no);
-                    if (total > 0.f) pct = std::clamp((elapsed / total) * 100.f, 0.f, 100.f);
-                }
-            }
-            if (pct >= 0.f) r.pct = static_cast<int>(std::round(pct));
-        }
-
-        // Collect mod/transformer name for separate line if enabled
-        if (r.transforming) {
-            if (Lorebox::show_transformer_name.load(std::memory_order_relaxed)) {
-                if (r.mod) {
-                    const auto nm = FormNameW(r.mod);
+                if (r.mod && Lorebox::show_modulator_name.load(std::memory_order_relaxed)) {
+                    std::wstring nm = FormNameW(r.mod);
+                    if (Lorebox::show_multiplier.load(std::memory_order_relaxed)) {
+                        // Append multiplier if known; fall back to slope if not found in settings
+                        float mult = r.slope;
+                        if (src->settings.delayers.contains(r.mod)) {
+                            mult = src->settings.delayers.at(r.mod);
+                        }
+                        nm += std::format(L": x{:.2f}", mult);
+                    }
                     r.tag = std::format(L"[{}]", nm);
                 }
             }
-        } else {
-            if (r.mod && Lorebox::show_modulator_name.load(std::memory_order_relaxed)) {
-                std::wstring nm = FormNameW(r.mod);
-                if (Lorebox::show_multiplier.load(std::memory_order_relaxed)) {
-                    // Append multiplier if known; fall back to slope if not found in settings
-                    float mult = r.slope;
-                    if (src->settings.delayers.contains(r.mod)) {
-                        mult = src->settings.delayers.at(r.mod);
-                    }
-                    nm += std::format(L": x{:.2f}", mult);
-                }
-                r.tag = std::format(L"[{}]", nm);
-            }
-        }
 
-        rows.push_back(std::move(r));
+            rows.push_back(std::move(r));
+        }
     }
 
-    if (rows.empty()) return L"";
+    if (rows.empty()) return return_str;
 
     // Sort by ETA (frozen/unknown at the end), then by target label
     std::ranges::sort(rows, [](const Row& a, const Row& b) {
@@ -209,7 +221,7 @@ std::wstring Lorebox::BuildLoreForHover()
     // Optional title
     if (Lorebox::show_title.load(std::memory_order_relaxed)) {
         const auto titleHex = HexColor(Lorebox::color_title.load());
-        out += std::format(L"<b><font color=\"{}\">Alchemy of Time</font></b>", titleHex);
+		out += std::format(L"<b><font color=\"{}\">Alchemy of Time</font></b>", titleHex);
         out += L"<br>";
     }
 
@@ -226,7 +238,7 @@ std::wstring Lorebox::BuildLoreForHover()
     for (const auto& r : rows) {
         if (printed >= MAX_ROWS) break;
 
-        const auto eta = (r.minutes < 0) ? L"now" : HrsMinsW(r.minutes / 60.f);
+        const auto eta = r.minutes < 0 ? L"Now" : HrsMinsW(r.minutes / 60.f);
 
         // choose color if enabled
         const bool doColors = Lorebox::colorize_rows.load(std::memory_order_relaxed);

@@ -12,6 +12,8 @@ namespace Lorebox
 	inline std::shared_mutex kw_mutex;
 	inline std::unordered_set<FormID> kw_added;
 
+    inline std::unordered_set<FormID> kw_removed;
+
 	// UI toggle: show a title before rows in lorebox
 	inline std::atomic show_title{ true };
 	// UI toggle: show progress percentage per instance (default true)
@@ -43,21 +45,63 @@ namespace Lorebox
 		return aot_kw != nullptr;
 	}
 
-    inline void AddKeyword(RE::BGSKeywordForm* a_form, FormID a_formid)
+    inline bool AddKeyword(RE::BGSKeywordForm* a_form, FormID a_formid)
 	{
 		if (std::shared_lock lock(kw_mutex);
-			kw_added.contains(a_formid)) return;  // already added
+			kw_added.contains(a_formid)) return false;  // already added
 
         if (!a_form->HasKeyword(aot_kw)) {
 		    if (!a_form->AddKeyword(aot_kw)) {
 			    logger::error("Failed to add keyword to formid: {:x}", a_formid);
-			    return;
 		    }
+			else {
+		        std::unique_lock ulock(kw_mutex);
+		        kw_added.insert(a_formid);
+				kw_removed.erase(a_formid);
+			    return true;
+			}
 		}
-
-		std::unique_lock ulock(kw_mutex);
-		kw_added.insert(a_formid);
+		return false;
 	}
+
+	inline bool RemoveKeyword(RE::TESForm* a_form) {
+
+        const auto kw_form = a_form->As<RE::BGSKeywordForm>();
+
+        if (!kw_form) return false;
+
+		if (kw_form->HasKeyword(aot_kw)) {
+			if (!kw_form->RemoveKeyword(aot_kw)) {
+				logger::error("Failed to remove keyword from formid: {:x}", a_form->GetFormID());
+				return false;
+			}
+		    const auto a_formid = a_form->GetFormID();
+		    std::unique_lock ulock(kw_mutex);
+		    kw_removed.insert(a_formid);
+		    kw_added.erase(a_formid);
+		    return true;
+		}
+		return false;
+	}
+
+	inline void ReAddKWs() {
+        std::shared_lock lock(kw_mutex);
+        for (const auto& formid : kw_removed) {
+            if (const auto form = RE::TESForm::LookupByID(formid)) {
+                if (const auto kw_form = form->As<RE::BGSKeywordForm>()) {
+					lock.unlock();
+                    Lorebox::AddKeyword(kw_form, formid);
+					lock.lock();
+                }
+            }
+        }
+        kw_removed.clear();
+    }
+
+	inline bool HasKW(const RE::TESForm* a_form) {
+		std::shared_lock lock(kw_mutex);
+		return kw_added.contains(a_form->GetFormID());
+    }
 
 	struct LoreBoxInfo {
 		Count count;
