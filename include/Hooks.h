@@ -28,12 +28,6 @@ namespace Hooks {
 		static void Install();
 	};
 
-    // Credits: SkyrimThiago
-    struct InventoryHoverHook {
-        static int64_t thunk(RE::InventoryEntryData* a1);
-        static inline REL::Relocation<decltype(thunk)> originalFunction;
-    };
-
     template <typename RefType>
     class MoveItemHooks {
     public:

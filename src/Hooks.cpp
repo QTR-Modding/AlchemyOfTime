@@ -121,10 +121,8 @@ RE::UI_MESSAGE_RESULTS MenuHook<MenuType>::ProcessMessage_Hook(RE::UIMessage& a_
                 //if (const auto vendor_chest = Menu::GetVendorChestFromMenu()) {
                 //    M->Update(vendor_chest);
                 //} else logger ::error("Could not get vendor chest.");
-                clib_utilsQTR::Tasker::GetSingleton()->PushTask([]() {
-				    is_barter_menu_open = true;
-					}, 500); // delay to allow the menu to fully initialize
-            } 
+				is_barter_menu_open = true;
+            }
             else if (menuname == RE::ContainerMenu::MENU_NAME) {
                 logger::trace("Container menu is open.");
                 if (const auto container = Menu::GetContainerFromMenu()) {
@@ -165,9 +163,6 @@ void Hooks::Install(Manager* mngr){
 
 	const REL::Relocation<std::uintptr_t> add_item_functor_hook{ RELOCATION_ID(55946, 56490) };
 	add_item_functor_ = trampoline.write_call<5>(add_item_functor_hook.address() + 0x15D, add_item_functor);
-
-    /*const REL::Relocation<std::uintptr_t> function{REL::RelocationID(51019, 51897)};
-    InventoryHoverHook::originalFunction = trampoline.write_call<5>(function.address() + REL::Relocate(0x114, 0x22c), InventoryHoverHook::thunk);*/
 
     // Install a Translate hook for whatever translator is currently active (vanilla or custom)
     InstallTranslatorVtableHook();
@@ -235,23 +230,4 @@ void Hooks::MoveItemHooks<RefType>::addObjectToContainer(RefType* a_this, RE::TE
     add_object_to_container_(a_this, a_object, a_extraList, a_count, a_fromRefr);
 
     M->Update(a_fromRefr, a_this, a_object, a_count);
-}
-
-int64_t Hooks::InventoryHoverHook::thunk(RE::InventoryEntryData* a1)
-{
-    if (is_barter_menu_open) {
-        if (const auto item_data = Menu::GetSelectedItemData<RE::BarterMenu>()) {
-			const auto a_bound = item_data->objDesc->GetObject();
-            if (!Lorebox::HasKW(a_bound)) {
-                if (const auto owner = Menu::GetOwnerOfItem(item_data); owner && owner->IsPlayerRef()) {
-                    if (const auto a_kw_form = a_bound->As<RE::BGSKeywordForm>()) {
-                        if (Lorebox::AddKeyword(a_kw_form, a_bound->GetFormID())) {
-                            RE::SendUIMessage::SendInventoryUpdateMessage(RE::PlayerCharacter::GetSingleton(), nullptr);
-                        }
-                    }
-                }
-            }
-        }
-    }
-	return originalFunction(a1);
 }
