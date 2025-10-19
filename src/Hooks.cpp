@@ -45,6 +45,13 @@ namespace {
                 if (!body.empty()) {
                     a_info->SetResult(body.c_str(), body.size());
                 }
+                else if (const auto selected_item = Menu::GetSelectedItemDataInMenu();
+					selected_item && selected_item->objDesc &&
+                    Lorebox::RemoveKeyword(selected_item->objDesc->GetObject())) {
+                    SKSE::GetTaskInterface()->AddUITask([] {
+                        RE::SendUIMessage::SendInventoryUpdateMessage(RE::PlayerCharacter::GetSingleton(),nullptr);
+                    });
+                }
             }
         }
     }
@@ -121,7 +128,6 @@ RE::UI_MESSAGE_RESULTS MenuHook<MenuType>::ProcessMessage_Hook(RE::UIMessage& a_
                 //if (const auto vendor_chest = Menu::GetVendorChestFromMenu()) {
                 //    M->Update(vendor_chest);
                 //} else logger ::error("Could not get vendor chest.");
-				is_barter_menu_open = true;
             }
             else if (menuname == RE::ContainerMenu::MENU_NAME) {
                 logger::trace("Container menu is open.");
@@ -135,7 +141,6 @@ RE::UI_MESSAGE_RESULTS MenuHook<MenuType>::ProcessMessage_Hook(RE::UIMessage& a_
         }
 		else if (msg_type == 3) {
 			is_menu_open = false;
-			is_barter_menu_open = false;
             Lorebox::ReAddKWs();
         }
     }
@@ -158,11 +163,14 @@ void Hooks::Install(Manager* mngr){
 
 	auto& trampoline = SKSE::GetTrampoline();
     constexpr size_t size_per_hook = 14;
-    constexpr size_t NUM_TRAMPOLINE_HOOKS = 1;
+    constexpr size_t NUM_TRAMPOLINE_HOOKS = 2;
 	trampoline.create(size_per_hook * NUM_TRAMPOLINE_HOOKS);
 
 	const REL::Relocation<std::uintptr_t> add_item_functor_hook{ RELOCATION_ID(55946, 56490) };
 	add_item_functor_ = trampoline.write_call<5>(add_item_functor_hook.address() + 0x15D, add_item_functor);
+
+    const REL::Relocation<std::uintptr_t> function{REL::RelocationID(51019, 51897)};
+    InventoryHoverHook::originalFunction = trampoline.write_call<5>(function.address() + REL::Relocate(0x114, 0x22c), InventoryHoverHook::thunk);
 
     // Install a Translate hook for whatever translator is currently active (vanilla or custom)
     InstallTranslatorVtableHook();
@@ -230,4 +238,19 @@ void Hooks::MoveItemHooks<RefType>::addObjectToContainer(RefType* a_this, RE::TE
     add_object_to_container_(a_this, a_object, a_extraList, a_count, a_fromRefr);
 
     M->Update(a_fromRefr, a_this, a_object, a_count);
+}
+
+int64_t Hooks::InventoryHoverHook::thunk(RE::InventoryEntryData* a1)
+{
+	auto res = originalFunction(a1);
+    auto selected_item = Menu::GetSelectedItemDataInMenu();
+    if (selected_item &&
+        Lorebox::IsRemoved(selected_item->objDesc->GetObject()->GetFormID()) &&
+        !Lorebox::BuildLoreForHover().empty() &&
+        Lorebox::ReAddKW(selected_item->objDesc->GetObject())) {
+        SKSE::GetTaskInterface()->AddUITask([] {
+            RE::SendUIMessage::SendInventoryUpdateMessage(RE::PlayerCharacter::GetSingleton(),nullptr);
+        });
+    }
+    return res;
 }

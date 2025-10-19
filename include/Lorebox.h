@@ -43,74 +43,16 @@ namespace Lorebox
 		return aot_kw != nullptr;
 	}
 
-    inline bool AddKeyword(RE::BGSKeywordForm* a_form, FormID a_formid)
-	{
-		if (std::shared_lock lock(kw_mutex);
-			kw_added.contains(a_formid)) return false;  // already added
+    bool AddKeyword(RE::BGSKeywordForm* a_form, FormID a_formid);
 
-        if (!a_form->HasKeyword(aot_kw)) {
-		    if (!a_form->AddKeyword(aot_kw)) {
-			    logger::error("Failed to add keyword to formid: {:x}", a_formid);
-		    }
-			else {
-		        std::unique_lock ulock(kw_mutex);
-		        kw_added.insert(a_formid);
-				kw_removed.erase(a_formid);
-			    return true;
-			}
-		}
-		return false;
-	}
+    bool ReAddKW(RE::TESForm* a_form);
 
-	inline bool RemoveKeyword(RE::TESForm* a_form) {
+    bool RemoveKeyword(RE::TESForm* a_form);
 
-        const auto kw_form = a_form->As<RE::BGSKeywordForm>();
+    void ReAddKWs();
 
-        if (!kw_form) return false;
-
-		if (kw_form->HasKeyword(aot_kw)) {
-			if (!kw_form->RemoveKeyword(aot_kw)) {
-				logger::error("Failed to remove keyword from formid: {:x}", a_form->GetFormID());
-				return false;
-			}
-		    const auto a_formid = a_form->GetFormID();
-		    std::unique_lock ulock(kw_mutex);
-		    kw_removed.insert(a_formid);
-		    kw_added.erase(a_formid);
-		    return true;
-		}
-		return false;
-	}
-
-	inline void ReAddKWs() {
-
-		std::vector<std::pair<RE::BGSKeywordForm*,FormID>> to_add;
-		{
-            std::unique_lock lock(kw_mutex);
-            for (const auto& formid : kw_removed) {
-                if (const auto form = RE::TESForm::LookupByID(formid)) {
-                    if (const auto kw_form = form->As<RE::BGSKeywordForm>()) {
-						to_add.push_back({ kw_form, formid });
-                    }
-                }
-            }
-            kw_removed.clear();
-		}
-
-		for (const auto& [kw_form, formid] : to_add) {
-			AddKeyword(kw_form,formid);
-		}
-	}
-
-	inline bool HasKW(const RE::TESForm* a_form) {
-		std::shared_lock lock(kw_mutex);
-		return kw_added.contains(a_form->GetFormID());
-    }
-
-	struct LoreBoxInfo {
-		Count count;
-		float h_remaining;
-	};
+    bool HasKW(const RE::TESForm* a_form);
+	bool IsRemoved(FormID a_formid);
 
 	// Returns a UTF-16 (wstring) body to be used as translation result
 	std::wstring BuildLoreForHover();

@@ -396,19 +396,9 @@ namespace Menu {
 
     RE::TESObjectREFR* GetVendorChestFromMenu();
 
-    template <typename T>
-    void UpdateItemList() {
-        if (const auto ui = RE::UI::GetSingleton(); ui->IsMenuOpen(T::MENU_NAME)) {
-            if (auto inventory_menu = ui->GetMenu<T>()) {
-                if (auto itemlist = inventory_menu->GetRuntimeData().itemList) {
-                    //logger::trace("Updating itemlist.");
-                    itemlist->Update();
-                } else logger::info("Itemlist is null.");
-            } else logger::info("Inventory menu is null.");
-        } else logger::info("Inventory menu is not open.");
-    }
+    void UpdateItemList();
 
-	template <typename MenuType>
+    template <typename MenuType>
     RE::StandardItemData* GetSelectedItemData() {
         if (const auto ui = RE::UI::GetSingleton()) {
             if (const auto menu = ui->GetMenu<MenuType>()) {
@@ -423,6 +413,7 @@ namespace Menu {
     }
 
 	RE::StandardItemData* GetSelectedItemDataInMenu(std::string& a_menuOut);
+	RE::StandardItemData* GetSelectedItemDataInMenu();
 
     RE::TESObjectREFR* GetOwnerOfItem(const RE::StandardItemData* a_itemdata);
 

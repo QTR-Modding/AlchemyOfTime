@@ -1443,6 +1443,32 @@ RE::TESObjectREFR* Menu::GetVendorChestFromMenu()
     return nullptr;
 }
 
+void Menu::UpdateItemList() {
+    if (const auto ui = RE::UI::GetSingleton()) {
+        if (ui->IsMenuOpen(RE::InventoryMenu::MENU_NAME)) {
+            auto inventory_menu = ui->GetMenu<RE::InventoryMenu>();
+            if (auto itemlist = inventory_menu->GetRuntimeData().itemList) {
+                itemlist->Update();
+            }
+            else logger::error("Itemlist is null.");
+        }
+        else if (ui->IsMenuOpen(RE::BarterMenu::MENU_NAME)) {
+            auto barter_menu = ui->GetMenu<RE::BarterMenu>();
+            if (auto itemlist = barter_menu->GetRuntimeData().itemList) {
+                itemlist->Update();
+            }
+            else logger::error("Itemlist is null.");
+        }
+        else if (ui->IsMenuOpen(RE::ContainerMenu::MENU_NAME)) {
+            auto container_menu = ui->GetMenu<RE::ContainerMenu>();
+            if (auto itemlist = container_menu->GetRuntimeData().itemList) {
+                itemlist->Update();
+            }
+            else logger::error("Itemlist is null.");
+        }
+    }
+}
+
 RE::StandardItemData* Menu::GetSelectedItemDataInMenu(std::string& a_menuOut) {
     if (const auto ui = RE::UI::GetSingleton()) {
         if (ui->IsMenuOpen(RE::InventoryMenu::MENU_NAME)) {
@@ -1461,12 +1487,17 @@ RE::StandardItemData* Menu::GetSelectedItemDataInMenu(std::string& a_menuOut) {
     return nullptr;
 }
 
+RE::StandardItemData* Menu::GetSelectedItemDataInMenu() {
+    std::string menu_name;
+	return GetSelectedItemDataInMenu(menu_name);
+}
+
 RE::TESObjectREFR* Menu::GetOwnerOfItem(const RE::StandardItemData* a_itemdata) {
     auto& refHandle = a_itemdata->owner;
-    if (RE::NiPointer<RE::TESObjectREFR> owner; LookupReferenceByHandle(refHandle,owner)) {
+    if (auto owner = RE::TESObjectREFR::LookupByHandle(refHandle)) {
         return owner.get();
     }
-    if (RE::NiPointer<RE::Actor> owner_actor; LookupReferenceByHandle(refHandle,owner_actor)) {
+    if (auto owner_actor = RE::Actor::LookupByHandle(refHandle)) {
 		return owner_actor->AsReference();
     }
     return nullptr;

@@ -51,29 +51,61 @@ namespace {
         return fallback;
     }
 
-    std::wstring NextLabelW(const Source& src, const StageInstance& st) {
+    struct Transition {
+        FormID nextFormId{0};
+        bool hasNext{false};
+        bool transforming{false};
+        bool backwards{false};
+        std::wstring label; // pre-formatted label with arrow and target name
+    };
+
+    Transition ComputeNext(const Source& src, const StageInstance& st) {
+        Transition t{};
         if (st.xtra.is_transforming) {
+            t.transforming = true;
             const auto tr = st.GetDelayerFormID();
             if (tr && src.settings.transformers.contains(tr)) {
-                const auto endForm = src.settings.transformers.at(tr).first;
-                // Use configured arrow
-                return std::format(L"{} {}", Lorebox::arrow_right, FormNameW(endForm));
+                t.nextFormId = src.settings.transformers.at(tr).first;
+                t.hasNext = t.nextFormId != 0;
+                t.label = std::format(L"{} {}", Lorebox::arrow_right, FormNameW(t.nextFormId));
+            } else {
+                t.label = std::format(L"{} (transform)", Lorebox::arrow_right);
             }
-            return std::format(L"{} (transform)", Lorebox::arrow_right);
+            return t;
         }
-        const auto slope = st.GetDelaySlope();
-        if (std::abs(slope) < EPSILON) return L"";
-        if (slope > 0) {
+
+        const float slope = st.GetDelaySlope();
+        if (std::abs(slope) < EPSILON) {
+            // Frozen; keep empty label as current implementation
+            return t;
+        }
+
+        if (slope > 0.f) {
+            // Forward
             if (src.IsStageNo(st.no + 1)) {
-                return std::format(L"{} {}", Lorebox::arrow_right, StageNameOrW(src, st.no + 1, std::format(L"Stage {}", st.no + 1)));
+                const auto ns = src.GetStage(st.no + 1);
+                t.nextFormId = ns->formid;
+                t.hasNext = true;
+                t.label = std::format(L"{} {}", Lorebox::arrow_right, StageNameOrW(src, st.no + 1, std::format(L"Stage {}", st.no + 1)));
+            } else {
+                t.nextFormId = src.settings.decayed_id;
+                t.hasNext = t.nextFormId != 0;
+                auto decayed_form = RE::TESForm::LookupByID(t.nextFormId);
+                t.label = std::format(L"{} {}", Lorebox::arrow_right, decayed_form ? Widen(decayed_form->GetName()) : L"");
             }
-			auto decayed_form = RE::TESForm::LookupByID(src.settings.decayed_id);
-			return std::format(L"{} {}", Lorebox::arrow_right,Widen(decayed_form->GetName())); // TODO: give custom name for final stage
+        } else {
+            // Backwards
+            t.backwards = true;
+            if (st.no > 0 && src.IsStageNo(st.no - 1)) {
+                const auto ps = src.GetStage(st.no - 1);
+                t.nextFormId = ps->formid;
+                t.hasNext = true;
+                t.label = std::format(L"{} {}", Lorebox::arrow_left, StageNameOrW(src, st.no - 1, std::format(L"Stage {}", st.no - 1)));
+            } else {
+                t.label = std::format(L"{} Initial", Lorebox::arrow_left);
+            }
         }
-        if (st.no > 0 && src.IsStageNo(st.no - 1)) {
-            return std::format(L"{} {}", Lorebox::arrow_left, StageNameOrW(src, st.no - 1, std::format(L"Stage {}", st.no - 1)));
-        }
-        return std::format(L"{} Initial", Lorebox::arrow_left);
+        return t;
     }
 
     struct Row {
@@ -89,6 +121,93 @@ namespace {
     };
 }
 
+bool Lorebox::AddKeyword(RE::BGSKeywordForm* a_form, FormID a_formid) {
+    if (std::shared_lock lock(kw_mutex);
+        kw_added.contains(a_formid)) return false;  // already added
+
+    if (!a_form->HasKeyword(aot_kw)) {
+        if (!a_form->AddKeyword(aot_kw)) {
+            logger::error("Failed to add keyword to formid: {:x}", a_formid);
+        }
+        else {
+            std::unique_lock ulock(kw_mutex);
+            kw_added.insert(a_formid);
+            kw_removed.erase(a_formid);
+            return true;
+        }
+    }
+    return false;
+}
+
+bool Lorebox::ReAddKW(RE::TESForm* a_form) {
+    const auto kw_form = a_form->As<RE::BGSKeywordForm>();
+
+    if (!kw_form) return false;
+
+    auto a_formid = a_form->GetFormID();
+
+    if (std::shared_lock lock(kw_mutex);
+        !kw_removed.contains(a_formid)) {
+        return false;  // not removed
+    }
+
+    return AddKeyword(kw_form, a_formid);
+}
+
+bool Lorebox::RemoveKeyword(RE::TESForm* a_form) {
+
+    if (std::shared_lock lock(kw_mutex);
+		!kw_added.contains(a_form->GetFormID())) return false;  // not added
+
+    const auto kw_form = a_form->As<RE::BGSKeywordForm>();
+
+    if (!kw_form) return false;
+
+    if (kw_form->HasKeyword(aot_kw)) {
+        if (!kw_form->RemoveKeyword(aot_kw)) {
+            logger::error("Failed to remove keyword from formid: {:x}", a_form->GetFormID());
+            return false;
+        }
+        const auto a_formid = a_form->GetFormID();
+        std::unique_lock ulock(kw_mutex);
+        kw_removed.insert(a_formid);
+        kw_added.erase(a_formid);
+        return true;
+    }
+    return false;
+}
+
+void Lorebox::ReAddKWs() {
+
+    std::vector<std::pair<RE::BGSKeywordForm*,FormID>> to_add;
+    {
+        std::unique_lock lock(kw_mutex);
+        for (const auto& formid : kw_removed) {
+            if (const auto form = RE::TESForm::LookupByID(formid)) {
+                if (const auto kw_form = form->As<RE::BGSKeywordForm>()) {
+                    to_add.push_back({ kw_form, formid });
+                }
+            }
+        }
+        kw_removed.clear();
+    }
+
+    for (const auto& [kw_form, formid] : to_add) {
+        AddKeyword(kw_form,formid);
+    }
+}
+
+bool Lorebox::HasKW(const RE::TESForm* a_form) {
+    std::shared_lock lock(kw_mutex);
+    return kw_added.contains(a_form->GetFormID());
+}
+
+bool Lorebox::IsRemoved(FormID a_formid)
+{
+	std::shared_lock lock(kw_mutex);
+	return kw_removed.contains(a_formid);
+}
+
 std::wstring Lorebox::BuildLoreForHover()
 {
 	// in case it fails we return just the title
@@ -96,7 +215,7 @@ std::wstring Lorebox::BuildLoreForHover()
 	// prepare title in case of early return
 
 
-    auto return_str = L" ";
+    auto return_str = L"";
 
     std::string menu_name;
     auto item_data = Menu::GetSelectedItemDataInMenu(menu_name);
@@ -108,14 +227,6 @@ std::wstring Lorebox::BuildLoreForHover()
     auto a_form = item_data->objDesc->GetObject();
     const FormID hovered = a_form->GetFormID();
     if (!hovered) return return_str;
-
-    if (Hooks::is_barter_menu_open) {
-        if (RemoveKeyword(a_form)) {
-            RE::SendUIMessage::SendInventoryUpdateMessage(RE::TESObjectREFR::LookupByHandle(RE::UI::GetSingleton()->GetMenu<RE::BarterMenu>()->GetTargetRefHandle()).get(),nullptr);
-        }
-		return return_str;
-    }
-
 
     auto owner = Menu::GetOwnerOfItem(item_data);
 	FormID ownerId = owner ? owner->GetFormID() : 0;
@@ -141,12 +252,19 @@ std::wstring Lorebox::BuildLoreForHover()
             if (st.count <= 0 || st.xtra.is_decayed) continue;
             if (st.xtra.form_id != hovered) continue;
 
+            // Compute next transition once and reuse
+            const auto trans = ComputeNext(*src, st);
+            if (trans.nextFormId != 0 && trans.nextFormId == st.xtra.form_id) {
+                // Next stage resolves to the same form; do not display this row
+                continue;
+            }
+
             Row r;
             r.count = st.count;
             r.slope = st.GetDelaySlope();
             r.mod = st.GetDelayerFormID();
             r.transforming = st.xtra.is_transforming;
-            r.next = NextLabelW(*src, st);
+            r.next = trans.label;
 
             const float nextT = src->GetNextUpdateTime(const_cast<StageInstance*>(&st));
             r.minutes = std::abs(r.slope) < EPSILON ? -1
