@@ -116,6 +116,7 @@ namespace {
         // percentage in range [0,100]
         int pct{-1};
         std::wstring tag; // bracketed name (and optional multiplier)
+        std::wstring curr; // current stage name if available
     };
 }
 
@@ -254,24 +255,18 @@ std::wstring Lorebox::BuildLoreForHover()
         return return_str;
     }
 
-    auto owner = Menu::GetOwnerOfItem(item_data);
+    const auto owner = Menu::GetOwnerOfItem(item_data);
     if (!owner) {
         if (menu_name == RE::BarterMenu::MENU_NAME) {
             // Try to resolve current stage name from the hovered form
-            const auto hovered = item_data->objDesc->GetObject()->GetFormID();
-            if (hovered) {
-                const auto sources = M->GetSources();
-                for (const auto& s : sources) {
+            if (const auto hovered = item_data->objDesc->GetObject()->GetFormID()) {
+                for (const auto& s : M->GetSources()) {
                     if (!s.IsHealthy()) continue;
                     if (!s.IsStage(hovered)) continue;
-                    const auto no = s.GetStageNo(hovered);
-                    if (no >= 0) {
-                        const auto name = s.GetStageName(no);
-                        if (!name.empty()) {
-                            return BuildFrozenLore(std::wstring{name.begin(), name.end()});
-                        }
-                        break; // found source, but no name
+                    if (const auto name = s.GetStageName(s.GetStageNo(hovered)); !name.empty()) {
+                        return BuildFrozenLore(std::wstring{name.begin(), name.end()});
                     }
+                    break; // found source, but no name
                 }
             }
             return BuildFrozenLore();
@@ -323,6 +318,9 @@ std::wstring Lorebox::BuildLoreFor(FormID hovered, RefID ownerId) {
             r.mod = st.GetDelayerFormID();
             r.transforming = st.xtra.is_transforming;
             r.next = trans.label;
+            if (const auto curName = src->GetStageName(st.no); !curName.empty()) {
+                r.curr = Widen(curName);
+            }
 
             const float nextT = src->GetNextUpdateTime(const_cast<StageInstance*>(&st));
             r.minutes = std::abs(r.slope) < EPSILON ? -1
@@ -430,9 +428,17 @@ std::wstring Lorebox::BuildLoreFor(FormID hovered, RefID ownerId) {
 
         std::wstring line;
         if (Lorebox::show_percentage.load(std::memory_order_relaxed) && r.pct >= 0) {
-            line = std::format(L"{}x {} | {} ({}%)", r.count, r.next, eta, r.pct);
+            if (!r.curr.empty()) {
+                line = std::format(L"{}x {} {} | {} ({}%)", r.count, r.curr, r.next, eta, r.pct);
+            } else {
+                line = std::format(L"{}x {} | {} ({}%)", r.count, r.next, eta, r.pct);
+            }
         } else {
-            line = std::format(L"{}x {} | {}", r.count, r.next, eta);
+            if (!r.curr.empty()) {
+                line = std::format(L"{}x {} {} | {}", r.count, r.curr, r.next, eta);
+            } else {
+                line = std::format(L"{}x {} | {}", r.count, r.next, eta);
+            }
         }
 
         if (doColors) {
