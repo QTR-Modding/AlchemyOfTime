@@ -42,15 +42,22 @@ namespace {
 
             if (is_menu_open && keyUtf8 == Lorebox::aot_kw_name_lorebox) {
                 const std::wstring body = Lorebox::BuildLoreForHover();
-                if (!body.empty()) {
-                    a_info->SetResult(body.c_str(), body.size());
-                }
-                else if (const auto selected_item = Menu::GetSelectedItemDataInMenu();
-					selected_item && selected_item->objDesc &&
-                    Lorebox::RemoveKeyword(selected_item->objDesc->GetObject())) {
-                    SKSE::GetTaskInterface()->AddUITask([] {
-                        RE::SendUIMessage::SendInventoryUpdateMessage(RE::PlayerCharacter::GetSingleton(),nullptr);
-                    });
+                a_info->SetResult(body.c_str(), body.size());
+                if (body == Lorebox::return_str) {
+                    if (const auto selected_item = Menu::GetSelectedItemDataInMenu()) {
+					    if (!inventory_update_timeout && Lorebox::RemoveKW(selected_item->objDesc->GetObject())) {
+                            SKSE::GetTaskInterface()->AddUITask([] {
+                                RE::SendUIMessage::SendInventoryUpdateMessage(RE::PlayerCharacter::GetSingleton(),nullptr);
+                                inventory_update_timeout = true;
+                                clib_utilsQTR::Tasker::GetSingleton()->PushTask(
+                                    [] {
+                                        inventory_update_timeout = false;
+                                    },
+						            inventory_update_timeout_ms
+                                );
+                            });
+                        }
+                    }
                 }
             }
         }
@@ -116,7 +123,8 @@ template <typename MenuType>
 RE::UI_MESSAGE_RESULTS MenuHook<MenuType>::ProcessMessage_Hook(RE::UIMessage& a_message) {
 
     if (const std::string_view menuname = MenuType::MENU_NAME; a_message.menu==menuname) {
-        if (const auto msg_type = static_cast<int>(a_message.type.get()); msg_type == 1) {
+        const auto msg_type = static_cast<int>(a_message.type.get());
+        if (msg_type == 1) {
             if (menuname == RE::FavoritesMenu::MENU_NAME) {
                 M->Update(RE::PlayerCharacter::GetSingleton());
             }
@@ -130,7 +138,6 @@ RE::UI_MESSAGE_RESULTS MenuHook<MenuType>::ProcessMessage_Hook(RE::UIMessage& a_
                 //} else logger ::error("Could not get vendor chest.");
             }
             else if (menuname == RE::ContainerMenu::MENU_NAME) {
-                logger::trace("Container menu is open.");
                 if (const auto container = Menu::GetContainerFromMenu()) {
                     M->Update(RE::PlayerCharacter::GetSingleton());
                     M->Update(container);
@@ -242,15 +249,32 @@ void Hooks::MoveItemHooks<RefType>::addObjectToContainer(RefType* a_this, RE::TE
 
 int64_t Hooks::InventoryHoverHook::thunk(RE::InventoryEntryData* a1)
 {
-	auto res = originalFunction(a1);
-    auto selected_item = Menu::GetSelectedItemDataInMenu();
-    if (selected_item &&
-        Lorebox::IsRemoved(selected_item->objDesc->GetObject()->GetFormID()) &&
-        !Lorebox::BuildLoreForHover().empty() &&
-        Lorebox::ReAddKW(selected_item->objDesc->GetObject())) {
-        SKSE::GetTaskInterface()->AddUITask([] {
-            RE::SendUIMessage::SendInventoryUpdateMessage(RE::PlayerCharacter::GetSingleton(),nullptr);
-        });
+	// gets called before translation hook
+
+	const auto a_bound = a1->GetObject();
+	const auto a_bound_formid = a_bound->GetFormID();
+	const auto res = originalFunction(a1);
+
+    if (!inventory_update_timeout && Lorebox::IsRemoved(a_bound_formid)) {
+        if (const auto selected_item = Menu::GetSelectedItemDataInMenu();
+			selected_item && selected_item->objDesc == a1) {
+            if (const auto owner = Menu::GetOwnerOfItem(selected_item);
+                owner &&
+                Lorebox::BuildLoreFor(a_bound_formid, owner->GetFormID()) != Lorebox::return_str &&
+                Lorebox::ReAddKW(a_bound)) {
+                SKSE::GetTaskInterface()->AddUITask([] {
+                    RE::SendUIMessage::SendInventoryUpdateMessage(RE::PlayerCharacter::GetSingleton(), nullptr);
+					inventory_update_timeout = true;
+                    clib_utilsQTR::Tasker::GetSingleton()->PushTask(
+                        [] {
+                            inventory_update_timeout = false;
+                        },
+						inventory_update_timeout_ms
+                    );
+                });
+                
+            }
+        }
     }
     return res;
 }

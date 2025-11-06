@@ -1,6 +1,4 @@
 ﻿#include "Lorebox.h"
-
-#include "Hooks.h"
 #include "Manager.h"
 #include "Utils.h"
 
@@ -121,6 +119,44 @@ namespace {
     };
 }
 
+std::wstring Lorebox::BuildFrozenLore()
+{
+    return BuildFrozenLore(L"");
+}
+
+std::wstring Lorebox::BuildFrozenLore(const std::wstring& currentStageName)
+{
+    std::wstring out;
+
+    // Optional title
+    if (Lorebox::show_title.load(std::memory_order_relaxed)) {
+        const auto titleHex = HexColor(Lorebox::color_title.load());
+        out += std::format(L"<b><font color=\"{}\">Alchemy of Time</font></b>", titleHex);
+        out += L"<br>";
+    }
+
+    const auto HEX_NEUTRAL = HexColor(Lorebox::color_neutral.load());
+
+    // Build single-line body: optional current stage name, then time and optional percentage
+    std::wstring line;
+    if (!currentStageName.empty()) {
+        line = std::format(L"{} | 9999d", currentStageName);
+    } else {
+        line = L"9999d";
+    }
+    if (Lorebox::show_percentage.load(std::memory_order_relaxed)) {
+        line += L" (0%)";
+    }
+
+    if (Lorebox::colorize_rows.load(std::memory_order_relaxed)) {
+        out += std::format(L"<font color=\"{}\">{}</font>", HEX_NEUTRAL, line);
+    } else {
+        out += line;
+    }
+
+    return out;
+}
+
 bool Lorebox::AddKeyword(RE::BGSKeywordForm* a_form, FormID a_formid) {
     if (std::shared_lock lock(kw_mutex);
         kw_added.contains(a_formid)) return false;  // already added
@@ -154,10 +190,10 @@ bool Lorebox::ReAddKW(RE::TESForm* a_form) {
     return AddKeyword(kw_form, a_formid);
 }
 
-bool Lorebox::RemoveKeyword(RE::TESForm* a_form) {
+bool Lorebox::RemoveKW(RE::TESForm* a_form) {
 
     if (std::shared_lock lock(kw_mutex);
-		!kw_added.contains(a_form->GetFormID())) return false;  // not added
+        !kw_added.contains(a_form->GetFormID())) return false;  // not added
 
     const auto kw_form = a_form->As<RE::BGSKeywordForm>();
 
@@ -204,32 +240,50 @@ bool Lorebox::HasKW(const RE::TESForm* a_form) {
 
 bool Lorebox::IsRemoved(FormID a_formid)
 {
-	std::shared_lock lock(kw_mutex);
-	return kw_removed.contains(a_formid);
+    std::shared_lock lock(kw_mutex);
+    return kw_removed.contains(a_formid);
 }
 
 std::wstring Lorebox::BuildLoreForHover()
 {
-	// in case it fails we return just the title
-
-	// prepare title in case of early return
-
-
-    auto return_str = L"";
-
     std::string menu_name;
     auto item_data = Menu::GetSelectedItemDataInMenu(menu_name);
+
     if (!item_data) {
         logger::error("No selected item data in menu '{}'.", menu_name);
         return return_str;
     }
 
-    auto a_form = item_data->objDesc->GetObject();
-    const FormID hovered = a_form->GetFormID();
-    if (!hovered) return return_str;
-
     auto owner = Menu::GetOwnerOfItem(item_data);
-	FormID ownerId = owner ? owner->GetFormID() : 0;
+    if (!owner) {
+        if (menu_name == RE::BarterMenu::MENU_NAME) {
+            // Try to resolve current stage name from the hovered form
+            const auto hovered = item_data->objDesc->GetObject()->GetFormID();
+            if (hovered) {
+                const auto sources = M->GetSources();
+                for (const auto& s : sources) {
+                    if (!s.IsHealthy()) continue;
+                    if (!s.IsStage(hovered)) continue;
+                    const auto no = s.GetStageNo(hovered);
+                    if (no >= 0) {
+                        const auto name = s.GetStageName(no);
+                        if (!name.empty()) {
+                            return BuildFrozenLore(std::wstring{name.begin(), name.end()});
+                        }
+                        break; // found source, but no name
+                    }
+                }
+            }
+            return BuildFrozenLore();
+        }
+        return return_str;
+    }
+
+    return BuildLoreFor(item_data->objDesc->GetObject()->GetFormID(), owner->GetFormID());
+    
+}
+
+std::wstring Lorebox::BuildLoreFor(FormID hovered, RefID ownerId) {
 
     // Snapshot sources safely
     const auto sources = M->GetSources();
@@ -255,8 +309,12 @@ std::wstring Lorebox::BuildLoreForHover()
             // Compute next transition once and reuse
             const auto trans = ComputeNext(*src, st);
             if (trans.nextFormId != 0 && trans.nextFormId == st.xtra.form_id) {
-                // Next stage resolves to the same form; do not display this row
-                continue;
+                // Instead of skipping, show frozen lore with current stage name if available
+                std::wstring stageNameW;
+                if (const auto name = src->GetStageName(st.no); !name.empty()) {
+                    stageNameW = std::wstring(name.begin(), name.end());
+                }
+                return BuildFrozenLore(stageNameW);
             }
 
             Row r;
@@ -346,11 +404,11 @@ std::wstring Lorebox::BuildLoreForHover()
     const auto HEX_TRANSFORM = HexColor(Lorebox::color_transform.load());
 
     int printed = 0;
-    constexpr int MAX_ROWS = 8;
+    
     bool firstLine = true;
     const auto HEX_SEP = HexColor(Lorebox::color_separator.load());
     for (const auto& r : rows) {
-        if (printed >= MAX_ROWS) break;
+        if (printed >= Lorebox::MAX_ROWS) break;
 
         const auto eta = r.minutes < 0 ? L"Now" : HrsMinsW(r.minutes / 60.f);
 

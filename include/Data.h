@@ -38,7 +38,7 @@ struct Source {
     [[nodiscard]] inline bool IsFakeStage(StageNo no) const;
 
     // assumes that the formid exists as a stage!
-    [[nodiscard]] StageNo GetStageNo(FormID formid_);
+    [[nodiscard]] StageNo GetStageNo(FormID formid_) const;
 
 	const Stage& GetStage(StageNo no);
     [[nodiscard]] const Stage* GetStage(StageNo no) const;

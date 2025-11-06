@@ -7,6 +7,8 @@ namespace Hooks {
     const size_t trampoline_size = n_hooks * 14;*/
 
 	inline bool is_menu_open = false;
+    inline bool inventory_update_timeout = false;
+	inline int inventory_update_timeout_ms = 500;
 
     void Install(Manager* mngr);
 

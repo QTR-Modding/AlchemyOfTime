@@ -185,7 +185,7 @@ inline bool Source::IsFakeStage(const StageNo no) const {
 	return fake_stages.contains(no);
 }
 
-StageNo Source::GetStageNo(const FormID formid_) {
+StageNo Source::GetStageNo(const FormID formid_) const {
     for (auto& [key, value] : stages) {
         if (value.formid == formid_) return key;
     }
