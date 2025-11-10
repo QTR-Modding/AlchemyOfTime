@@ -22,7 +22,8 @@ namespace {
     }
 
     std::wstring HrsMinsW(const float hours) {
-        if (hours < 0.f) return L"now";
+        // If negative (due/past), show as 0 seconds instead of "Now"
+        if (hours < 0.f) return L"0s";
         const int totalM = static_cast<int>(std::round(hours * 60.f));
         constexpr int minsPerDay = 24 * 60;
         const int d = totalM / minsPerDay;
@@ -349,6 +350,11 @@ std::wstring Lorebox::BuildLoreFor(FormID hovered, RefID ownerId) {
                 if (pct >= 0.f) r.pct = static_cast<int>(std::round(pct));
             }
 
+            // If due/past (negative remaining) and not frozen, force to 0s and 100%
+            if (r.minutes < 0 && std::abs(r.slope) >= EPSILON) {
+                r.pct = 100;
+            }
+
             // Collect mod/transformer name for separate line if enabled
             if (auto nm = FormNameW(r.mod); !nm.empty()) {
                 if (r.transforming) {
@@ -409,7 +415,7 @@ std::wstring Lorebox::BuildLoreFor(FormID hovered, RefID ownerId) {
     for (const auto& r : rows) {
         if (printed >= Lorebox::MAX_ROWS) break;
 
-        const std::wstring eta = r.minutes < 0 ? (std::abs(r.slope) < EPSILON ? std::wstring{INFINITY_SYM} : std::wstring{L"Now"}) : HrsMinsW(r.minutes / 60.f);
+        const std::wstring eta = std::abs(r.slope) < EPSILON ? std::wstring{INFINITY_SYM} : HrsMinsW(r.minutes / 60.f);
 
         // choose color if enabled
         const bool doColors = Lorebox::colorize_rows.load(std::memory_order_relaxed);
