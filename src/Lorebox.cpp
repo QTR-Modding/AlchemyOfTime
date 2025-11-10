@@ -325,7 +325,7 @@ std::wstring Lorebox::BuildLoreFor(FormID hovered, RefID ownerId) {
                 r.curr = Widen(curName);
             }
 
-            const float nextT = src->GetNextUpdateTime(const_cast<StageInstance*>(&st));
+            const float nextT = src->GetNextUpdateTime(&st);
             r.minutes = std::abs(r.slope) < EPSILON ? -1
                        : nextT > 0.f ? static_cast<int>(std::round((nextT - now) * 60.f)) : -1;
 

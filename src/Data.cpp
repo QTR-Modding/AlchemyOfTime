@@ -552,7 +552,7 @@ void Source::UpdateTimeModulationInWorld(RE::TESObjectREFR* wo, StageInstance& w
     SetDelayOfInstance(wo_inst, _time, wo, false);
 }
 
-float Source::GetNextUpdateTime(StageInstance* st_inst) {
+float Source::GetNextUpdateTime(const StageInstance* st_inst) {
     if (!st_inst) {
         logger::error("Stage instance is null.");
         return 0;
@@ -586,7 +586,7 @@ float Source::GetNextUpdateTime(StageInstance* st_inst) {
     return st_inst->GetHittingTime(schranke);
 }
 
-float Source::GetNextUpdateTime(StageInstance* st_inst) const
+float Source::GetNextUpdateTime(const StageInstance* st_inst) const
 {
     if (!st_inst) {
         logger::error("Stage instance is null.");

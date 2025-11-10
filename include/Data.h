@@ -74,8 +74,8 @@ struct Source {
 
     void UpdateTimeModulationInWorld(RE::TESObjectREFR* wo, StageInstance& wo_inst, float _time) const;
 
-    float GetNextUpdateTime(StageInstance* st_inst);
-    float GetNextUpdateTime(StageInstance* st_inst) const;
+    float GetNextUpdateTime(const StageInstance* st_inst);
+    float GetNextUpdateTime(const StageInstance* st_inst) const;
 
     void CleanUpData();
 
