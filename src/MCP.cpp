@@ -230,8 +230,7 @@ void __stdcall UI::RenderLoreBox()
             ini.LoadFile(Settings::INI_path);
             ini.SetBoolValue("LoreBox", "ShowTitle", lorebox_show_title);
             ini.SetBoolValue("LoreBox", "ShowPercentage", lorebox_show_percentage);
-            ini.SetBoolValue("LoreBox", "ShowModName", show_mod_name);
-            ini.SetBoolValue("LoreBox", "ShowTransformerName", show_mod_name);
+            ini.SetBoolValue("LoreBox", "ShowModulatorName", show_mod_name);
             ini.SetBoolValue("LoreBox", "ShowMultiplier", show_multiplier);
             ini.SetBoolValue("LoreBox", "ColorizeRows", colorize);
 
