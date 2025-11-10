@@ -10,6 +10,8 @@ namespace {
         return std::format(L"#{:06X}", rgb & 0xFFFFFF);
     }
 
+    constexpr const wchar_t* INFINITY_SYM = L"~"; // ∞
+
     std::wstring FormNameW(FormID fid) {
         if (!fid) return L"";
         if (auto f = RE::TESForm::LookupByID(fid)) {
@@ -138,12 +140,12 @@ std::wstring Lorebox::BuildFrozenLore(const std::wstring& currentStageName)
 
     const auto HEX_NEUTRAL = HexColor(Lorebox::color_neutral.load());
 
-    // Build single-line body: optional current stage name, then time and optional percentage
+    // Build single-line body: optional current stage name, then infinity and optional percentage
     std::wstring line;
     if (!currentStageName.empty()) {
-        line = std::format(L"{} | 9999d", currentStageName);
+        line = std::format(L"{} | {}", currentStageName, INFINITY_SYM);
     } else {
-        line = L"9999d";
+        line = INFINITY_SYM;
     }
     if (Lorebox::show_percentage.load(std::memory_order_relaxed)) {
         line += L" (0%)";
@@ -304,7 +306,7 @@ std::wstring Lorebox::BuildLoreFor(FormID hovered, RefID ownerId) {
             // Compute next transition once and reuse
             const auto trans = ComputeNext(*src, st);
             if (trans.nextFormId != 0 && trans.nextFormId == st.xtra.form_id) {
-                // Instead of skipping, show frozen lore with current stage name if available
+                // Frozen lore
                 std::wstring stageNameW;
                 if (const auto name = src->GetStageName(st.no); !name.empty()) {
                     stageNameW = std::wstring(name.begin(), name.end());
@@ -330,7 +332,6 @@ std::wstring Lorebox::BuildLoreFor(FormID hovered, RefID ownerId) {
             if (Lorebox::show_percentage.load(std::memory_order_relaxed)) {
                 float pct = -1.f;
                 if (st.xtra.is_transforming) {
-                    // Transform progress = elapsed since transform / total transform duration
                     const auto tr = st.GetDelayerFormID();
                     if (tr && src->settings.transformers.contains(tr)) {
                         const float elapsed = st.GetTransformElapsed(now);
@@ -408,7 +409,7 @@ std::wstring Lorebox::BuildLoreFor(FormID hovered, RefID ownerId) {
     for (const auto& r : rows) {
         if (printed >= Lorebox::MAX_ROWS) break;
 
-        const auto eta = r.minutes < 0 ? L"Now" : HrsMinsW(r.minutes / 60.f);
+        const std::wstring eta = r.minutes < 0 ? (std::abs(r.slope) < EPSILON ? std::wstring{INFINITY_SYM} : std::wstring{L"Now"}) : HrsMinsW(r.minutes / 60.f);
 
         // choose color if enabled
         const bool doColors = Lorebox::colorize_rows.load(std::memory_order_relaxed);
