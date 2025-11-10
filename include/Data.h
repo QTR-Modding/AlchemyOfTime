@@ -31,17 +31,17 @@ struct Source {
     std::unordered_map<RefID, std::vector<StageUpdate>> UpdateAllStages(const std::vector<RefID>& filter, float time);
 
     // daha once yaratilmis bi stage olmasi gerekiyo
-    bool IsStage(FormID some_formid);
+    bool IsStage(FormID some_formid) const;
 
     [[nodiscard]] inline bool IsStageNo(StageNo no) const;
 
     [[nodiscard]] inline bool IsFakeStage(StageNo no) const;
 
     // assumes that the formid exists as a stage!
-    [[nodiscard]] StageNo GetStageNo(FormID formid_);
+    [[nodiscard]] StageNo GetStageNo(FormID formid_) const;
 
-    const Stage& GetStage(StageNo no);
-    [[nodiscard]] const Stage* GetStageSafe(StageNo no) const;
+	const Stage& GetStage(StageNo no);
+    [[nodiscard]] const Stage* GetStage(StageNo no) const;
 
     [[nodiscard]] Duration GetStageDuration(StageNo no) const;
 
@@ -74,7 +74,8 @@ struct Source {
 
     void UpdateTimeModulationInWorld(RE::TESObjectREFR* wo, StageInstance& wo_inst, float _time) const;
 
-    float GetNextUpdateTime(StageInstance* st_inst);
+    float GetNextUpdateTime(const StageInstance* st_inst);
+    float GetNextUpdateTime(const StageInstance* st_inst) const;
 
     void CleanUpData();
 
@@ -157,10 +158,6 @@ private:
                     logger::error("Stage form {} not found.", stage_formid);
 					continue;
 				}
-                else {
-                    // Add keywords to the stage form
-                    Lorebox::AddKeyword<T>(stage_form);
-                }
                 RegisterStage(stage_formid, stage_no);
 			}
         }
@@ -212,21 +209,18 @@ private:
             }
 
             // Update value of the fake form
-            const auto temp_value = settings.costoverrides[st_no];
+            const auto temp_value = settings.costoverrides.contains(st_no) ? settings.costoverrides.at(st_no) : -1;
             if (temp_value >= 0) FormTraits<T>::SetValue(stage_form, temp_value);
             // Update weight of the fake form
-            const auto temp_weight = settings.weightoverrides[st_no];
+            const auto temp_weight = settings.weightoverrides.contains(st_no) ? settings.weightoverrides.at(st_no) : -1;
             if (temp_weight >= 0) FormTraits<T>::SetWeight(stage_form, temp_weight);
 
 			// Update magic effects of the fake form
-            if (!settings.effects[st_no].empty() &&
+            if (settings.effects.contains(st_no) && !settings.effects.at(st_no).empty() &&
                 Vector::HasElement<std::string>(Settings::mgeffs_allowedQFORMS, qFormType)) {
                 // change mgeff of fake form
-                ApplyMGEFFSettings(stage_form, settings.effects[st_no]);
+                ApplyMGEFFSettings(stage_form, settings.effects.at(st_no));
             }
-
-			// add keyword
-			Lorebox::AddKeyword<T>(stage_form);
         } else {
 		    logger::error("Could not create copy form for source {}", editorid);
 		    return 0;

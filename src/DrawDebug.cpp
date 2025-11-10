@@ -1,14 +1,12 @@
 #include "DrawDebug.h"
-
 #include <glm/ext.hpp>
 #include <glm/glm.hpp>
-#include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/euler_angles.hpp>
 #include <glm/gtx/quaternion.hpp>
 
 namespace DebugAPI_IMPL {
     glm::highp_mat4 GetRotationMatrix(const glm::vec3 eulerAngles) {
-        return glm::eulerAngleXYZ(-(eulerAngles.x), -(eulerAngles.y), -(eulerAngles.z));
+        return glm::eulerAngleXYZ(-eulerAngles.x, -eulerAngles.y, -eulerAngles.z);
     }
 
     glm::vec3 NormalizeVector(const glm::vec3 p) { return glm::normalize(p); }
@@ -138,7 +136,7 @@ namespace DebugAPI_IMPL {
 
     glm::vec3 VectorToEulerRotation(const glm::vec3 vecIn) {
         const float yaw = atan2(vecIn.x, vecIn.y);
-        const float pitch = atan2(vecIn.z, sqrt((vecIn.x * vecIn.x) + (vecIn.y * vecIn.y)));
+        const float pitch = atan2(vecIn.z, sqrt(vecIn.x * vecIn.x + vecIn.y * vecIn.y));
 
         return glm::vec3(pitch, 0.0f, yaw);
     }
@@ -176,9 +174,9 @@ namespace DebugAPI_IMPL {
     }
 
     glm::vec3 GetPointOnRotatedCircle(const glm::vec3 origin, const float radius, const float i, const float maxI, const glm::vec3 eulerAngles) {
-        const float currAngle = (i / maxI) * glm::two_pi<float>();
+        const float currAngle = i / maxI * glm::two_pi<float>();
 
-        const glm::vec3 targetPos((radius * cos(currAngle)), (radius * sin(currAngle)), 0.0f);
+        const glm::vec3 targetPos(radius * cos(currAngle), radius * sin(currAngle), 0.0f);
 
         const auto targetPosRotated = RotateVector(eulerAngles, targetPos);
 
@@ -259,11 +257,11 @@ namespace DebugAPI_IMPL {
     void DebugAPI::DrawCircle(const glm::vec3 origin, const float radius, const glm::vec3 eulerAngles, const int liftetimeMS,
                               const glm::vec4& color, const float lineThickness) {
         glm::vec3 lastEndPos =
-            GetPointOnRotatedCircle(origin, radius, CIRCLE_NUM_SEGMENTS, (float)(CIRCLE_NUM_SEGMENTS - 1), eulerAngles);
+            GetPointOnRotatedCircle(origin, radius, CIRCLE_NUM_SEGMENTS, static_cast<float>(CIRCLE_NUM_SEGMENTS - 1), eulerAngles);
 
         for (int i = 0; i <= CIRCLE_NUM_SEGMENTS; i++) {
             glm::vec3 currEndPos =
-                GetPointOnRotatedCircle(origin, radius, (float)i, (float)(CIRCLE_NUM_SEGMENTS - 1), eulerAngles);
+                GetPointOnRotatedCircle(origin, radius, static_cast<float>(i), static_cast<float>(CIRCLE_NUM_SEGMENTS - 1), eulerAngles);
 
             DrawLineForMS(lastEndPos, currEndPos, liftetimeMS, color, lineThickness);
 
@@ -355,7 +353,7 @@ namespace DebugAPI_IMPL {
     // this is inaccurate. A more accurate solution would require finding the sub vector that overshoots the screen rect
     // between two points and scale the vector accordingly. Might implement that at some point, but the inaccuracy is
     // barely noticeable
-    const float CLAMP_MAX_OVERSHOOT = 10000.0f;
+    constexpr float CLAMP_MAX_OVERSHOOT = 10000.0f;
     void DebugAPI::FastClampToScreen(glm::vec2& point) {
         if (point.x < 0.0) {
             const float overshootX = abs(point.x);
@@ -374,9 +372,9 @@ namespace DebugAPI_IMPL {
         }
     }
 
-    float DebugAPI::ConvertComponentR(const float value) { return (value * 0xffff) + value; }
+    float DebugAPI::ConvertComponentR(const float value) { return value * 0xffff + value; }
 
-    float DebugAPI::ConvertComponentG(const float value) { return (value * 0xff) + value; }
+    float DebugAPI::ConvertComponentG(const float value) { return value * 0xff + value; }
 
     float DebugAPI::ConvertComponentB(const float value) { return value; }
 
@@ -456,7 +454,7 @@ namespace DebugAPI_IMPL {
     bool DebugAPI::IsOnScreen(const glm::vec2 from, const glm::vec2 to) { return IsOnScreen(from) || IsOnScreen(to); }
 
     bool DebugAPI::IsOnScreen(const glm::vec2 point) {
-        return (point.x <= ScreenResX && point.x >= 0.0 && point.y <= ScreenResY && point.y >= 0.0);
+        return point.x <= ScreenResX && point.x >= 0.0 && point.y <= ScreenResY && point.y >= 0.0;
     }
 
     void DebugOverlayMenu::AdvanceMovie(const float a_interval, const std::uint32_t a_currentTime) {

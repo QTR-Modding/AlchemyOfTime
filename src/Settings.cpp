@@ -5,6 +5,7 @@
 #include "Threading.h"
 #include "CLibUtilsQTR/PresetHelpers/PresetHelpersTXT.hpp"
 #include "CLibUtilsQTR/PresetHelpers/PresetHelpersYAML.hpp"
+#include "Lorebox.h"
 
 using QFormChecker = bool(*)(const RE::TESForm*);
 
@@ -24,28 +25,13 @@ static const std::unordered_map<std::string, QFormChecker> qformCheckers = {
 };
 
 bool Settings::IsQFormType(const FormID formid, const std::string& qformtype) {
-    // POPULATE THIS
-    /*const auto* form = GetFormByID(formid);
-    if (qformtype == "FOOD") return IsFoodItem(form);
-    if (qformtype == "INGR") return FormIsOfType(form, RE::IngredientItem::FORMTYPE);
-    if (qformtype == "MEDC") return IsMedicineItem(form);
-    if (qformtype == "POSN") return IsPoisonItem(form);
-    if (qformtype == "ARMO") return FormIsOfType(form,RE::TESObjectARMO::FORMTYPE);
-    if (qformtype == "WEAP") return FormIsOfType(form,RE::TESObjectWEAP::FORMTYPE);
-    if (qformtype == "SCRL") return FormIsOfType(form, RE::ScrollItem::FORMTYPE);
-	if (qformtype == "BOOK") return FormIsOfType(form,RE::TESObjectBOOK::FORMTYPE);
-    if (qformtype == "SLGM") return FormIsOfType(form, RE::TESSoulGem::FORMTYPE);
-	if (qformtype == "MISC") return FormIsOfType(form,RE::TESObjectMISC::FORMTYPE);
-	if (qformtype == "NPC") return FormIsOfType(form,RE::TESNPC::FORMTYPE);
-    return false;*/
-
     const auto* form = FormReader::GetFormByID(formid);
     if (!form) {
         logger::warn("IsQFormType: Form not found.");
         return false;
 	}
     const auto it = qformCheckers.find(qformtype);
-    return (it != qformCheckers.end()) ? it->second(form) : false;
+    return it != qformCheckers.end() ? it->second(form) : false;
 }
 
 std::string Settings::GetQFormType(const FormID formid)
@@ -359,7 +345,7 @@ namespace {
 		    return;
         }
 
-        for (const auto& Node_ : config["formsLists"]){
+        for (const auto& Node_ : config["formsLists"]) {
 		    if (!Node_["forms"] || Node_["forms"].IsNull()) {
 			    logger::warn("Forms not found in {}", filename);
 			    return;
@@ -412,22 +398,6 @@ namespace {
 	    }
 	    return combinedSettings;
     }
-
-    std::unordered_map<FormID, AddOnSettings> parseAddOns(const std::string& _type)
-    {
-        const auto folder_path = "Data/SKSE/Plugins/AlchemyOfTime/" + _type + "/addon";
-        std::filesystem::create_directories(folder_path);
-
-	    std::unordered_map<FormID, AddOnSettings> _addon_settings;
-
-        for (const auto& entry : std::filesystem::directory_iterator(folder_path)) {
-            if (!entry.is_regular_file() || entry.path().extension() != ".yml") continue;
-            const auto filename = entry.path().string();
-            processAddOnFile(filename,_addon_settings);
-        }
-        return _addon_settings;
-    }
-
 
     auto parse_color = [](const YAML::Node& node, const char* key) -> std::optional<uint32_t> {
         if (node[key] && !node[key].IsNull())
@@ -628,7 +598,7 @@ DefaultSettings PresetParse::parseDefaults_(const YAML::Node& config)
                 temp_name.empty() || std::ranges::all_of(temp_name, isspace)) {
 				settings.stage_names[a_stage_no] = "";
             }
-            else settings.stage_names[a_stage_no] = stageNode["name"].as<StageName>();
+            else settings.stage_names[a_stage_no] = temp_name;
         } else settings.stage_names[a_stage_no] = "";
         // add to costoverrides
         if (auto a_value = parse_type<int>(stageNode, "value"); a_value) {
@@ -818,6 +788,69 @@ void PresetParse::LoadINISettings()
     Settings::world_objects_evolve = ini.GetBoolValue("Other Settings", "WorldObjectsEvolve", Settings::world_objects_evolve);
 	Settings::placed_objects_evolve = ini.GetBoolValue("Other Settings", "PlacedObjectsEvolve", Settings::placed_objects_evolve);
 	Settings::unowned_objects_evolve = ini.GetBoolValue("Other Settings", "UnOwnedObjectsEvolve", Settings::unowned_objects_evolve);
+
+    // LoreBox settings (defaults true, except ShowModulatorName and ShowMultiplier)
+    const bool lb_title = ini.GetBoolValue("LoreBox", "ShowTitle", true);
+    const bool lb_pct   = ini.GetBoolValue("LoreBox", "ShowPercentage", true);
+    const bool lb_mod   = ini.GetBoolValue("LoreBox", "ShowModulatorName", false);
+    const bool lb_col   = ini.GetBoolValue("LoreBox", "ColorizeRows", true);
+    const bool lb_mul   = ini.GetBoolValue("LoreBox", "ShowMultiplier", false);
+    Lorebox::show_title.store(lb_title);
+    Lorebox::show_percentage.store(lb_pct);
+    Lorebox::show_modulator_name.store(lb_mod);
+    Lorebox::colorize_rows.store(lb_col);
+    Lorebox::show_multiplier.store(lb_mul);
+
+    // Colors
+    auto readHex = [&](const char* key, const uint32_t def) {
+        const char* s = ini.GetValue("LoreBox", key, nullptr);
+        if (!s) return def;
+        try {
+            return static_cast<uint32_t>(std::stoul(s, nullptr, 16));
+        } catch (...) {
+            return def;
+        }
+    };
+
+    Lorebox::color_title.store(readHex("ColorTitle", Lorebox::color_title.load()));
+    Lorebox::color_neutral.store(readHex("ColorNeutral", Lorebox::color_neutral.load()));
+    Lorebox::color_slow.store(readHex("ColorSlow", Lorebox::color_slow.load()));
+    Lorebox::color_fast.store(readHex("ColorFast", Lorebox::color_fast.load()));
+    Lorebox::color_transform.store(readHex("ColorTransform", Lorebox::color_transform.load()));
+    Lorebox::color_separator.store(readHex("ColorSeparator", Lorebox::color_separator.load()));
+
+    // Symbols (allow raw ASCII, HTML entities, or backslash-escapes)
+    if (const char* sep = ini.GetValue("LoreBox", "SeparatorSymbol", nullptr)) {
+        if (const auto ws = String::DecodeEscapesFromAscii(sep); !ws.empty()) Lorebox::separator_symbol = ws;
+    }
+    if (const char* ar = ini.GetValue("LoreBox", "ArrowRight", nullptr)) {
+        if (const auto ws = String::DecodeEscapesFromAscii(ar); !ws.empty()) Lorebox::arrow_right = ws;
+    }
+    if (const char* al = ini.GetValue("LoreBox", "ArrowLeft", nullptr)) {
+        if (const auto ws = String::DecodeEscapesFromAscii(al); !ws.empty()) Lorebox::arrow_left = ws;
+    }
+
+    // Ensure keys exist with defaults if they were missing
+    ini.SetBoolValue("LoreBox", "ShowTitle", lb_title);
+    ini.SetBoolValue("LoreBox", "ShowPercentage", lb_pct);
+    ini.SetBoolValue("LoreBox", "ShowModulatorName", lb_mod);
+    ini.SetBoolValue("LoreBox", "ColorizeRows", lb_col);
+    ini.SetBoolValue("LoreBox", "ShowMultiplier", lb_mul);
+
+    auto writeHex = [&](const char* key, uint32_t val) {
+        ini.SetValue("LoreBox", key, std::format("{:06X}", val).c_str());
+    };
+    writeHex("ColorTitle", Lorebox::color_title.load());
+    writeHex("ColorNeutral", Lorebox::color_neutral.load());
+    writeHex("ColorSlow", Lorebox::color_slow.load());
+    writeHex("ColorFast", Lorebox::color_fast.load());
+    writeHex("ColorTransform", Lorebox::color_transform.load());
+    writeHex("ColorSeparator", Lorebox::color_separator.load());
+
+    // Write symbol defaults only if missing; preserve user's raw codes/entities (use escaped ASCII)
+    if (!ini.KeyExists("LoreBox", "SeparatorSymbol")) ini.SetValue("LoreBox", "SeparatorSymbol", String::EncodeEscapesToAscii(Lorebox::separator_symbol).c_str());
+    if (!ini.KeyExists("LoreBox", "ArrowRight")) ini.SetValue("LoreBox", "ArrowRight", String::EncodeEscapesToAscii(Lorebox::arrow_right).c_str());
+    if (!ini.KeyExists("LoreBox", "ArrowLeft")) ini.SetValue("LoreBox", "ArrowLeft", String::EncodeEscapesToAscii(Lorebox::arrow_left).c_str());
 		
     ini.SaveFile(Settings::INI_path);
 }

@@ -18,7 +18,7 @@ class OurEventSink final :  public clib_util::singleton::ISingleton<OurEventSink
     bool furniture_entered = false;
     RE::NiPointer<RE::TESObjectREFR> furniture = nullptr;
 
-    void HandleWO(RE::TESObjectREFR* ref) const;
+    static void HandleWO(RE::TESObjectREFR* ref);
 
 public:
 

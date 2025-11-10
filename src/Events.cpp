@@ -1,8 +1,7 @@
 #include "Events.h"
 #include "Threading.h"
 
-void OurEventSink::HandleWO(RE::TESObjectREFR* ref) const
-{
+void OurEventSink::HandleWO(RE::TESObjectREFR* ref) {
     if (!ref) return;
     //if (ref->extraList.GetOwner() && !ref->extraList.GetOwner()->IsPlayer()) return;
     if (!Settings::IsItem(ref)) return;

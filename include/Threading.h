@@ -16,7 +16,7 @@ public:
                 while (true) {
                     std::function<void()> task;
                     {
-                        std::unique_lock<std::mutex> lock(queueMutex);
+                        std::unique_lock lock(queueMutex);
                         condition.wait(lock, [this] { return stop || !tasks.empty(); });
                         if (stop && tasks.empty()) return;
                         task = std::move(tasks.front());
@@ -30,7 +30,7 @@ public:
 
     ~ThreadPool() {
         {
-            std::unique_lock<std::mutex> lock(queueMutex);
+            std::unique_lock lock(queueMutex);
             stop = true;
         }
         condition.notify_all();
@@ -49,7 +49,7 @@ public:
 
         std::future<return_type> res = task->get_future();
         {
-            std::unique_lock<std::mutex> lock(queueMutex);
+            std::unique_lock lock(queueMutex);
             if (stop) throw std::runtime_error("enqueue on stopped ThreadPool");
             tasks.emplace([task]() { (*task)(); });
         }

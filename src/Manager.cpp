@@ -555,7 +555,7 @@ void Manager::SyncWithInventory(RE::TESObjectREFR* ref)
             if (bound->IsDynamicForm()) {
                 const auto a_formID = bound->GetFormID();
                 auto* name = bound->GetName();
-                const auto nameLen = (name != nullptr) ? std::strlen(name) : 0;
+                const auto nameLen = name != nullptr ? std::strlen(name) : 0;
                 if (nameLen == 0) {
                     RemoveItem(ref, a_formID, std::max(1, entry.first));
                 }
@@ -782,7 +782,7 @@ void Manager::Register(const FormID some_formid, const Count count, const RefID 
     }
 }
 
-void Manager::HandleCraftingEnter(unsigned int bench_type)
+void Manager::HandleCraftingEnter(const unsigned int bench_type)
  {
     if (!handle_crafting_instances.empty()) {
         logger::warn("HandleCraftingEnter: Crafting instances already exist.");
@@ -988,6 +988,8 @@ void Manager::Reset()
         for (auto& src : sources) src.Reset();
         sources.clear();
     }
+    stages_fast_lookup.clear();
+
     // external_favs.clear();         // we will update this in ReceiveData
     handle_crafting_instances.clear();
     faves_list.clear();
@@ -996,6 +998,7 @@ void Manager::Reset()
     Clear();
 	listen_container_change.store(true);
 	isUninstalled.store(false);
+
     
     logger::info("Manager reset.");
 }
