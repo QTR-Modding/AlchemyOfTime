@@ -185,13 +185,15 @@ void Hooks::Install(Manager* mngr){
 
 void UpdateHook::Update(RE::Actor* a_this, float a_delta)
 {
-        Update_(a_this, a_delta);
-        DebugAPI_IMPL::DebugAPI::Update();
+    Update_(a_this, a_delta);
+    DebugAPI_IMPL::DebugAPI::Update();
 }
 
 void UpdateHook::Install() {
+#ifndef NDEBUG
     REL::Relocation<std::uintptr_t> PlayerCharacterVtbl{ RE::VTABLE_PlayerCharacter[0] };
 	Update_ = PlayerCharacterVtbl.write_vfunc(0xAD, Update);
+#endif
 }
 
 void Hooks::add_item_functor(RE::TESObjectREFR* a_this, RE::TESObjectREFR* a_object, int32_t a_count, bool a4, bool a5)

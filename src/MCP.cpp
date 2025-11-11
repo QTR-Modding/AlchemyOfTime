@@ -58,6 +58,8 @@ void __stdcall UI::RenderSettings()
             }
         }
     }
+
+    ImGui::Checkbox("DrawDebug",&draw_debug);
 }
 
 void __stdcall UI::RenderStatus()

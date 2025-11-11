@@ -113,4 +113,6 @@ namespace UI {
 
     std::string GetName(FormID formid);
 
+	inline bool draw_debug = false;
+
 };

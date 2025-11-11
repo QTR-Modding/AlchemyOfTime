@@ -1,4 +1,6 @@
 #include "Data.h"
+
+#include "MCP.h"
 #ifndef NDEBUG
 #include "DrawDebug.h"
 #endif
@@ -1138,8 +1140,10 @@ namespace {
 
     bool SearchModulatorInCell_Sub(const RE::TESObjectREFR* a_origin, const RE::TESObjectREFR* ref, const float proximity=Settings::proximity_range) {
 #ifndef NDEBUG
-        draw_line(WorldObject::GetPosition(ref), WorldObject::GetPosition(RE::PlayerCharacter::GetSingleton()),3.f, glm::vec4(0.f, 0.f, 1.f, 1.f));
-        WorldObject::DrawBoundingBox(ref);
+        if (UI::draw_debug) {
+            draw_line(WorldObject::GetPosition(ref), WorldObject::GetPosition(RE::PlayerCharacter::GetSingleton()),3.f, glm::vec4(0.f, 0.f, 1.f, 1.f));
+            WorldObject::DrawBoundingBox(ref);
+        }
 #endif
         if (!WorldObject::AreClose(a_origin, ref, proximity)) {
 	        return false;
