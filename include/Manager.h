@@ -125,10 +125,7 @@ public:
     void Uninstall() {isUninstalled.store(true);} 
 
 	// [locks: queueMutex_]
-	void ClearWOUpdateQueue() {
-		std::unique_lock lock(queueMutex_);
-	    _ref_stops_.clear();
-	}
+	void ClearWOUpdateQueue();
 
     // use it only for world objects! checks if there is a stage instance for the given refid
     [[nodiscard]] bool RefIsRegistered(RefID refid);
@@ -170,22 +167,12 @@ public:
     void Print();
 
     // Snapshot copy of sources (read-only). [locks: sourceMutex_] (shared)
-    std::vector<Source> GetSources() {
-		std::shared_lock lock(sourceMutex_);
-        return sources;
-    }
+    std::vector<Source> GetSources();
 
     // Snapshot of the update queue. [locks: queueMutex_] (shared)
-    std::unordered_map<RefID, float> GetUpdateQueue() {
-		std::unordered_map<RefID, float> _ref_stops_copy;
-		std::shared_lock lock(queueMutex_);
-		for (const auto& [key, value] : _ref_stops_) {
-			_ref_stops_copy[key] = value.stop_time;
-		}
-        return _ref_stops_copy;
-    }
+    std::unordered_map<RefID, float> GetUpdateQueue();
 
-	void HandleDynamicWO(RE::TESObjectREFR* ref);
+    void HandleDynamicWO(RE::TESObjectREFR* ref);
 
     // Note: called from contexts that already hold sourceMutex_. Do not acquire it inside.
     void HandleWOBaseChange(RE::TESObjectREFR* ref);
@@ -195,24 +182,6 @@ public:
 	}
 
     bool IsStageItem(FormID a_formid);
-
 };
-
-inline bool Manager::IsStageItem(FormID a_formid) {
-	if (const auto it = stages_fast_lookup.find(a_formid); it != stages_fast_lookup.end()) {
-		return true;
-	}
-
-	std::shared_lock lock(sourceMutex_);
-    for (const auto& src : sources) {
-		if (src.IsStage(a_formid)) {
-			stages_fast_lookup.insert(a_formid);
-			return true;
-        }
-    }
-
-	return false;
-}
-
 
 inline Manager* M = nullptr;

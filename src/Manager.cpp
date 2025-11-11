@@ -1,6 +1,228 @@
+#pragma once
 #include "Manager.h"
 #include <unordered_set>
-#include "DrawDebug.h"
+#include "Data.h"
+#include "Ticker.h"
+#include <shared_mutex>
+#include <cassert>
+#include <thread>
+#include <mutex>
+#include <unordered_map>
+#include <atomic>
+
+#ifndef NDEBUG
+namespace {
+    // Tags to distinguish per-mutex state
+    struct SourceMutexTag { static constexpr const char* name = "Manager::sourceMutex_"; };
+    struct QueueMutexTag  { static constexpr const char* name = "Manager::queueMutex_";  };
+
+    template <typename Tag>
+    struct DebugLockState {
+        static inline thread_local int sharedDepth = 0;
+        static inline thread_local int uniqueDepth = 0;
+    };
+
+    // Debug metadata per mutex tag
+    template <typename Tag>
+    struct DebugMeta {
+        static inline std::atomic<size_t> uniqueOwner{0};   // hash(tid) of current unique owner or 0
+        static inline const char* uniqueFile = nullptr;
+        static inline int uniqueLine = 0;
+        static inline const char* uniqueFunc = nullptr;
+
+        static inline std::mutex metaMutex;                 // guards sharedOwners and unique site fields
+        static inline std::unordered_map<size_t, int> sharedOwners; // tid hash -> depth
+    };
+
+    size_t dbg_tid() {
+        return std::hash<std::thread::id>{}(std::this_thread::get_id());
+    }
+
+    template <typename Tag>
+    [[noreturn]] void ReportAndAbort(const char* reason) {
+        logger::critical("[LockAssert] mutex={} reason={} thread_id={}", Tag::name, reason, dbg_tid());
+        assert(false && "Lock invariant violation");
+        std::abort();
+    }
+
+    template <typename Tag>
+    void CheckLockOrder() {
+        // Enforce single consistent order: source -> queue
+        // Allow acquiring queue while already holding source.
+        if constexpr (std::is_same_v<Tag, SourceMutexTag>) {
+            // Disallow acquiring source while holding queue (deadlock risk)
+            if (DebugLockState<QueueMutexTag>::sharedDepth > 0 || DebugLockState<QueueMutexTag>::uniqueDepth > 0) {
+                ReportAndAbort<Tag>("Lock order violation: acquiring source while holding queue");
+            }
+        }
+        // Acquiring queue while holding source is allowed by design.
+    }
+
+    template <typename Tag>
+    struct DebugSharedLock {
+        std::shared_mutex* m{};
+        bool active{false};
+
+        explicit DebugSharedLock(std::shared_mutex* mutex, const char* file = nullptr, int line = 0, const char* func = nullptr)
+            : m(mutex) {
+            if (!m) ReportAndAbort<Tag>("null mutex pointer");
+            // Only assert real misuse
+            if (DebugLockState<Tag>::uniqueDepth != 0) ReportAndAbort<Tag>("illegal upgrade: shared while holding unique");
+            if (DebugLockState<Tag>::sharedDepth != 0) ReportAndAbort<Tag>("re-entrant shared acquisition");
+            CheckLockOrder<Tag>();
+
+            // Normal contention: block, do not assert/log
+            if (!m->try_lock_shared()) {
+                m->lock_shared();
+            }
+
+            // register this thread as shared owner (for optional diagnostics you already have)
+            {
+                std::scoped_lock g(DebugMeta<Tag>::metaMutex);
+                DebugMeta<Tag>::sharedOwners[dbg_tid()] += 1;
+            }
+
+            active = true;
+            DebugLockState<Tag>::sharedDepth = 1;
+        }
+
+        DebugSharedLock(const DebugSharedLock&) = delete;
+        DebugSharedLock& operator=(const DebugSharedLock&) = delete;
+        DebugSharedLock(DebugSharedLock&&) = delete;
+        DebugSharedLock& operator=(DebugSharedLock&&) = delete;
+
+        void unlock() {
+            if (!active) ReportAndAbort<Tag>("shared unlock without ownership");
+            if (DebugLockState<Tag>::sharedDepth <= 0) ReportAndAbort<Tag>("shared depth underflow (unlock)");
+
+            // unregister shared holder
+            {
+                std::scoped_lock g(DebugMeta<Tag>::metaMutex);
+                auto it = DebugMeta<Tag>::sharedOwners.find(dbg_tid());
+                if (it != DebugMeta<Tag>::sharedOwners.end()) {
+                    if (--it->second == 0) DebugMeta<Tag>::sharedOwners.erase(it);
+                }
+            }
+
+            if (--DebugLockState<Tag>::sharedDepth == 0) {
+                m->unlock_shared();
+                active = false;
+            }
+        }
+
+        ~DebugSharedLock() {
+            if (!active) return;
+            if (DebugLockState<Tag>::sharedDepth <= 0) ReportAndAbort<Tag>("shared depth underflow (dtor)");
+
+            // unregister shared holder
+            {
+                std::scoped_lock g(DebugMeta<Tag>::metaMutex);
+                auto it = DebugMeta<Tag>::sharedOwners.find(dbg_tid());
+                if (it != DebugMeta<Tag>::sharedOwners.end()) {
+                    if (--it->second == 0) DebugMeta<Tag>::sharedOwners.erase(it);
+                }
+            }
+
+            if (--DebugLockState<Tag>::sharedDepth == 0) {
+                m->unlock_shared();
+                active = false;
+            }
+        }
+    };
+
+    template <typename Tag>
+    struct DebugUniqueLock {
+        std::shared_mutex* m{};
+        bool owns{false};
+
+        explicit DebugUniqueLock(std::shared_mutex* mutex, const char* file = nullptr, int line = 0, const char* func = nullptr)
+            : m(mutex) {
+            if (!m) ReportAndAbort<Tag>("null mutex pointer");
+            // Only assert real misuse
+            if (DebugLockState<Tag>::sharedDepth != 0) ReportAndAbort<Tag>("illegal upgrade: unique while holding shared");
+            if (DebugLockState<Tag>::uniqueDepth != 0) ReportAndAbort<Tag>("re-entrant unique acquisition");
+            CheckLockOrder<Tag>();
+
+            // Normal contention: block, do not assert/log
+            if (!m->try_lock()) {
+                m->lock();
+            }
+
+            // mark unique owner and site (for diagnostics)
+            {
+                std::scoped_lock g(DebugMeta<Tag>::metaMutex);
+                DebugMeta<Tag>::uniqueOwner.store(dbg_tid(), std::memory_order_relaxed);
+                DebugMeta<Tag>::uniqueFile = file;
+                DebugMeta<Tag>::uniqueLine = line;
+                DebugMeta<Tag>::uniqueFunc = func;
+            }
+
+            owns = true;
+            DebugLockState<Tag>::uniqueDepth = 1;
+        }
+
+        DebugUniqueLock(const DebugUniqueLock&) = delete;
+        DebugUniqueLock& operator=(const DebugUniqueLock&) = delete;
+        DebugUniqueLock(DebugUniqueLock&&) = delete;
+        DebugUniqueLock& operator=(DebugUniqueLock&&) = delete;
+
+        void unlock() {
+            if (!owns) ReportAndAbort<Tag>("unique unlock without ownership");
+            if (DebugLockState<Tag>::uniqueDepth != 1) ReportAndAbort<Tag>("unique depth corruption (unlock)");
+
+            // clear unique owner
+            {
+                std::scoped_lock g(DebugMeta<Tag>::metaMutex);
+                DebugMeta<Tag>::uniqueOwner.store(0, std::memory_order_relaxed);
+                DebugMeta<Tag>::uniqueFile = nullptr;
+                DebugMeta<Tag>::uniqueLine = 0;
+                DebugMeta<Tag>::uniqueFunc = nullptr;
+            }
+
+            m->unlock();
+            owns = false;
+            DebugLockState<Tag>::uniqueDepth = 0;
+        }
+
+        ~DebugUniqueLock() {
+            if (!owns) return;
+            if (DebugLockState<Tag>::uniqueDepth != 1) ReportAndAbort<Tag>("unique depth corruption (dtor)");
+
+            // clear unique owner
+            {
+                std::scoped_lock g(DebugMeta<Tag>::metaMutex);
+                DebugMeta<Tag>::uniqueOwner.store(0, std::memory_order_relaxed);
+                DebugMeta<Tag>::uniqueFile = nullptr;
+                DebugMeta<Tag>::uniqueLine = 0;
+                DebugMeta<Tag>::uniqueFunc = nullptr;
+            }
+
+            m->unlock();
+            owns = false;
+            DebugLockState<Tag>::uniqueDepth = 0;
+        }
+    };
+
+    // Helpers to create unique variable names in macros
+    #define AOT_CONCAT_INNER(a,b) a##b
+    #define AOT_CONCAT(a,b) AOT_CONCAT_INNER(a,b)
+}
+
+// Debug macros (per-mutex) – pass source location for better logs
+#define SRC_SHARED_GUARD  DebugSharedLock<SourceMutexTag> AOT_CONCAT(src_slock_, __COUNTER__)(&sourceMutex_, __FILE__, __LINE__, __func__)
+#define SRC_UNIQUE_GUARD  DebugUniqueLock<SourceMutexTag> AOT_CONCAT(src_ulock_, __COUNTER__)(&sourceMutex_, __FILE__, __LINE__, __func__)
+#define QUE_SHARED_GUARD  DebugSharedLock<QueueMutexTag>  AOT_CONCAT(que_slock_, __COUNTER__)(&queueMutex_,  __FILE__, __LINE__, __func__)
+#define QUE_UNIQUE_GUARD  DebugUniqueLock<QueueMutexTag>  AOT_CONCAT(que_ulock_, __COUNTER__)(&queueMutex_,  __FILE__, __LINE__, __func__)
+
+#else
+// Release macros map to std locks with CTAD
+#define AOT_CONCAT_INNER(a,b) a##b
+#define AOT_CONCAT(a,b) AOT_CONCAT_INNER(a,b)
+#define SRC_SHARED_GUARD  std::shared_lock  AOT_CONCAT(src_slock_, __COUNTER__){sourceMutex_}
+#define SRC_UNIQUE_GUARD  std::unique_lock  AOT_CONCAT(src_ulock_, __COUNTER__){sourceMutex_}
+#define QUE_SHARED_GUARD  std::shared_lock  AOT_CONCAT(que_slock_, __COUNTER__){queueMutex_}
+#define QUE_UNIQUE_GUARD  std::unique_lock  AOT_CONCAT(que_ulock_, __COUNTER__){queueMutex_}
+#endif
 
 void Manager::PreDeleteRefStop(RefStop& a_ref_stop, RE::NiAVObject* a_obj)
 {
@@ -14,14 +236,14 @@ void Manager::UpdateLoop()
 {
 
     if (!Settings::world_objects_evolve.load()) {
-	    std::unique_lock lock(queueMutex_);
+        QUE_UNIQUE_GUARD;
         for (auto& [key,val] : _ref_stops_) {
             const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(key);
             PreDeleteRefStop(val, ref ? ref->Get3D() : nullptr);
         }
         _ref_stops_.clear();
     }
-	else if (std::unique_lock lock(queueMutex_);
+	else if (QUE_UNIQUE_GUARD;
         !queue_delete_.empty() || !Settings::placed_objects_evolve.load()) {
 	    for (auto it = _ref_stops_.begin(); it != _ref_stops_.end();) {
             if (const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(it->first); 
@@ -35,11 +257,16 @@ void Manager::UpdateLoop()
 		queue_delete_.clear();
     }
 
-
-    if (std::shared_lock sh_lk(queueMutex_); _ref_stops_.empty()) {
-		sh_lk.unlock();
+	bool should_stop = false;
+    {
+        QUE_SHARED_GUARD;
+        if (_ref_stops_.empty()) {
+           should_stop = true;
+        }
+    }
+    if (should_stop) {
         Stop();
-	    std::unique_lock lock(queueMutex_);
+        QUE_UNIQUE_GUARD;
         queue_delete_.clear();
         return;
     }
@@ -48,7 +275,7 @@ void Manager::UpdateLoop()
 
 	std::vector<RefID> ref_stops_copy;
     for (
-        auto lock = std::shared_lock(queueMutex_);
+        QUE_SHARED_GUARD;
         const auto& key : _ref_stops_ | std::views::keys) {
         ref_stops_copy.push_back(key);
     } 
@@ -67,7 +294,7 @@ void Manager::UpdateLoop()
 		std::vector<RefID> ref_stops_due;
         ref_stops_due.reserve(ref_stops_copy.size());
 		for (
-            auto lock = std::shared_lock(queueMutex_);
+            QUE_SHARED_GUARD;
             const auto& key : ref_stops_copy) {
             auto it = _ref_stops_.find(key);
 			if (it == _ref_stops_.end()) continue;
@@ -87,7 +314,7 @@ void Manager::UpdateLoop()
 
         for (const auto refid : ref_stops_due) {
             if (const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(refid)) {
-                std::unique_lock lock(queueMutex_);
+                QUE_UNIQUE_GUARD;
                 if (auto it = _ref_stops_.find(refid); it != _ref_stops_.end()) {
                     auto& val = it->second;
                     PreDeleteRefStop(val, ref->Get3D());
@@ -102,7 +329,7 @@ void Manager::QueueWOUpdate(const RefStop& a_refstop)
 {
     if (!Settings::world_objects_evolve.load()) return;
 	const auto refid = a_refstop.ref_id;
-    std::unique_lock lock(queueMutex_);
+    QUE_UNIQUE_GUARD;
     if (_ref_stops_.contains(refid)) _ref_stops_.at(refid).Update(a_refstop);
     else _ref_stops_[refid] = a_refstop;
     Start();
@@ -467,10 +694,10 @@ std::set<float> Manager::GetUpdateTimes(const RE::TESObjectREFR* inventory_owner
 
 bool Manager::UpdateInventory(RE::TESObjectREFR* ref, const float t)
 {
-    bool update_took_place = false;
-    const auto refid = ref->GetFormID();
+ bool update_took_place = false;
+ const auto refid = ref->GetFormID();
 
-    for (size_t i = 0; i < sources.size(); ++i) {
+ for (size_t i = 0; i < sources.size(); ++i) {
         auto& src = sources[i];
         if (!src.IsHealthy()) continue;
         if (src.data.empty()) continue;
@@ -500,7 +727,7 @@ bool Manager::UpdateInventory(RE::TESObjectREFR* ref, const float t)
 
 void Manager::UpdateInventory(RE::TESObjectREFR* ref)
 {
-    listen_container_change.store(false);
+ listen_container_change.store(false);
 
 	SyncWithInventory(ref);
     
@@ -534,12 +761,12 @@ void Manager::SyncWithInventory(RE::TESObjectREFR* ref)
     const auto loc_inventory = ref->GetInventory();
 
     formid_instances_map.reserve(loc_inventory.size());
-	total_registry_counts.reserve(loc_inventory.size());
+    total_registry_counts.reserve(loc_inventory.size());
 
     for (auto& src : sources) {
         if (!src.data.contains(loc_refid)) continue;
         for (auto& st_inst : src.data.at(loc_refid)) {  // bu liste onceski savele ayni deil cunku source.datayi
-                                                        // _registeratreceivedata deistirdi
+            // _registeratreceivedata deistirdi
             if (!st_inst.xtra.is_decayed && st_inst.count > 0) {
                 auto& vecRef = formid_instances_map[st_inst.xtra.form_id];
                 vecRef.push_back(&st_inst);
@@ -685,12 +912,17 @@ RefStop* Manager::GetRefStop(const RefID refid)
 	return &_ref_stops_.at(refid);
 }
 
+void Manager::ClearWOUpdateQueue() {
+    QUE_UNIQUE_GUARD;
+    _ref_stops_.clear();
+}
+
 bool Manager::RefIsRegistered(const RefID refid) {
     if (!refid) {
         logger::warn("Refid is null.");
         return false;
     }
-    std::shared_lock lock(sourceMutex_);
+    SRC_SHARED_GUARD;
     if (sources.empty()) {
         logger::warn("Sources is empty.");
         return false;
@@ -805,9 +1037,7 @@ void Manager::HandleCraftingEnter(const unsigned int bench_type)
     std::map<FormID, int> to_remove;
     const auto player_inventory = player_ref->GetInventory();
 
-    for (
-        std::shared_lock lock(sourceMutex_);
-        auto& src : sources) {
+    for (SRC_SHARED_GUARD; auto& src : sources) {
 		if (!src.IsHealthy()) continue;
         if (!src.data.contains(player_refid)) continue;
         
@@ -894,7 +1124,7 @@ void Manager::Update(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::T
 
     if (from && to && !from->HasContainer()) {
         const auto temp_refid = from->GetFormID();
-		std::unique_lock lock(queueMutex_);
+        QUE_UNIQUE_GUARD;
         if ( _ref_stops_.contains(temp_refid)) {
             queue_delete_.insert(temp_refid);
         }
@@ -908,7 +1138,7 @@ void Manager::Update(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::T
     if (!to && what && what->Is(RE::FormType::AlchemyItem)) count = 0;
 
     if (what && count > 0) {
-		std::unique_lock lock(sourceMutex_);
+        SRC_UNIQUE_GUARD;
         if (const auto src = GetSource(what->GetFormID())) {
 	        from_refid = from ? from->GetFormID() : from_refid;
 	        const auto to_refid = to ? to->GetFormID() : 0;
@@ -947,11 +1177,11 @@ void Manager::Update(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::T
 	}
 
     if (to) {
-		std::unique_lock lock(sourceMutex_);
+        SRC_UNIQUE_GUARD;
         UpdateRef(to);
     }
     if (from && (from->HasContainer() || !to)) {
-		std::unique_lock lock(sourceMutex_);
+        SRC_UNIQUE_GUARD;
 		UpdateRef(from);
 	}
 }
@@ -966,7 +1196,7 @@ void Manager::SwapWithStage(RE::TESObjectREFR* wo_ref)
 
     RE::TESBoundObject* toSwap;
     {
-        std::shared_lock lock(sourceMutex_);
+        SRC_SHARED_GUARD;
         if (const auto* st_inst = GetWOStageInstance(wo_ref)) {
             toSwap = st_inst->GetBound();
         } else {
@@ -984,7 +1214,7 @@ void Manager::Reset()
 	Stop();
 	ClearWOUpdateQueue();
     {
-	    std::unique_lock lock(sourceMutex_);
+        SRC_UNIQUE_GUARD;
         for (auto& src : sources) src.Reset();
         sources.clear();
     }
@@ -1005,7 +1235,7 @@ void Manager::Reset()
 
 void Manager::HandleFormDelete(const FormID a_refid)
 {
-	std::unique_lock lock(sourceMutex_);
+    SRC_UNIQUE_GUARD;
     for (auto& src : sources) {
         if (src.data.contains(a_refid)) {
             logger::warn("HandleFormDelete: Formid {:x}", a_refid);
@@ -1023,10 +1253,10 @@ void Manager::SendData()
     Clear();
 
     int n_instances = 0;
-	std::shared_lock lock(sourceMutex_);
+    SRC_SHARED_GUARD;
     for (const auto& src : sources) {
 		if (src.GetStageDuration(0) >= 10000.f) {
-            if (src.settings.transformers_order.size()==0 && src.settings.delayers_order.size()==0) {
+            if (src.settings.transformers_order.size() == 0 && src.settings.delayers_order.size() == 0) {
 			    continue;
             }
 		}
@@ -1051,7 +1281,7 @@ void Manager::SendData()
 
 void Manager::HandleLoc(RE::TESObjectREFR* loc_ref)
 {
-    std::unique_lock lk(sourceMutex_);
+    SRC_UNIQUE_GUARD;
 
     if (!loc_ref) {
         logger::error("Loc ref is null.");
@@ -1070,14 +1300,13 @@ void Manager::HandleLoc(RE::TESObjectREFR* loc_ref)
     }
 
     for (const auto loc_inventory_temp = loc_ref->GetInventory(); const auto& [bound, entry] : loc_inventory_temp) {
-        if (bound && IsDynamicFormID(bound->GetFormID()) &&
-            std::strlen(bound->GetName()) == 0) {
-            RemoveItem(loc_ref, bound->GetFormID(), std::max(1, entry.first));
-        }
+    if (bound && IsDynamicFormID(bound->GetFormID()) && std::strlen(bound->GetName()) == 0) {
+        RemoveItem(loc_ref, bound->GetFormID(), std::max(1, entry.first));
     }
+ }
 
-    SyncWithInventory(loc_ref);
-    locs_to_be_handled.erase(loc_refid);
+ SyncWithInventory(loc_ref);
+ locs_to_be_handled.erase(loc_refid);
 }
 
 StageInstance* Manager::RegisterAtReceiveData(const FormID source_formid, const RefID loc, const StageInstancePlain& st_plain)
@@ -1207,7 +1436,7 @@ void Manager::ReceiveData()
             source_formid = source_form->GetFormID();
         }
 
-        std::unique_lock lock(sourceMutex_);
+        SRC_UNIQUE_GUARD;
         for (const auto& st_plain : rhs) {
             if (st_plain.is_fake) locs_to_be_handled[loc].push_back(st_plain.form_id);
             if (const auto* inserted_instance = RegisterAtReceiveData(source_formid, loc, st_plain); !inserted_instance) {
@@ -1237,7 +1466,7 @@ void Manager::ReceiveData()
     }
 
     HandleLoc(player_ref);
-    std::unique_lock lk(sourceMutex_);
+    SRC_UNIQUE_GUARD;
     locs_to_be_handled.erase(player_refid);
     Print();
 
@@ -1252,6 +1481,20 @@ void Manager::Print()
         if (src.data.empty()) continue;
         src.PrintData();
     }*/
+}
+
+std::vector<Source> Manager::GetSources() {
+    SRC_SHARED_GUARD;
+    return sources;
+}
+
+std::unordered_map<RefID, float> Manager::GetUpdateQueue() {
+    std::unordered_map<RefID, float> _ref_stops_copy;
+    QUE_SHARED_GUARD;
+    for (const auto& [key, value] : _ref_stops_) {
+        _ref_stops_copy[key] = value.stop_time;
+    }
+    return _ref_stops_copy;
 }
 
 void Manager::HandleDynamicWO(RE::TESObjectREFR* ref)
@@ -1269,17 +1512,34 @@ void Manager::HandleDynamicWO(RE::TESObjectREFR* ref)
 
 void Manager::HandleWOBaseChange(RE::TESObjectREFR* ref)
 {
-	if (!ref) return;
-	if (const auto bound = ref->GetObjectReference()) {
-		if (bound->IsDynamicForm()) return HandleDynamicWO(ref);
+    if (!ref) return;
+    if (const auto bound = ref->GetObjectReference()) {
+        if (bound->IsDynamicForm()) return HandleDynamicWO(ref);
         const auto* src = GetSource(bound->GetFormID());
-		if (!src || !src->IsHealthy()) return;
+        if (!src || !src->IsHealthy()) return;
         auto* st_inst = GetWOStageInstance(ref);
-		if (!st_inst || st_inst->count <= 0) return;
+        if (!st_inst || st_inst->count <= 0) return;
         if (const auto* bound_expected = src->IsFakeStage(st_inst->no) ? src->GetBoundObject() : st_inst->GetBound(); bound_expected->GetFormID() != bound->GetFormID()) {
-	        st_inst->count = 0;
-			std::unique_lock lock(queueMutex_);
-			queue_delete_.insert(ref->GetFormID());
+            st_inst->count = 0;
+            QUE_UNIQUE_GUARD;
+            queue_delete_.insert(ref->GetFormID());
         }
-	}
+    }
+}
+
+bool Manager::IsStageItem(FormID a_formid) {
+	    
+    if (const auto it = stages_fast_lookup.find(a_formid); it != stages_fast_lookup.end()) {
+        return true;
+    }
+
+    SRC_SHARED_GUARD;
+    for (const auto& src : sources) {
+        if (src.IsStage(a_formid)) {
+            stages_fast_lookup.insert(a_formid);
+            return true;
+        }
+    }
+
+    return false;
 }
