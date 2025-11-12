@@ -999,7 +999,7 @@ void Manager::Register(const FormID some_formid, const Count count, const RefID 
         ApplyEvolutionInInventory(src->qFormType, ref, count, some_formid, stage_formid);
     } 
     else {
-        if (auto* inserted_instance = src->InitInsertInstanceWO(stage_no, count, location_refid, register_time); !inserted_instance) {
+        if (const auto* inserted_instance = src->InitInsertInstanceWO(stage_no, count, location_refid, register_time); !inserted_instance) {
             logger::error("Register: InsertNewInstance failed 2.");
         }
         else {
@@ -1167,7 +1167,10 @@ void Manager::Update(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::T
 							logger::error("Update: MoveInstance failed for form {} and loc {}.", what_formid, to_refid);
 						}
                         else {
-							UpdateRef(new_ref);
+                            auto a_handle = new_ref->GetHandle();
+                            if (const auto a_ref = a_handle.get().get()) {
+                                UpdateRef(a_ref);
+                            }
                         }
                     }
                     else logger::error("Update: New ref is null.");
@@ -1177,12 +1180,18 @@ void Manager::Update(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::T
 	}
 
     if (to) {
-        SRC_UNIQUE_GUARD;
-        UpdateRef(to);
+        const auto a_handle = to->GetHandle();
+        if (const auto a_ref = a_handle.get().get()) {
+            SRC_UNIQUE_GUARD;
+            UpdateRef(a_ref);
+        }
     }
     if (from && (from->HasContainer() || !to)) {
-        SRC_UNIQUE_GUARD;
-		UpdateRef(from);
+        const auto a_handle = from->GetHandle();
+        if (const auto a_ref = a_handle.get().get()) {
+            SRC_UNIQUE_GUARD;
+            UpdateRef(a_ref);
+        }
 	}
 }
 
