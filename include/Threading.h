@@ -34,18 +34,18 @@ public:
             stop = true;
         }
         condition.notify_all();
-        for (std::thread &worker : workers) {
+        for (std::thread& worker : workers) {
             worker.join();
         }
     }
 
     template <class F, class... Args>
-    auto enqueue(F&& f, Args&&... args) -> std::future<std::invoke_result_t<F, Args...>> {
+    std::future<std::invoke_result_t<F, Args...>> enqueue(F&& f, Args&&... args) {
         using return_type = std::invoke_result_t<F, Args...>;
 
         auto task = std::make_shared<std::packaged_task<return_type()>>(
             std::bind(std::forward<F>(f), std::forward<Args>(args)...)
-        );
+            );
 
         std::future<return_type> res = task->get_future();
         {
@@ -71,17 +71,19 @@ inline size_t numThreads = std::max(1u, std::thread::hardware_concurrency());
 
 
 class SpeedProfiler {
-	std::chrono::time_point<std::chrono::steady_clock> start_time;
-	std::chrono::time_point<std::chrono::steady_clock> end_time;
-	std::string name;
+    std::chrono::time_point<std::chrono::steady_clock> start_time;
+    std::chrono::time_point<std::chrono::steady_clock> end_time;
+    std::string name;
+
 public:
     explicit SpeedProfiler(const std::string& name) {
-		start_time = std::chrono::steady_clock::now();
-		this->name = name;
-	}
-	~SpeedProfiler() {
-		end_time = std::chrono::steady_clock::now();
-		std::chrono::duration<double> elapsed_seconds = end_time - start_time;
-		logger::info("Elapsed time: {}", elapsed_seconds.count());
-	}
+        start_time = std::chrono::steady_clock::now();
+        this->name = name;
+    }
+
+    ~SpeedProfiler() {
+        end_time = std::chrono::steady_clock::now();
+        std::chrono::duration<double> elapsed_seconds = end_time - start_time;
+        logger::info("Elapsed time: {}", elapsed_seconds.count());
+    }
 };

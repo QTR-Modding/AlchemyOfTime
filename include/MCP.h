@@ -7,9 +7,8 @@
 static void HelpMarker(const char* desc);
 
 namespace UI {
-
     struct Instance {
-        std::pair<StageNo,StageNo> stage_number;
+        std::pair<StageNo, StageNo> stage_number;
         std::string stage_name;
         Count count;
         float start_time;
@@ -43,8 +42,11 @@ namespace UI {
         }
 
         // constructor
-        Stage(GameObject item_, StageName name_, const Duration duration_, const bool is_fake_, const bool crafting_allowed_, const unsigned int no_)
-            : item(std::move(item_)), name(std::move(name_)), duration(duration_), is_fake(is_fake_), crafting_allowed(crafting_allowed_), no(no_) {}
+        Stage(GameObject item_, StageName name_, const Duration duration_, const bool is_fake_,
+              const bool crafting_allowed_, const unsigned int no_)
+            : item(std::move(item_)), name(std::move(name_)), duration(duration_), is_fake(is_fake_),
+              crafting_allowed(crafting_allowed_), no(no_) {
+        }
 
     private:
         unsigned int no = 0;
@@ -54,10 +56,10 @@ namespace UI {
         std::set<Stage> stages;
         std::set<GameObject> containers;
         std::set<GameObject> transformers;
-        std::map<FormID,GameObject> transformer_enditems;
-        std::map<FormID,Duration> transform_durations;
+        std::map<FormID, GameObject> transformer_enditems;
+        std::map<FormID, Duration> transform_durations;
         std::set<GameObject> time_modulators;
-        std::map<FormID,float> time_modulator_multipliers;
+        std::map<FormID, float> time_modulator_multipliers;
         std::string type;
     };
 
@@ -80,7 +82,9 @@ namespace UI {
     inline ImGuiTextFilter* filter2;
     inline std::string filter_module = "None";
     inline int selected_source_index = 0;
-    inline ImGuiTableFlags table_flags = ImGuiTableFlags_Resizable | ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg;
+    inline ImGuiTableFlags table_flags = ImGuiTableFlags_Resizable | ImGuiTableFlags_SizingFixedFit |
+                                         ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_Borders |
+                                         ImGuiTableFlags_RowBg;
 
     inline Manager* M;
     void __stdcall RenderSettings();
@@ -93,7 +97,7 @@ namespace UI {
     void __stdcall RenderLoreBox();
     void Register(Manager* manager);
 
-    inline std::map<FormID,std::pair<std::string,int>> dynamic_forms;
+    inline std::map<FormID, std::pair<std::string, int>> dynamic_forms;
     inline int dft_form_limit = DynamicFormTracker::GetSingleton()->form_limit;
 
     // LoreBox UI state
@@ -101,7 +105,8 @@ namespace UI {
     inline bool lorebox_show_percentage = true;
 
     void ExcludeList();
-    void IniSettingToggle(bool& setting, const std::string& setting_name, const std::string&section_name, const char* desc);
+    void IniSettingToggle(bool& setting, const std::string& setting_name, const std::string& section_name,
+                          const char* desc);
     void DrawFilter1();
     void DrawFilter2();
     bool DrawFilterModule();
@@ -113,6 +118,5 @@ namespace UI {
 
     std::string GetName(FormID formid);
 
-	inline bool draw_debug = false;
-
+    inline bool draw_debug = false;
 };

@@ -3,13 +3,14 @@
 #include "Ticker.h"
 
 class Manager final : public Ticker, public SaveLoadData {
-	RE::TESObjectREFR* player_ref = RE::PlayerCharacter::GetSingleton()->As<RE::TESObjectREFR>();
-	
-    std::map<Types::FormFormID, std::pair<int, Count>> handle_crafting_instances;  // formid1: source formid, formid2: stage formid
+    RE::TESObjectREFR* player_ref = RE::PlayerCharacter::GetSingleton()->As<RE::TESObjectREFR>();
+
+    std::map<Types::FormFormID, std::pair<int, Count>> handle_crafting_instances;
+    // formid1: source formid, formid2: stage formid
     std::unordered_map<FormID, bool> faves_list;
     std::unordered_map<FormID, bool> equipped_list;
 
-    std::unordered_map<RefID, std::vector<FormID>> locs_to_be_handled;  // onceki sessiondan kalan fake formlar
+    std::unordered_map<RefID, std::vector<FormID>> locs_to_be_handled; // onceki sessiondan kalan fake formlar
 
     bool should_reset = false;
 
@@ -65,21 +66,25 @@ class Manager final : public Ticker, public SaveLoadData {
     static inline void ApplyStageInWorld_Fake(RE::TESObjectREFR* wo_ref, const char* xname);
 
 
-    static void ApplyStageInWorld(RE::TESObjectREFR* wo_ref, const Stage& stage, RE::TESBoundObject* source_bound = nullptr);
+    static void ApplyStageInWorld(RE::TESObjectREFR* wo_ref, const Stage& stage,
+                                  RE::TESBoundObject* source_bound = nullptr);
 
-    static inline void ApplyEvolutionInInventoryX(RE::TESObjectREFR* inventory_owner, Count update_count, FormID old_item,
-                                                   FormID new_item);
-
-    static inline void ApplyEvolutionInInventory_(RE::TESObjectREFR* inventory_owner, Count update_count, FormID old_item,
+    static inline void ApplyEvolutionInInventoryX(RE::TESObjectREFR* inventory_owner, Count update_count,
+                                                  FormID old_item,
                                                   FormID new_item);
 
-    void ApplyEvolutionInInventory(const std::string& _qformtype_, RE::TESObjectREFR* inventory_owner, Count update_count,
+    static inline void ApplyEvolutionInInventory_(RE::TESObjectREFR* inventory_owner, Count update_count,
+                                                  FormID old_item,
+                                                  FormID new_item);
+
+    void ApplyEvolutionInInventory(const std::string& _qformtype_, RE::TESObjectREFR* inventory_owner,
+                                   Count update_count,
                                    FormID old_item, FormID new_item);
 
     static inline void RemoveItem(RE::TESObjectREFR* moveFrom, FormID item_id, Count count);
 
     static void AddItem(RE::TESObjectREFR* addTo, RE::TESObjectREFR* addFrom, FormID item_id, Count count);
-    
+
     void Init();
 
     // [expects: sourceMutex_] (shared)
@@ -93,14 +98,14 @@ class Manager final : public Ticker, public SaveLoadData {
 
     // [expects: sourceMutex_] (unique)
     void UpdateWO(RE::TESObjectREFR* ref);
-	// [expects: sourceMutex_] (unique)
+    // [expects: sourceMutex_] (unique)
     void SyncWithInventory(RE::TESObjectREFR* ref);
 
     // [expects: sourceMutex_] (unique)
     void UpdateRef(RE::TESObjectREFR* loc);
 
-	// queue access helper, only safe under queueMutex_. Prefer using GetUpdateQueue() which locks internally.
-	RefStop* GetRefStop(RefID refid);
+    // queue access helper, only safe under queueMutex_. Prefer using GetUpdateQueue() which locks internally.
+    RefStop* GetRefStop(RefID refid);
 
 public:
     Manager(const std::vector<Source>& data, const std::chrono::milliseconds interval)
@@ -108,7 +113,8 @@ public:
         Init();
     }
 
-    static Manager* GetSingleton(const std::vector<Source>& data, const int u_intervall = Settings::Ticker::GetInterval(Settings::ticker_speed)) {
+    static Manager* GetSingleton(const std::vector<Source>& data,
+                                 const int u_intervall = Settings::Ticker::GetInterval(Settings::ticker_speed)) {
         static Manager singleton(data, std::chrono::milliseconds(u_intervall));
         return &singleton;
     }
@@ -120,36 +126,37 @@ public:
     std::atomic<bool> isUninstalled = false;
     std::atomic<bool> isLoading = false;
 
-	const char* GetType() override { return "Manager"; }
+    const char* GetType() override { return "Manager"; }
 
-    void Uninstall() {isUninstalled.store(true);} 
+    void Uninstall() { isUninstalled.store(true); }
 
-	// [locks: queueMutex_]
-	void ClearWOUpdateQueue();
+    // [locks: queueMutex_]
+    void ClearWOUpdateQueue();
 
     // use it only for world objects! checks if there is a stage instance for the given refid
     [[nodiscard]] bool RefIsRegistered(RefID refid);
 
     // Registers instances; may mutate sources. [expects: sourceMutex_] (unique)
     void Register(FormID some_formid, Count count, RefID location_refid,
-                                           Duration register_time = 0);
+                  Duration register_time = 0);
 
-	// These read from sources under a shared_lock internally
-	void HandleCraftingEnter(unsigned int bench_type);
+    // These read from sources under a shared_lock internally
+    void HandleCraftingEnter(unsigned int bench_type);
 
-	void HandleCraftingExit();
+    void HandleCraftingExit();
 
     // External entry point. Handles queue + source locking internally.
-    void Update(RE::TESObjectREFR* from, RE::TESObjectREFR* to=nullptr, const RE::TESForm* what=nullptr, Count count=0, RefID from_refid=0);
+    void Update(RE::TESObjectREFR* from, RE::TESObjectREFR* to = nullptr, const RE::TESForm* what = nullptr,
+                Count count = 0, RefID from_refid = 0);
 
-	// Swap based on stage instance. Requires sourceMutex_ held for pointer lifetime.
+    // Swap based on stage instance. Requires sourceMutex_ held for pointer lifetime.
     void SwapWithStage(RE::TESObjectREFR* wo_ref);
 
     // Clears and resets all data. [locks: sourceMutex_] (unique) + [locks: queueMutex_]
     void Reset();
 
-	// [locks: sourceMutex_] (unique)
-	void HandleFormDelete(FormID a_refid);
+    // [locks: sourceMutex_] (unique)
+    void HandleFormDelete(FormID a_refid);
 
     // Serialisation helpers. [locks: sourceMutex_] (shared)
     void SendData();
@@ -157,10 +164,10 @@ public:
     // for syncing the previous session's (fake form) data with the current session
     // [expects: sourceMutex_] (unique)
     void HandleLoc(RE::TESObjectREFR* loc_ref);
-    
+
     // Restore instances on load; mutates sources. [expects: sourceMutex_] (unique)
     StageInstance* RegisterAtReceiveData(FormID source_formid, RefID loc,
-                                          const StageInstancePlain& st_plain);
+                                         const StageInstancePlain& st_plain);
 
     void ReceiveData();
 
@@ -177,9 +184,9 @@ public:
     // Note: called from contexts that already hold sourceMutex_. Do not acquire it inside.
     void HandleWOBaseChange(RE::TESObjectREFR* ref);
 
-	bool IsTickerActive() const {
-	    return isRunning();
-	}
+    bool IsTickerActive() const {
+        return isRunning();
+    }
 
     bool IsStageItem(FormID a_formid);
 };

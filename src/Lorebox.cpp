@@ -3,14 +3,13 @@
 #include "Utils.h"
 
 namespace {
-
-    std::wstring Widen(const std::string& s) { return { s.begin(), s.end() }; }
+    std::wstring Widen(const std::string& s) { return {s.begin(), s.end()}; }
 
     std::wstring HexColor(const uint32_t rgb) {
         return std::format(L"#{:06X}", rgb & 0xFFFFFF);
     }
 
-    constexpr const wchar_t* INFINITY_SYM = L"~"; // ∞
+    constexpr auto INFINITY_SYM = L"~"; // ∞
 
     std::wstring FormNameW(FormID fid) {
         if (!fid) return L"";
@@ -87,12 +86,14 @@ namespace {
                 const auto ns = src.GetStage(st.no + 1);
                 t.nextFormId = ns->formid;
                 t.hasNext = true;
-                t.label = std::format(L"{} {}", Lorebox::arrow_right, StageNameOrW(src, st.no + 1, std::format(L"Stage {}", st.no + 1)));
+                t.label = std::format(L"{} {}", Lorebox::arrow_right,
+                                      StageNameOrW(src, st.no + 1, std::format(L"Stage {}", st.no + 1)));
             } else {
                 t.nextFormId = src.settings.decayed_id;
                 t.hasNext = t.nextFormId != 0;
                 auto decayed_form = RE::TESForm::LookupByID(t.nextFormId);
-                t.label = std::format(L"{} {}", Lorebox::arrow_right, decayed_form ? Widen(decayed_form->GetName()) : L"");
+                t.label = std::format(L"{} {}", Lorebox::arrow_right,
+                                      decayed_form ? Widen(decayed_form->GetName()) : L"");
             }
         } else {
             // Backwards
@@ -101,7 +102,8 @@ namespace {
                 const auto ps = src.GetStage(st.no - 1);
                 t.nextFormId = ps->formid;
                 t.hasNext = true;
-                t.label = std::format(L"{} {}", Lorebox::arrow_left, StageNameOrW(src, st.no - 1, std::format(L"Stage {}", st.no - 1)));
+                t.label = std::format(L"{} {}", Lorebox::arrow_left,
+                                      StageNameOrW(src, st.no - 1, std::format(L"Stage {}", st.no - 1)));
             } else {
                 t.label = std::format(L"{} Initial", Lorebox::arrow_left);
             }
@@ -123,23 +125,21 @@ namespace {
     };
 }
 
-std::wstring Lorebox::BuildFrozenLore()
-{
+std::wstring Lorebox::BuildFrozenLore() {
     return BuildFrozenLore(L"");
 }
 
-std::wstring Lorebox::BuildFrozenLore(const std::wstring& currentStageName)
-{
+std::wstring Lorebox::BuildFrozenLore(const std::wstring& currentStageName) {
     std::wstring out;
 
     // Optional title
-    if (Lorebox::show_title.load(std::memory_order_relaxed)) {
-        const auto titleHex = HexColor(Lorebox::color_title.load());
+    if (show_title.load(std::memory_order_relaxed)) {
+        const auto titleHex = HexColor(color_title.load());
         out += std::format(L"<b><font color=\"{}\">Alchemy of Time</font></b>", titleHex);
         out += L"<br>";
     }
 
-    const auto HEX_NEUTRAL = HexColor(Lorebox::color_neutral.load());
+    const auto HEX_NEUTRAL = HexColor(color_neutral.load());
 
     // Build single-line body: optional current stage name, then infinity and optional percentage
     std::wstring line;
@@ -148,11 +148,11 @@ std::wstring Lorebox::BuildFrozenLore(const std::wstring& currentStageName)
     } else {
         line = INFINITY_SYM;
     }
-    if (Lorebox::show_percentage.load(std::memory_order_relaxed)) {
+    if (show_percentage.load(std::memory_order_relaxed)) {
         line += L" (0%)";
     }
 
-    if (Lorebox::colorize_rows.load(std::memory_order_relaxed)) {
+    if (colorize_rows.load(std::memory_order_relaxed)) {
         out += std::format(L"<font color=\"{}\">{}</font>", HEX_NEUTRAL, line);
     } else {
         out += line;
@@ -163,13 +163,13 @@ std::wstring Lorebox::BuildFrozenLore(const std::wstring& currentStageName)
 
 bool Lorebox::AddKeyword(RE::BGSKeywordForm* a_form, FormID a_formid) {
     if (std::shared_lock lock(kw_mutex);
-        kw_added.contains(a_formid)) return false;  // already added
+        kw_added.contains(a_formid))
+        return false; // already added
 
     if (!a_form->HasKeyword(aot_kw)) {
         if (!a_form->AddKeyword(aot_kw)) {
             logger::error("Failed to add keyword to formid: {:x}", a_formid);
-        }
-        else {
+        } else {
             std::unique_lock ulock(kw_mutex);
             kw_added.insert(a_formid);
             kw_removed.erase(a_formid);
@@ -188,16 +188,16 @@ bool Lorebox::ReAddKW(RE::TESForm* a_form) {
 
     if (std::shared_lock lock(kw_mutex);
         !kw_removed.contains(a_formid)) {
-        return false;  // not removed
+        return false; // not removed
     }
 
     return AddKeyword(kw_form, a_formid);
 }
 
 bool Lorebox::RemoveKW(RE::TESForm* a_form) {
-
     if (std::shared_lock lock(kw_mutex);
-        !kw_added.contains(a_form->GetFormID())) return false;  // not added
+        !kw_added.contains(a_form->GetFormID()))
+        return false; // not added
 
     const auto kw_form = a_form->As<RE::BGSKeywordForm>();
 
@@ -218,14 +218,13 @@ bool Lorebox::RemoveKW(RE::TESForm* a_form) {
 }
 
 void Lorebox::ReAddKWs() {
-
-    std::vector<std::pair<RE::BGSKeywordForm*,FormID>> to_add;
+    std::vector<std::pair<RE::BGSKeywordForm*, FormID>> to_add;
     {
         std::unique_lock lock(kw_mutex);
         for (const auto& formid : kw_removed) {
             if (const auto form = RE::TESForm::LookupByID(formid)) {
                 if (const auto kw_form = form->As<RE::BGSKeywordForm>()) {
-                    to_add.push_back({ kw_form, formid });
+                    to_add.push_back({kw_form, formid});
                 }
             }
         }
@@ -233,7 +232,7 @@ void Lorebox::ReAddKWs() {
     }
 
     for (const auto& [kw_form, formid] : to_add) {
-        AddKeyword(kw_form,formid);
+        AddKeyword(kw_form, formid);
     }
 }
 
@@ -242,14 +241,12 @@ bool Lorebox::HasKW(const RE::TESForm* a_form) {
     return kw_added.contains(a_form->GetFormID());
 }
 
-bool Lorebox::IsRemoved(FormID a_formid)
-{
+bool Lorebox::IsRemoved(FormID a_formid) {
     std::shared_lock lock(kw_mutex);
     return kw_removed.contains(a_formid);
 }
 
-std::wstring Lorebox::BuildLoreForHover()
-{
+std::wstring Lorebox::BuildLoreForHover() {
     std::string menu_name;
     auto item_data = Menu::GetSelectedItemDataInMenu(menu_name);
 
@@ -278,18 +275,19 @@ std::wstring Lorebox::BuildLoreForHover()
     }
 
     return BuildLoreFor(item_data->objDesc->GetObject()->GetFormID(), owner->GetFormID());
-    
 }
 
 std::wstring Lorebox::BuildLoreFor(FormID hovered, RefID ownerId) {
-
     // Snapshot sources safely
     const auto sources = M->GetSources();
 
     const Source* src = nullptr;
     for (const auto& s : sources) {
         if (!s.IsHealthy()) continue;
-        if (s.IsStage(hovered)) { src = &s; break; }
+        if (s.IsStage(hovered)) {
+            src = &s;
+            break;
+        }
     }
     if (!src) return return_str;
 
@@ -326,11 +324,14 @@ std::wstring Lorebox::BuildLoreFor(FormID hovered, RefID ownerId) {
             }
 
             const float nextT = src->GetNextUpdateTime(&st);
-            r.minutes = std::abs(r.slope) < EPSILON ? -1
-                       : nextT > 0.f ? static_cast<int>(std::round((nextT - now) * 60.f)) : -1;
+            r.minutes = std::abs(r.slope) < EPSILON
+                            ? -1
+                            : nextT > 0.f
+                            ? static_cast<int>(std::round((nextT - now) * 60.f))
+                            : -1;
 
             // Compute percentage
-            if (Lorebox::show_percentage.load(std::memory_order_relaxed)) {
+            if (show_percentage.load(std::memory_order_relaxed)) {
                 float pct = -1.f;
                 if (st.xtra.is_transforming) {
                     const auto tr = st.GetDelayerFormID();
@@ -358,12 +359,12 @@ std::wstring Lorebox::BuildLoreFor(FormID hovered, RefID ownerId) {
             // Collect mod/transformer name for separate line if enabled
             if (auto nm = FormNameW(r.mod); !nm.empty()) {
                 if (r.transforming) {
-                    if (Lorebox::show_modulator_name.load(std::memory_order_relaxed)) {
+                    if (show_modulator_name.load(std::memory_order_relaxed)) {
                         r.tag = std::format(L"[{}]", nm);
                     }
                 } else {
-                    if (Lorebox::show_modulator_name.load(std::memory_order_relaxed)) {
-                        if (Lorebox::show_multiplier.load(std::memory_order_relaxed)) {
+                    if (show_modulator_name.load(std::memory_order_relaxed)) {
+                        if (show_multiplier.load(std::memory_order_relaxed)) {
                             // Append multiplier if known; fall back to slope if not found in settings
                             float mult = r.slope;
                             if (src->settings.delayers.contains(r.mod)) {
@@ -390,35 +391,35 @@ std::wstring Lorebox::BuildLoreFor(FormID hovered, RefID ownerId) {
         if (a.transforming != b.transforming) return a.transforming > b.transforming; // transforming first
         return a.next < b.next;
     });
-        
+
     // Build multi-line body (each StageInstance on a separate line) with a bullet between rows
     std::wstring out;
     out.reserve(512);
 
     // Optional title
-    if (Lorebox::show_title.load(std::memory_order_relaxed)) {
-        const auto titleHex = HexColor(Lorebox::color_title.load());
-		out += std::format(L"<b><font color=\"{}\">Alchemy of Time</font></b>", titleHex);
+    if (show_title.load(std::memory_order_relaxed)) {
+        const auto titleHex = HexColor(color_title.load());
+        out += std::format(L"<b><font color=\"{}\">Alchemy of Time</font></b>", titleHex);
         out += L"<br>";
     }
 
     // Colors
-    const auto HEX_NEUTRAL   = HexColor(Lorebox::color_neutral.load());
-    const auto HEX_SLOW      = HexColor(Lorebox::color_slow.load());
-    const auto HEX_FAST      = HexColor(Lorebox::color_fast.load());
-    const auto HEX_TRANSFORM = HexColor(Lorebox::color_transform.load());
+    const auto HEX_NEUTRAL = HexColor(color_neutral.load());
+    const auto HEX_SLOW = HexColor(color_slow.load());
+    const auto HEX_FAST = HexColor(color_fast.load());
+    const auto HEX_TRANSFORM = HexColor(color_transform.load());
 
     int printed = 0;
-    
+
     bool firstLine = true;
-    const auto HEX_SEP = HexColor(Lorebox::color_separator.load());
+    const auto HEX_SEP = HexColor(color_separator.load());
     for (const auto& r : rows) {
-        if (printed >= Lorebox::MAX_ROWS) break;
+        if (printed >= MAX_ROWS) break;
 
         const std::wstring eta = std::abs(r.slope) < EPSILON ? std::wstring{INFINITY_SYM} : HrsMinsW(r.minutes / 60.f);
 
         // choose color if enabled
-        const bool doColors = Lorebox::colorize_rows.load(std::memory_order_relaxed);
+        const bool doColors = colorize_rows.load(std::memory_order_relaxed);
         const std::wstring* rowColor = &HEX_NEUTRAL;
         if (doColors) {
             if (r.transforming) rowColor = &HEX_TRANSFORM;
@@ -429,12 +430,12 @@ std::wstring Lorebox::BuildLoreFor(FormID hovered, RefID ownerId) {
 
         if (!firstLine) {
             // Insert a separator symbol between lines
-            out += std::format(L"<br><font color=\"{}\">{}</font><br>", HEX_SEP, Lorebox::separator_symbol);
+            out += std::format(L"<br><font color=\"{}\">{}</font><br>", HEX_SEP, separator_symbol);
         }
         firstLine = false;
 
         std::wstring line;
-        if (Lorebox::show_percentage.load(std::memory_order_relaxed) && r.pct >= 0) {
+        if (show_percentage.load(std::memory_order_relaxed) && r.pct >= 0) {
             if (!r.curr.empty()) {
                 line = std::format(L"{}x {} {} | {} ({}%)", r.count, r.curr, r.next, eta, r.pct);
             } else {

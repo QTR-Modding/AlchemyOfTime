@@ -45,7 +45,7 @@ bool SaveLoadData::Save(SKSE::SerializationInterface* serializationInterface) {
 }
 
 bool SaveLoadData::Save(SKSE::SerializationInterface* serializationInterface, const std::uint32_t type,
-    const std::uint32_t version) {
+                        const std::uint32_t version) {
     if (!serializationInterface->OpenRecord(type, version)) {
         logger::error("Failed to open record for Data Serialization!");
         return false;
@@ -64,18 +64,16 @@ bool SaveLoadData::Load(SKSE::SerializationInterface* serializationInterface) {
     Locker locker(m_Lock);
     m_Data.clear();
 
-
     for (auto i = 0; i < recordDataSize; i++) {
-                
         SaveDataRHS rhs;
-                 
+
         std::uint32_t formid = 0;
         serializationInterface->ReadRecordData(formid);
         if (!serializationInterface->ResolveFormID(formid, formid)) {
             logger::error("Failed to resolve form ID, 0x{:X}.", formid);
             continue;
         }
-                 
+
         std::string editorid;
         if (!Serialization::read_string(serializationInterface, editorid)) {
             logger::error("Failed to read editorid");
@@ -85,7 +83,7 @@ bool SaveLoadData::Load(SKSE::SerializationInterface* serializationInterface) {
         std::uint32_t refid = 0;
         serializationInterface->ReadRecordData(refid);
 
-        SaveDataLHS lhs({formid,editorid},refid);
+        SaveDataLHS lhs({formid, editorid}, refid);
 
         std::size_t rhsSize = 0;
         serializationInterface->ReadRecordData(rhsSize);
@@ -98,7 +96,7 @@ bool SaveLoadData::Load(SKSE::SerializationInterface* serializationInterface) {
 
         m_Data[lhs] = rhs;
     }
-             
+
     return true;
 }
 
@@ -141,7 +139,7 @@ bool DFSaveLoadData::Save(SKSE::SerializationInterface* serializationInterface) 
 }
 
 bool DFSaveLoadData::Save(SKSE::SerializationInterface* serializationInterface, const std::uint32_t type,
-    const std::uint32_t version) {
+                          const std::uint32_t version) {
     if (!serializationInterface->OpenRecord(type, version)) {
         logger::error("Failed to open record for Data Serialization!");
         return false;
@@ -175,7 +173,6 @@ bool DFSaveLoadData::Load(SKSE::SerializationInterface* serializationInterface) 
             logger::error("Failed to read editorid");
             return false;
         }
-
 
         DFSaveDataLHS lhs({formid, editorid});
 

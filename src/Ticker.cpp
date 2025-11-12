@@ -1,8 +1,7 @@
 #include "Ticker.h"
 
-void Ticker::Start()
-{
-	if (m_Running) {
+void Ticker::Start() {
+    if (m_Running) {
         return;
     }
     m_Running = true;
@@ -13,15 +12,13 @@ void Ticker::Start()
     }
 }
 
-void Ticker::UpdateInterval(const std::chrono::milliseconds newInterval)
-{
+void Ticker::UpdateInterval(const std::chrono::milliseconds newInterval) {
     m_IntervalMutex.lock();
     m_Interval = newInterval;
     m_IntervalMutex.unlock();
 }
 
-void Ticker::RunLoop()
-{
+void Ticker::RunLoop() {
     m_ThreadActive = true;
     while (m_Running) {
         m_OnTick();
