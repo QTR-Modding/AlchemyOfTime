@@ -280,6 +280,10 @@ void Manager::UpdateLoop() {
     if (const auto ui = RE::UI::GetSingleton(); ui && ui->GameIsPaused()) return;
 
     std::vector<RefID> ref_stops_copy;
+    {
+        QUE_SHARED_GUARD;
+        ref_stops_copy.reserve(_ref_stops_.size());
+    }
     for (
         QUE_SHARED_GUARD;
         const auto& key : _ref_stops_ | std::views::keys) {
@@ -334,8 +338,9 @@ void Manager::QueueWOUpdate(const RefStop& a_refstop) {
     if (!Settings::world_objects_evolve.load()) return;
     const auto refid = a_refstop.ref_id;
     QUE_UNIQUE_GUARD;
-    if (_ref_stops_.contains(refid)) _ref_stops_.at(refid).Update(a_refstop);
-    else _ref_stops_[refid] = a_refstop;
+    if (auto [it, inserted] = _ref_stops_.try_emplace(refid, a_refstop); !inserted) {
+        it->second.Update(a_refstop);
+    }
     Start();
 }
 
@@ -907,8 +912,8 @@ void Manager::UpdateRef(RE::TESObjectREFR* loc) {
 }
 
 RefStop* Manager::GetRefStop(const RefID refid) {
-    if (!_ref_stops_.contains(refid)) return nullptr;
-    return &_ref_stops_.at(refid);
+    const auto it = _ref_stops_.find(refid);
+    return it == _ref_stops_.end() ? nullptr : &it->second;
 }
 
 void Manager::ClearWOUpdateQueue() {
