@@ -1144,6 +1144,7 @@ void Manager::Update(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::T
             auto what_formid = what->GetFormID();
 
             if (src->data.contains(from_refid)) {
+                // remaining count
                 count = src->MoveInstances(from_refid, to_refid, what_formid, count, true);
             }
 
@@ -1157,10 +1158,12 @@ void Manager::Update(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::T
                 for (auto& st_inst : src->data.at(to_refid)) {
                     const auto temp_count = st_inst.count;
                     if (!handled_first) {
-                        if (to->extraList.GetCount() != temp_count)
-                            to->extraList.SetCount(
-                                static_cast<uint16_t>(temp_count));
-                        if (is_player_owned) to->extraList.SetOwner(RE::TESForm::LookupByID(0x07));
+                        if (to->extraList.GetCount() != temp_count) {
+                            to->extraList.SetCount(static_cast<uint16_t>(temp_count));
+                        }
+                        if (is_player_owned) {
+                            to->extraList.SetOwner(RE::TESForm::LookupByID(0x07));
+                        }
                         handled_first = true;
                     } else if (const auto new_ref = WorldObject::DropObjectIntoTheWorld(
                         st_inst.GetBound(), temp_count, is_player_owned)) {

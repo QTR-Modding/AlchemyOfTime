@@ -22,16 +22,11 @@ namespace {
     TranslateFn g_OrigTranslateAny = nullptr;
     void** g_TranslatorVTable = nullptr; // remembers which vtable we patched
 
-    std::string utf8_from_w(const wchar_t* w) {
-        return wide_to_utf8(w);
-    }
-
     // Generic hook for any GFxTranslator::Translate (vanilla or custom)
     void AnyTranslator_Translate_Hook(RE::GFxTranslator* a_this, RE::GFxTranslator::TranslateInfo* a_info) {
         // Always fall through to original unless we actually handle a specific key
         if (g_OrigTranslateAny) {
-            // Optionally: inspect key before calling original
-            const auto keyUtf8 = utf8_from_w(a_info->GetKey());
+            const auto keyUtf8 = wide_to_utf8(a_info->GetKey());
 
             // Let the current translator do its work first
             g_OrigTranslateAny(a_this, a_info);
@@ -39,23 +34,6 @@ namespace {
             if (is_menu_open && keyUtf8 == Lorebox::aot_kw_name_lorebox) {
                 const std::wstring body = Lorebox::BuildLoreForHover();
                 a_info->SetResult(body.c_str(), body.size());
-                if (body == Lorebox::return_str) {
-                    if (const auto selected_item = Menu::GetSelectedItemDataInMenu()) {
-                        if (!inventory_update_timeout && Lorebox::RemoveKW(selected_item->objDesc->GetObject())) {
-                            SKSE::GetTaskInterface()->AddUITask([] {
-                                RE::SendUIMessage::SendInventoryUpdateMessage(
-                                    RE::PlayerCharacter::GetSingleton(), nullptr);
-                                inventory_update_timeout = true;
-                                clib_utilsQTR::Tasker::GetSingleton()->PushTask(
-                                    [] {
-                                        inventory_update_timeout = false;
-                                    },
-                                    inventory_update_timeout_ms
-                                    );
-                            });
-                        }
-                    }
-                }
             }
         }
     }
@@ -168,10 +146,6 @@ void Hooks::Install(Manager* mngr) {
     const REL::Relocation<std::uintptr_t> add_item_functor_hook{RELOCATION_ID(55946, 56490)};
     add_item_functor_ = trampoline.write_call<5>(add_item_functor_hook.address() + 0x15D, add_item_functor);
 
-    const REL::Relocation<std::uintptr_t> function{REL::RelocationID(51019, 51897)};
-    InventoryHoverHook::originalFunction = trampoline.write_call<5>(function.address() + REL::Relocate(0x114, 0x22c),
-                                                                    InventoryHoverHook::thunk);
-
     // Install a Translate hook for whatever translator is currently active (vanilla or custom)
     InstallTranslatorVtableHook();
 }
@@ -246,34 +220,4 @@ void MoveItemHooks<RefType>::addObjectToContainer(RefType* a_this, RE::TESBoundO
     add_object_to_container_(a_this, a_object, a_extraList, a_count, a_fromRefr);
 
     M->Update(a_fromRefr, a_this, a_object, a_count);
-}
-
-int64_t InventoryHoverHook::thunk(RE::InventoryEntryData* a1) {
-    // gets called before translation hook
-
-    const auto a_bound = a1->GetObject();
-    const auto a_bound_formid = a_bound->GetFormID();
-    const auto res = originalFunction(a1);
-
-    if (!inventory_update_timeout && Lorebox::IsRemoved(a_bound_formid)) {
-        if (const auto selected_item = Menu::GetSelectedItemDataInMenu();
-            selected_item && selected_item->objDesc == a1) {
-            if (const auto owner = Menu::GetOwnerOfItem(selected_item);
-                owner &&
-                Lorebox::BuildLoreFor(a_bound_formid, owner->GetFormID()) != Lorebox::return_str &&
-                Lorebox::ReAddKW(a_bound)) {
-                SKSE::GetTaskInterface()->AddUITask([] {
-                    RE::SendUIMessage::SendInventoryUpdateMessage(RE::PlayerCharacter::GetSingleton(), nullptr);
-                    inventory_update_timeout = true;
-                    clib_utilsQTR::Tasker::GetSingleton()->PushTask(
-                        [] {
-                            inventory_update_timeout = false;
-                        },
-                        inventory_update_timeout_ms
-                        );
-                });
-            }
-        }
-    }
-    return res;
 }

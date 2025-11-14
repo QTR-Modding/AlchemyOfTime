@@ -3,12 +3,7 @@
 
 namespace Hooks {
 
-    /*const uint8_t n_hooks = 0;
-    const size_t trampoline_size = n_hooks * 14;*/
-
 	inline bool is_menu_open = false;
-    inline bool inventory_update_timeout = false;
-	inline int inventory_update_timeout_ms = 500;
 
     void Install(Manager* mngr);
 
@@ -28,12 +23,6 @@ namespace Hooks {
         static inline REL::Relocation<decltype(Update)> Update_;
 		static void Install();
 	};
-
-    // Credits: SkyrimThiago
-    struct InventoryHoverHook {
-        static int64_t thunk(RE::InventoryEntryData* a1);
-        static inline REL::Relocation<decltype(thunk)> originalFunction;
-    };
 
     template <typename RefType>
     class MoveItemHooks {
