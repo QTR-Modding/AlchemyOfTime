@@ -344,9 +344,7 @@ class DynamicFormTracker : public DFSaveLoadData {
         // alchemy
         const auto alch_underlying = underlying->As<RE::AlchemyItem>();
         const auto alch_derivative = derivative->As<RE::AlchemyItem>();
-        bool asd1 = alch_underlying != nullptr;
-        bool asd2 = alch_derivative != nullptr;
-        if (const int asd = asd1 + asd2; asd % 2 != 0) {
+        if ((alch_underlying != nullptr) != (alch_derivative != nullptr)) {
             logger::trace("Alchemy status does not match.");
             return false;
         }
@@ -371,9 +369,7 @@ class DynamicFormTracker : public DFSaveLoadData {
         // ingredient
         const auto ingr_underlying = underlying->As<RE::IngredientItem>();
         const auto ingr_derivative = derivative->As<RE::IngredientItem>();
-        asd1 = ingr_underlying != nullptr;
-        asd2 = ingr_derivative != nullptr;
-        if (const int asd = asd1 + asd2; asd % 2 != 0) {
+        if ((ingr_underlying != nullptr) != (ingr_derivative != nullptr)) {
             logger::trace("Ingredient status does not match.");
             return false;
         }

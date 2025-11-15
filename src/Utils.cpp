@@ -244,7 +244,6 @@ void EquipItem(RE::TESBoundObject* item, const bool unequip) {
 }
 
 bool IsEquipped(RE::TESBoundObject* item) {
-    logger::trace("IsEquipped");
 
     if (!item) {
         logger::trace("Item is null");
@@ -253,8 +252,7 @@ bool IsEquipped(RE::TESBoundObject* item) {
 
     const auto player_ref = RE::PlayerCharacter::GetSingleton();
     auto inventory = player_ref->GetInventory();
-    const auto it = inventory.find(item);
-    if (it != inventory.end()) {
+    if (const auto it = inventory.find(item); it != inventory.end()) {
         if (it->second.first <= 0) logger::warn("Item count is 0");
         return it->second.second->IsWorn();
     }
