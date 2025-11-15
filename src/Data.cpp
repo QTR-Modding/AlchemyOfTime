@@ -344,23 +344,23 @@ Count Source::MoveInstances(const RefID from_ref, const RefID to_ref, const Form
     // older_first: true to move older instances first
     if (data.empty()) {
         logger::warn("No data found for source {}", editorid);
-        return 0;
+        return count;
     }
     if (init_failed) {
         logger::critical("MoveInstances: Initialisation failed.");
-        return 0;
+        return count;
     }
     if (count <= 0) {
         logger::error("Count is less than or equal 0.");
-        return 0;
+        return count;
     }
     if (!instance_formid) {
         logger::error("Instance formid is 0.");
-        return 0;
+        return count;
     }
     if (from_ref == to_ref) {
         logger::error("From and to refs are the same.");
-        return 0;
+        return count;
     }
 
     if (!data.contains(from_ref)) {
@@ -371,29 +371,29 @@ Count Source::MoveInstances(const RefID from_ref, const RefID to_ref, const Form
     std::vector<size_t> instances_candidates = {};
     size_t index_ = 0;
     for (const auto& st_inst : data.at(from_ref)) {
-        if (st_inst.xtra.form_id == instance_formid) {
+        if (st_inst.xtra.form_id == instance_formid && st_inst.count > 0) {
             instances_candidates.push_back(index_);
         }
         index_++;
     }
 
     if (instances_candidates.empty()) {
-        logger::warn("No instances found for formid {:x} and location {}", instance_formid, from_ref);
-        return 0;
+        logger::info("No instances found for formid {:x} and location {:x}", instance_formid, from_ref);
+        return count;
     }
 
     const auto curr_time = RE::Calendar::GetSingleton()->GetHoursPassed();
     if (older_first) {
         std::ranges::sort(instances_candidates,
                           [this, from_ref, curr_time](const size_t a, const size_t b) {
-                              return this->data[from_ref][a].GetElapsed(curr_time) >
-                                     this->data[from_ref][b].GetElapsed(curr_time); // move the older stuff
+                              return this->data.at(from_ref)[a].GetElapsed(curr_time) >
+                                     this->data.at(from_ref)[b].GetElapsed(curr_time); // move the older stuff
                           });
     } else {
         std::ranges::sort(instances_candidates,
                           [this, from_ref, curr_time](const size_t a, const size_t b) {
-                              return this->data[from_ref][a].GetElapsed(curr_time) <
-                                     this->data[from_ref][b].GetElapsed(curr_time); // move the newer stuff
+                              return this->data.at(from_ref)[a].GetElapsed(curr_time) <
+                                     this->data.at(from_ref)[b].GetElapsed(curr_time); // move the newer stuff
                           });
     }
 
@@ -403,7 +403,7 @@ Count Source::MoveInstances(const RefID from_ref, const RefID to_ref, const Form
 
         StageInstance* instance;
         if (removed_indices.empty()) {
-            instance = &data[from_ref][index];
+            instance = &data.at(from_ref)[index];
         } else {
             int shift = 0;
             for (const size_t removed_index : removed_indices) {
@@ -413,7 +413,7 @@ Count Source::MoveInstances(const RefID from_ref, const RefID to_ref, const Form
                 }
                 if (index > removed_index) shift++;
             }
-            instance = &data[from_ref][index - shift];
+            instance = &data.at(from_ref)[index - shift];
         }
 
         if (count <= instance->count) {
@@ -638,16 +638,30 @@ void Source::CleanUpData() {
             }
         }
         for (auto it = instances.begin(); it != instances.end();) {
-            const bool should_erase =
-                it->count <= 0 ||
+            if (it->count <= 0 ||
                 it->start_time > curr_time ||
-                (it->xtra.is_decayed || !IsStageNo(it->no));
-
-            const auto decay_time = should_erase ? 0.f : GetDecayTime(*it);
-            if (should_erase ||
-                decay_time > 0.f && curr_time - decay_time > static_cast<float>(Settings::nForgettingTime)) {
+                (it->xtra.is_decayed || !IsStageNo(it->no))) {
                 it = instances.erase(it);
-            } else ++it;
+                continue;
+            }
+
+            //check if current time modulator is valid
+            const auto curr_delayer = it->GetDelayerFormID();
+            if (it->xtra.is_transforming) {
+                if (!settings.transformers.contains(curr_delayer)) {
+                    logger::warn("Transformer Formid {:x} not found in default settings.", curr_delayer);
+                    it->RemoveTimeMod(curr_time);
+                }
+            } else if (curr_delayer != 0 && !settings.delayers.contains(curr_delayer)) {
+                logger::warn("Delayer Formid {:x} not found in default settings.", curr_delayer);
+                it->RemoveTimeMod(curr_time);
+            }
+
+            if (curr_time - GetDecayTime(*it) > static_cast<float>(Settings::nForgettingTime)) {
+                it = instances.erase(it);
+                continue;
+            }
+            ++it;
         }
     }
 
@@ -737,7 +751,7 @@ bool Source::UpdateStageInstance(StageInstance& st_inst, const float curr_time) 
 
     if (st_inst.xtra.is_transforming) {
         if (!settings.transformers.contains(curr_delayer)) {
-            logger::error("Transformer Formid {} not found in default settings.", curr_delayer);
+            logger::error("Transformer Formid {:x} not found in default settings.", curr_delayer);
             st_inst.RemoveTimeMod(curr_time);
             return false;
         }
@@ -766,7 +780,7 @@ bool Source::UpdateStageInstance(StageInstance& st_inst, const float curr_time) 
     }
 
     if (curr_delayer != 0 && !settings.delayers.contains(curr_delayer)) {
-        logger::error("Delayer Formid {} not found in default settings.", curr_delayer);
+        logger::error("Delayer Formid {:x} not found in default settings.", curr_delayer);
         st_inst.RemoveTimeMod(curr_time);
         return false;
     }
@@ -804,7 +818,7 @@ Stage Source::GetFinalStage() const {
 Stage Source::GetTransformedStage(const FormID key_formid) const {
     Stage trnsf_st;
     if (!settings.transformers.contains(key_formid)) {
-        logger::error("Transformer Formid {} not found in settings.", key_formid);
+        logger::error("Transformer Formid {:x} not found in settings.", key_formid);
         return trnsf_st;
     }
     const auto& [fst, snd] = settings.transformers.at(key_formid);
