@@ -69,17 +69,9 @@ class Manager final : public Ticker, public SaveLoadData {
     static void ApplyStageInWorld(RE::TESObjectREFR* wo_ref, const Stage& stage,
                                   RE::TESBoundObject* source_bound = nullptr);
 
-    static inline void ApplyEvolutionInInventoryX(RE::TESObjectREFR* inventory_owner, Count update_count,
-                                                  FormID old_item,
-                                                  FormID new_item);
-
-    static inline void ApplyEvolutionInInventory_(RE::TESObjectREFR* inventory_owner, Count update_count,
-                                                  FormID old_item,
-                                                  FormID new_item);
-
-    void ApplyEvolutionInInventory(const std::string& _qformtype_, RE::TESObjectREFR* inventory_owner,
-                                   Count update_count,
-                                   FormID old_item, FormID new_item);
+    [[nodiscard]] static bool ApplyEvolutionInInventory(RE::TESObjectREFR* inventory_owner,
+                                                 Count update_count,
+                                                 FormID old_item, FormID new_item);
 
     static inline void RemoveItem(RE::TESObjectREFR* moveFrom, FormID item_id, Count count);
 

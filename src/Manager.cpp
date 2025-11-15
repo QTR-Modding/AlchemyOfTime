@@ -492,130 +492,64 @@ void Manager::ApplyStageInWorld(RE::TESObjectREFR* wo_ref, const Stage& stage, R
         WorldObject::SwapObjects(wo_ref, source_bound);
         ApplyStageInWorld_Fake(wo_ref, stage.GetExtraText());
     }
-    //SKSE::GetTaskInterface()->AddTask([wo_ref]() {
-    //	if (auto a_obj = wo_ref->Get3D()) {
-    //		a_obj->art
-    //	}
-    //});
 }
 
-inline void Manager::ApplyEvolutionInInventoryX(RE::TESObjectREFR* inventory_owner, const Count update_count,
-                                                const FormID old_item, const FormID new_item) {
-    // ReSharper disable once CppLocalVariableMayBeConst
-    auto* old_bound = RE::TESForm::LookupByID<RE::TESBoundObject>(old_item);
-    if (!old_bound) {
-        logger::error("Old item is null.");
-        return;
-    }
-
-    const auto inventory = inventory_owner->GetInventory();
-    const auto entry = inventory.find(old_bound);
-    if (entry == inventory.end()) {
-        logger::error("Item not found in inventory.");
-        return;
-    }
-    if (!entry->second.second) {
-        logger::error("Item data is null.");
-        return;
-    }
-    if (entry->second.second->IsQuestObject()) {
-        logger::warn("Item is a quest object.");
-        return;
-    }
-
-    const bool has_xList = Inventory::EntryHasXData(entry->second.second.get());
-
-    const auto inv_count = std::min(update_count, entry->second.first);
-
-    const auto ref_handle = WorldObject::DropObjectIntoTheWorld(RE::TESForm::LookupByID<RE::TESBoundObject>(new_item),
-                                                                inv_count);
-    if (has_xList) {
-        if (!xData::UpdateExtras(entry->second.second->extraLists->front(), &ref_handle->extraList)) {
-            logger::info("ExtraDataList not updated.");
-        }
-    } else logger::info("original ExtraDataList is null.");
-
-    if (!WorldObject::PlayerPickUpObject(ref_handle, inv_count)) {
-        logger::error("Item not picked up.");
-        return;
-    }
-
-    RemoveItem(inventory_owner, old_item, inv_count);
-}
-
-inline void Manager::ApplyEvolutionInInventory_(RE::TESObjectREFR* inventory_owner, Count update_count,
-                                                const FormID old_item, const FormID new_item) {
-    if (update_count <= 0) {
-        logger::error("Update count is 0 or less {}.", update_count);
-        return;
-    }
-
-    // ReSharper disable once CppLocalVariableMayBeConst
-    auto old_bound = RE::TESForm::LookupByID<RE::TESBoundObject>(old_item);
-    if (!old_bound) {
-        logger::error("Old item is null.");
-        return;
-    }
-    const auto inventory = inventory_owner->GetInventory();
-    const auto entry = inventory.find(old_bound);
-    if (entry == inventory.end()) {
-        logger::error("Item not found in inventory.");
-        return;
-    }
-    const auto inv_count = entry->second.first;
-    if (inv_count <= 0) {
-        logger::warn("Item count in inventory is 0 or less {}.", inv_count);
-        return;
-    }
-    if (!entry->second.second) {
-        logger::error("Item data is null.");
-        return;
-    }
-    if (entry->second.second->IsQuestObject()) {
-        logger::warn("Item is a quest object.");
-        return;
-    }
-    RemoveItem(inventory_owner, old_item, std::min(update_count, inv_count));
-    AddItem(inventory_owner, nullptr, new_item, update_count);
-}
-
-
-void Manager::ApplyEvolutionInInventory(const std::string& _qformtype_, RE::TESObjectREFR* inventory_owner,
-                                        const Count update_count, const FormID old_item, const FormID new_item) {
+bool Manager::ApplyEvolutionInInventory(RE::TESObjectREFR* inventory_owner,
+                                        Count update_count, const FormID old_item, const FormID new_item) {
     if (!inventory_owner) {
         logger::error("Inventory owner is null.");
-        return;
+        return false;
     }
     if (!old_item || !new_item) {
         logger::error("Item is null.");
-        return;
+        return false;
     }
-    if (!update_count) {
-        logger::warn("Update count is 0.");
-        return;
+    if (update_count <= 0) {
+        logger::error("Update count is 0 or less {}.", update_count);
+        return false;
     }
     if (old_item == new_item) {
-        return;
+        return false;
     }
 
-    bool is_faved = false;
-    bool is_equipped = false;
-    if (inventory_owner->IsPlayerRef()) {
-        is_faved = IsPlayerFavorited(RE::TESForm::LookupByID<RE::TESBoundObject>(old_item));
-        is_equipped = IsEquipped(RE::TESForm::LookupByID<RE::TESBoundObject>(old_item));
+    const auto old_bound = RE::TESForm::LookupByID<RE::TESBoundObject>(old_item);
+    if (!old_bound) {
+        logger::error("Old item is null.");
+        return false;
     }
-    if (is_faved || is_equipped || Vector::HasElement<std::string>(Settings::xQFORMS, _qformtype_)) {
-        ApplyEvolutionInInventoryX(inventory_owner, update_count, old_item, new_item);
-    } else {
-        ApplyEvolutionInInventory_(inventory_owner, update_count, old_item, new_item);
+    const auto new_bound = RE::TESForm::LookupByID<RE::TESBoundObject>(new_item);
+    if (!new_bound) {
+        logger::error("New item is null.");
+        return false;
     }
 
-    if (is_faved) FavoriteItem(RE::TESForm::LookupByID<RE::TESBoundObject>(new_item), inventory_owner);
-    if (is_equipped) {
-        listen_equip.store(false);
-        EquipItem(RE::TESForm::LookupByID<RE::TESBoundObject>(new_item));
-        listen_equip.store(true);
+    const auto inventory = inventory_owner->GetInventory();
+    const auto entry = inventory.find(old_bound);
+    if (entry == inventory.end()) {
+        logger::error("Item not found in inventory.");
+        return false;
     }
+    const auto inv_data = entry->second.second.get();
+    if (!inv_data) {
+        logger::error("Inv data is null.");
+        return false;
+    }
+    if (inv_data->IsQuestObject()) {
+        logger::warn("Item is a quest object.");
+        return false;
+    }
+
+    const auto inv_count = entry->second.first;
+    if (inv_count <= 0) {
+        logger::warn("Item count in inventory is 0 or less {}.", inv_count);
+        return false;
+    }
+
+    update_count = std::min(update_count, inv_count);
+    inventory_owner->RemoveItem(old_bound, update_count, RE::ITEM_REMOVE_REASON::kRemove, nullptr, nullptr);
+    inventory_owner->AddObjectToContainer(new_bound, nullptr, update_count, nullptr);
+
+    return true;
 }
 
 
@@ -720,15 +654,9 @@ bool Manager::UpdateInventory(RE::TESObjectREFR* ref, const float t) {
         const auto& updates = updated_stages.contains(refid) ? updated_stages.at(refid) : std::vector<StageUpdate>();
         if (!update_took_place && !updates.empty()) update_took_place = true;
         CleanUpSourceData(&src);
-        #ifndef NDEBUG
-        if (updates.empty()) {
-            logger::trace("UpdateInventory: No updates for source formid {:x} editorid {}", src.formid, src.editorid);
-        }
-        #endif // !NDEBUG
         for (const auto& update : updates) {
-            ApplyEvolutionInInventory(src.qFormType, ref, update.count, update.oldstage->formid,
-                                      update.newstage->formid);
-            if (src.IsDecayedItem(update.newstage->formid)) {
+            if (ApplyEvolutionInInventory(ref, update.count, update.oldstage->formid, update.newstage->formid) && src.
+                IsDecayedItem(update.newstage->formid)) {
                 Register(update.newstage->formid, update.count, refid, t);
             }
         }
@@ -904,11 +832,6 @@ void Manager::UpdateRef(RE::TESObjectREFR* loc) {
     if (loc->HasContainer()) {
         UpdateInventory(loc);
     } else UpdateWO(loc);
-
-    //   for (auto& src : sources) {
-    //	if (src.data.empty()) continue;
-    //	CleanUpSourceData(&src);
-    //}
 }
 
 RefStop* Manager::GetRefStop(const RefID refid) {
@@ -994,13 +917,7 @@ void Manager::Register(const FormID some_formid, const Count count, const RefID 
     if (ref->HasContainer()) {
         if (!src->InitInsertInstanceInventory(stage_no, count, ref, register_time)) {
             logger::error("Register: InsertNewInstance failed 1.");
-            return;
         }
-
-        // is this necessary?
-        const auto stage_formid = src->GetStage(stage_no).formid;
-        // to change from the source form to the stage form
-        ApplyEvolutionInInventory(src->qFormType, ref, count, some_formid, stage_formid);
     } else {
         if (const auto* inserted_instance = src->InitInsertInstanceWO(stage_no, count, location_refid, register_time); !
             inserted_instance) {
@@ -1245,7 +1162,7 @@ void Manager::HandleFormDelete(const FormID a_refid) {
     SRC_UNIQUE_GUARD;
     for (auto& src : sources) {
         if (src.data.contains(a_refid)) {
-            logger::warn("HandleFormDelete: Formid {:x}", a_refid);
+            logger::info("HandleFormDelete: Formid {:x}", a_refid);
             for (auto& st_inst : src.data.at(a_refid)) {
                 st_inst.count = 0;
             }
@@ -1258,6 +1175,11 @@ void Manager::SendData() {
     Print();
     Clear();
 
+
+    for (SRC_UNIQUE_GUARD; auto& src : sources) {
+        CleanUpSourceData(&src);
+    }
+
     int n_instances = 0;
     SRC_SHARED_GUARD;
     for (const auto& src : sources) {
@@ -1266,13 +1188,13 @@ void Manager::SendData() {
                 continue;
             }
         }
-        for (auto& [loc, instances] : src.data) {
+        for (const auto& [loc, instances] : src.data) {
             if (instances.empty()) continue;
             const SaveDataLHS lhs{{src.formid, src.editorid}, loc};
             SaveDataRHS rhs;
-            for (auto& st_inst : instances) {
+            for (const auto& st_inst : instances) {
                 auto plain = st_inst.GetPlain();
-                if (plain.is_fake) {
+                if (plain.is_fake && loc == 20) {
                     plain.is_faved = IsPlayerFavorited(st_inst.GetBound());
                     plain.is_equipped = IsEquipped(st_inst.GetBound());
                 }
@@ -1316,69 +1238,66 @@ void Manager::HandleLoc(RE::TESObjectREFR* loc_ref) {
 
 StageInstance* Manager::RegisterAtReceiveData(const FormID source_formid, const RefID loc,
                                               const StageInstancePlain& st_plain) {
-    {
-        if (!source_formid) {
-            logger::warn("Formid is null.");
-            return nullptr;
-        }
-
-        const auto count = st_plain.count;
-        if (!count) {
-            logger::warn("Count is 0.");
-            return nullptr;
-        }
-        if (!loc) {
-            logger::warn("loc is 0.");
-            return nullptr;
-        }
-
-        if (GetNInstances() > _instance_limit) {
-            logger::warn("Instance limit reached.");
-            MsgBoxesNotifs::InGame::CustomMsg(
-                std::format("The mod is tracking over {} instances. Maybe it is not bad to check your memory usage and "
-                            "skse co-save sizes.",
-                            _instance_limit));
-        }
-
-        // make new registry
-
-        auto* src = ForceGetSource(source_formid);
-        if (!src) {
-            logger::warn("Source could not be obtained for formid {:x}.", source_formid);
-            return nullptr;
-        }
-
-        //src->UpdateAddons();
-        if (!src->IsHealthy()) {
-            logger::warn("RegisterAtReceiveData: Source is not healthy.");
-            return nullptr;
-        }
-
-        const auto stage_no = st_plain.no;
-        if (!src->IsStageNo(stage_no)) {
-            logger::warn("Stage not found.");
-            return nullptr;
-        }
-
-        StageInstance new_instance(st_plain.start_time, stage_no, st_plain.count);
-        const auto& stage_temp = src->GetStage(stage_no);
-        new_instance.xtra.form_id = stage_temp.formid;
-        new_instance.xtra.editor_id = clib_util::editorID::get_editorID(stage_temp.GetBound());
-        new_instance.xtra.crafting_allowed = stage_temp.crafting_allowed;
-        if (src->IsFakeStage(stage_no)) new_instance.xtra.is_fake = true;
-
-        new_instance.SetDelay(st_plain);
-        new_instance.xtra.is_transforming = st_plain.is_transforming;
-
-        const auto instance = src->InsertNewInstance(new_instance, loc);
-
-        if (!instance) {
-            logger::warn("RegisterAtReceiveData: InsertNewInstance failed.");
-            return nullptr;
-        }
-
-        return instance;
+    if (!source_formid) {
+        logger::warn("Formid is null.");
+        return nullptr;
     }
+
+    if (const auto count = st_plain.count; !count) {
+        logger::warn("Count is 0.");
+        return nullptr;
+    }
+    if (!loc) {
+        logger::warn("loc is 0.");
+        return nullptr;
+    }
+
+    if (GetNInstances() > _instance_limit) {
+        logger::warn("Instance limit reached.");
+        MsgBoxesNotifs::InGame::CustomMsg(
+            std::format("The mod is tracking over {} instances. Maybe it is not bad to check your memory usage and "
+                        "skse co-save sizes.",
+                        _instance_limit));
+    }
+
+    // make new registry
+
+    auto* src = ForceGetSource(source_formid);
+    if (!src) {
+        logger::warn("Source could not be obtained for formid {:x}.", source_formid);
+        return nullptr;
+    }
+
+    //src->UpdateAddons();
+    if (!src->IsHealthy()) {
+        logger::warn("RegisterAtReceiveData: Source is not healthy.");
+        return nullptr;
+    }
+
+    const auto stage_no = st_plain.no;
+    if (!src->IsStageNo(stage_no)) {
+        logger::warn("Stage not found.");
+        return nullptr;
+    }
+
+    StageInstance new_instance(st_plain.start_time, stage_no, st_plain.count);
+    const auto& stage_temp = src->GetStage(stage_no);
+    new_instance.xtra.form_id = stage_temp.formid;
+    new_instance.xtra.editor_id = clib_util::editorID::get_editorID(stage_temp.GetBound());
+    new_instance.xtra.crafting_allowed = stage_temp.crafting_allowed;
+    if (src->IsFakeStage(stage_no)) new_instance.xtra.is_fake = true;
+
+    new_instance.SetDelay(st_plain);
+    new_instance.xtra.is_transforming = st_plain.is_transforming;
+
+    const auto instance = src->InsertNewInstance(new_instance, loc);
+
+    if (!instance) {
+        logger::warn("RegisterAtReceiveData: InsertNewInstance failed.");
+        return nullptr;
+    }
+
+    return instance;
 }
 
 void Manager::ReceiveData() {
@@ -1442,8 +1361,8 @@ void Manager::ReceiveData() {
         SRC_UNIQUE_GUARD;
         for (const auto& st_plain : rhs) {
             if (st_plain.is_fake) locs_to_be_handled[loc].push_back(st_plain.form_id);
-            if (const auto* inserted_instance = RegisterAtReceiveData(source_formid, loc, st_plain); !
-                inserted_instance) {
+            if (const auto* inserted_instance = RegisterAtReceiveData(source_formid, loc, st_plain);
+                !inserted_instance) {
                 logger::warn("ReceiveData: could not insert instance: formid: {:x}, loc: {:x}", source_formid, loc);
                 continue;
             }

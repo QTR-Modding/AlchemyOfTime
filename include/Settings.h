@@ -108,7 +108,7 @@ namespace Settings {
 
 
     const std::vector<std::string> fakes_allowedQFORMS = {"FOOD", "MISC"};
-    const std::vector<std::string> xQFORMS = {"ARMO", "WEAP", "SLGM", "MEDC", "POSN"};
+    //const std::vector<std::string> xQFORMS = {"ARMO", "WEAP", "SLGM", "MEDC", "POSN"};
     // xdata is carried over in item transitions
     const std::vector<std::string> mgeffs_allowedQFORMS = {"FOOD"};
     [[maybe_unused]] const std::vector<std::string> consumableQFORMS = {"FOOD", "INGR", "MEDC", "POSN", "SCRL", "BOOK",
