@@ -158,7 +158,10 @@ SKSEPluginLoad(const SKSE::LoadInterface *skse) {
     logger::info("Plugin loaded");
     SKSE::Init(skse);
     InitializeSerialization();
-    SKSE::GetMessagingInterface()->RegisterListener(OnMessage);
+    if (!SKSE::GetMessagingInterface()->RegisterListener(OnMessage)) {
+        SKSE::stl::report_and_fail("Failed to register message listener");
+        return false;
+    }
     logger::info("Number of threads: {}", numThreads);
     return true;
 }
