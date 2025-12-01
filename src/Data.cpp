@@ -1027,14 +1027,14 @@ void Source::RegisterStage(const FormID stage_formid, const StageNo stage_no) {
 
 FormID Source::FetchFake(const StageNo st_no) {
     if (!GetBoundObject()) {
-        logger::error("Could not get bound object", formid);
+        logger::error("Could not get bound object. FormID {:x}", formid);
         return 0;
     }
     if (editorid.empty()) {
         logger::error("Editorid is empty.");
         return 0;
     }
-    if (!Vector::HasElement(Settings::fakes_allowedQFORMS, qFormType)) {
+    if (!std::ranges::contains(Settings::fakes_allowedQFORMS, qFormType)) {
         logger::error("Fake not allowed for this form type {}", qFormType);
         return 0;
     }

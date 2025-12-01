@@ -145,7 +145,7 @@ bool DefaultSettings::CheckIntegrity() {
         return false;
     }
     for (auto i = 0; i < numbers.size(); i++) {
-        if (!Vector::HasElement<StageNo>(numbers, i)) {
+        if (!std::ranges::contains(numbers, i)) {
             logger::error("Key {} not found in numbers.", i);
             return false;
         }
@@ -195,7 +195,7 @@ bool DefaultSettings::CheckIntegrity() {
             return false;
         }
         for (const auto& _stage : _allowedStages) {
-            if (!Vector::HasElement<StageNo>(numbers, _stage)) {
+            if (!std::ranges::contains(numbers, _stage)) {
                 logger::error("Stage {} not found in numbers.", _stage);
                 init_failed = true;
                 return false;
@@ -221,7 +221,7 @@ bool DefaultSettings::CheckIntegrity() {
             return false;
         }
         for (const auto& _stage : _allowedStages) {
-            if (!Vector::HasElement<StageNo>(numbers, _stage)) {
+            if (!std::ranges::contains(numbers, _stage)) {
                 logger::error("Stage {} not found in numbers for delayer formid {:x}.", _stage, a_formID);
                 init_failed = true;
                 return false;

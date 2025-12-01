@@ -984,7 +984,7 @@ void Manager::HandleCraftingEnter(const unsigned int bench_type) {
         if (!src.IsHealthy()) continue;
         if (!src.data.contains(player_refid)) continue;
 
-        if (!Vector::HasElement<std::string>(q_form_types, src.qFormType)) {
+        if (!std::ranges::contains(q_form_types, src.qFormType)) {
             continue;
         }
 

@@ -143,7 +143,7 @@ private:
         for (StageNo stage_no: settings.numbers) {
             const auto stage_formid = settings.items[stage_no];
             if (!stage_formid && stage_no != 0) {
-                if (Vector::HasElement(Settings::fakes_allowedQFORMS, qFormType))
+                if (std::ranges::contains(Settings::fakes_allowedQFORMS, qFormType))
                 {
                     fake_stages.insert(stage_no);
                     continue;
@@ -217,7 +217,7 @@ private:
 
 			// Update magic effects of the fake form
             if (settings.effects.contains(st_no) && !settings.effects.at(st_no).empty() &&
-                Vector::HasElement<std::string>(Settings::mgeffs_allowedQFORMS, qFormType)) {
+                std::ranges::contains(Settings::mgeffs_allowedQFORMS, qFormType)) {
                 // change mgeff of fake form
                 ApplyMGEFFSettings(stage_form, settings.effects.at(st_no));
             }

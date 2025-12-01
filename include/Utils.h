@@ -71,17 +71,6 @@ inline void EquipItem(const FormID formid, const bool unequip = false) {
     return IsEquipped(FormReader::GetFormByID<RE::TESBoundObject>(formid));
 }
 
-template <typename T>
-void ForEachForm(std::function<bool(T*)> a_callback) {
-    const auto& [map,lock] = RE::TESForm::GetAllForms();
-    RE::BSReadLockGuard locker{lock};
-    for (auto& [id, form] : *map) {
-        if (!form) continue;
-        if (!form->Is(T::FORMTYPE)) continue;
-        if (auto* casted_form = skyrim_cast<T*>(form); casted_form && a_callback(casted_form)) return;
-    }
-};
-
 // https://github.com/SteveTownsend/SmartHarvestSE/blob/f709333c4cedba061ad21b4d92c90a720e20d2b1/src/WorldState/LocationTracker.cpp#L756
 bool AreAdjacentCells(RE::TESObjectCELL* cellA, RE::TESObjectCELL* cellB);
 
@@ -119,13 +108,6 @@ namespace Types {
 
 
         bool operator==(const FormEditorIDX& other) const;
-    };
-};
-
-namespace Vector {
-    template <typename T>
-    bool HasElement(const std::vector<T>& vec, const T& element) {
-        return std::find(vec.begin(), vec.end(), element) != vec.end();
     };
 };
 
@@ -221,102 +203,6 @@ namespace MsgBoxesNotifs {
     };
 };
 
-namespace xData {
-    namespace Copy {
-        void CopyEnchantment(const RE::ExtraEnchantment* from, RE::ExtraEnchantment* to);
-
-        void CopyHealth(const RE::ExtraHealth* from, RE::ExtraHealth* to);
-
-        void CopyRank(const RE::ExtraRank* from, RE::ExtraRank* to);
-
-        void CopyTimeLeft(const RE::ExtraTimeLeft* from, RE::ExtraTimeLeft* to);
-
-        void CopyCharge(const RE::ExtraCharge* from, RE::ExtraCharge* to);
-
-        void CopyScale(const RE::ExtraScale* from, RE::ExtraScale* to);
-
-        void CopyUniqueID(const RE::ExtraUniqueID* from, RE::ExtraUniqueID* to);
-
-        void CopyPoison(const RE::ExtraPoison* from, RE::ExtraPoison* to);
-
-        void CopyObjectHealth(const RE::ExtraObjectHealth* from, RE::ExtraObjectHealth* to);
-
-        void CopyLight(const RE::ExtraLight* from, RE::ExtraLight* to);
-
-        void CopyRadius(const RE::ExtraRadius* from, RE::ExtraRadius* to);
-
-        void CopyHorse(const RE::ExtraHorse* from, RE::ExtraHorse* to);
-
-        void CopyHotkey(const RE::ExtraHotkey* from, RE::ExtraHotkey* to);
-
-        void CopyTextDisplayData(const RE::ExtraTextDisplayData* from, RE::ExtraTextDisplayData* to);
-
-        void CopySoul(const RE::ExtraSoul* from, RE::ExtraSoul* to);
-
-        void CopyOwnership(const RE::ExtraOwnership* from, RE::ExtraOwnership* to);
-    };
-
-    template <typename T>
-    void CopyExtraData(T* from, T* to) {
-        if (!from || !to) return;
-        switch (T::EXTRADATATYPE) {
-            case RE::ExtraDataType::kEnchantment:
-                CopyEnchantment(from, to);
-                break;
-            case RE::ExtraDataType::kHealth:
-                CopyHealth(from, to);
-                break;
-            case RE::ExtraDataType::kRank:
-                CopyRank(from, to);
-                break;
-            case RE::ExtraDataType::kTimeLeft:
-                CopyTimeLeft(from, to);
-                break;
-            case RE::ExtraDataType::kCharge:
-                CopyCharge(from, to);
-                break;
-            case RE::ExtraDataType::kScale:
-                CopyScale(from, to);
-                break;
-            case RE::ExtraDataType::kUniqueID:
-                CopyUniqueID(from, to);
-                break;
-            case RE::ExtraDataType::kPoison:
-                CopyPoison(from, to);
-                break;
-            case RE::ExtraDataType::kObjectHealth:
-                CopyObjectHealth(from, to);
-                break;
-            case RE::ExtraDataType::kLight:
-                CopyLight(from, to);
-                break;
-            case RE::ExtraDataType::kRadius:
-                CopyRadius(from, to);
-                break;
-            case RE::ExtraDataType::kHorse:
-                CopyHorse(from, to);
-                break;
-            case RE::ExtraDataType::kHotkey:
-                CopyHotkey(from, to);
-                break;
-            case RE::ExtraDataType::kTextDisplayData:
-                CopyTextDisplayData(from, to);
-                break;
-            case RE::ExtraDataType::kSoul:
-                CopySoul(from, to);
-                break;
-            case RE::ExtraDataType::kOwnership:
-                CopyOwnership(from, to);
-                break;
-            default:
-                logger::warn("ExtraData type not found");
-                break;
-        }
-    }
-
-    [[nodiscard]] bool UpdateExtras(RE::ExtraDataList* copy_from, RE::ExtraDataList* copy_to);
-};
-
 namespace WorldObject {
     int16_t GetObjectCount(RE::TESObjectREFR* ref);
     void SetObjectCount(RE::TESObjectREFR* ref, Count count);
@@ -325,37 +211,13 @@ namespace WorldObject {
 
     void SwapObjects(RE::TESObjectREFR* a_from, RE::TESBoundObject* a_to, bool apply_havok = true);
 
-    float GetDistanceFromPlayer(const RE::TESObjectREFR* ref);
-    [[nodiscard]] bool PlayerPickUpObject(RE::TESObjectREFR* item, Count count, unsigned int max_try = 3);
-
-    RefID TryToGetRefIDFromHandle(const RE::ObjectRefHandle& handle);
-
-    RE::TESObjectREFR* TryToGetRefFromHandle(RE::ObjectRefHandle& handle, unsigned int max_try = 1);
-
     RE::TESObjectREFR* TryToGetRefInCell(FormID baseid, Count count, float radius = 180);
 
     bool IsPlacedObject(RE::TESObjectREFR* ref);
 
-    template <typename T>
-    void ForEachRefInCell(T func) {
-        const auto player_cell = RE::PlayerCharacter::GetSingleton()->GetParentCell();
-        if (!player_cell) {
-            logger::error("Player cell is null.");
-            return;
-        }
-        auto& runtimeData = player_cell->GetRuntimeData();
-        RE::BSSpinLockGuard locker(runtimeData.spinLock);
-        for (auto& ref : runtimeData.references) {
-            if (!ref) continue;
-            func(ref.get());
-        }
-    }
-
     RE::bhkRigidBody* GetRigidBody(const RE::TESObjectREFR* refr);
 
     RE::NiPoint3 GetPosition(const RE::TESObjectREFR* obj);
-
-    bool IsNextTo(const RE::TESObjectREFR* a_obj, const RE::TESObjectREFR* a_target, float range);
 
     std::array<RE::NiPoint3, 8> GetBoundingBox(const RE::TESObjectREFR* a_obj);
     void DrawBoundingBox(const RE::TESObjectREFR* a_obj);
@@ -366,26 +228,7 @@ namespace WorldObject {
 };
 
 namespace Inventory {
-    bool EntryHasXData(const RE::InventoryEntryData* entry);
-
-    bool HasItemEntry(RE::TESBoundObject* item, RE::TESObjectREFR* inventory_owner,
-                      bool nonzero_entry_check = false);
-
-    inline std::int32_t GetItemCount(RE::TESBoundObject* item, RE::TESObjectREFR* inventory_owner);
-
     bool IsQuestItem(FormID formid, RE::TESObjectREFR* inv_owner);
-
-    /*template <typename T>
-    void UpdateItemList() {
-        if (const auto ui = RE::UI::GetSingleton(); ui->IsMenuOpen(T::MENU_NAME)) {
-            if (auto inventory_menu = ui->GetMenu<T>()) {
-                if (auto itemlist = inventory_menu->GetRuntimeData().itemList) {
-                    logger::trace("Updating itemlist.");
-                    itemlist->Update();
-                } else logger::info("Itemlist is null.");
-            } else logger::info("Inventory menu is null.");
-        } else logger::info("Inventory menu is not open.");
-    }*/
 };
 
 namespace Menu {
