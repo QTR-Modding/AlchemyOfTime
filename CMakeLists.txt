@@ -21,11 +21,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
 
 # Enable compile_commands.json for tooling (clang-tidy, IDEs)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS OFF)
 
 # Options to enable extra analysis tools
 option(ENABLE_MSVC_ANALYZE "Enable MSVC /analyze static analysis (slower builds)" ON)
-option(ENABLE_CLANG_TIDY "Enable clang-tidy static analysis for this target" ON)
+option(ENABLE_CLANG_TIDY "Enable clang-tidy static analysis for this target" OFF)
 
 configure_file(
  ${CMAKE_CURRENT_SOURCE_DIR}/cmake/version.rc.in
