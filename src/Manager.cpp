@@ -777,12 +777,15 @@ void Manager::SyncWithInventory(RE::TESObjectREFR* ref) {
 
 void Manager::UpdateWO(RE::TESObjectREFR* ref) {
     HandleDynamicWO(ref);
-    if (!Settings::world_objects_evolve.load()) return;
-    if (ref->IsDeleted() || ref->IsDisabled() || ref->IsMarkedForDeletion()) return;
-    if (ref->IsActivationBlocked()) return;
-    if (!Settings::unowned_objects_evolve.load() && RE::PlayerCharacter::GetSingleton()->WouldBeStealing(ref)) return;
-
+    
     const RefID refid = ref->GetFormID();
+    if (!RefIsUpdatable(ref)) {
+        DeRegisterRef(refid);
+        QUE_UNIQUE_GUARD;
+        queue_delete_.insert(refid);
+        return;
+    }
+
     const auto curr_time = RE::Calendar::GetSingleton()->GetHoursPassed();
     bool not_found = true;
 
@@ -794,7 +797,11 @@ void Manager::UpdateWO(RE::TESObjectREFR* ref) {
         if (!src.data.contains(refid)) continue;
         if (src.data.at(refid).empty()) continue;
         HandleWOBaseChange(ref);
-        if (src.data.at(refid).data()->count <= 0) continue;
+        if (src.data.at(refid).data()->count <= 0) {
+            QUE_UNIQUE_GUARD;
+            queue_delete_.insert(refid);
+            continue;
+        }
 
         not_found = false;
 
@@ -811,7 +818,7 @@ void Manager::UpdateWO(RE::TESObjectREFR* ref) {
         }
 
         //src = sources[i];
-        if (!src.data.contains(refid)) logger::error("UpdateWO: Refid {} not found in source data.", refid);
+        if (!src.data.contains(refid)) logger::error("UpdateWO: Refid {:x} not found in source data.", refid);
         auto& wo_inst = src.data.at(refid).front();
         if (wo_inst.xtra.is_fake) ApplyStageInWorld(ref, src.GetStage(wo_inst.no), src.GetBoundObject());
         src.UpdateTimeModulationInWorld(ref, wo_inst, curr_time);
@@ -837,6 +844,24 @@ void Manager::UpdateRef(RE::TESObjectREFR* loc) {
 RefStop* Manager::GetRefStop(const RefID refid) {
     const auto it = _ref_stops_.find(refid);
     return it == _ref_stops_.end() ? nullptr : &it->second;
+}
+
+bool Manager::RefIsUpdatable(const RE::TESObjectREFR* ref) {
+    if (!Settings::world_objects_evolve.load()) return false;
+    if (ref->IsDeleted() || ref->IsDisabled() || ref->IsMarkedForDeletion()) return false;
+    if (ref->IsActivationBlocked()) return false;
+    if (!Settings::unowned_objects_evolve.load() && RE::PlayerCharacter::GetSingleton()->WouldBeStealing(ref)) return false;
+    return true;
+}
+
+void Manager::DeRegisterRef(const RefID refid) {
+    for (auto& src : sources) {
+        if (auto it = src.data.find(refid); it != src.data.end()) {
+            for (auto& st_inst : it->second) {
+                st_inst.count = 0;
+            }
+        }
+    }
 }
 
 void Manager::ClearWOUpdateQueue() {
@@ -1041,9 +1066,7 @@ void Manager::Update(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::T
     if (from && to && !from->HasContainer()) {
         const auto temp_refid = from->GetFormID();
         QUE_UNIQUE_GUARD;
-        if (_ref_stops_.contains(temp_refid)) {
-            queue_delete_.insert(temp_refid);
-        }
+        queue_delete_.insert(temp_refid);
     }
 
     if (RE::UI::GetSingleton()->IsMenuOpen(RE::BarterMenu::MENU_NAME)) {
@@ -1159,15 +1182,9 @@ void Manager::Reset() {
 }
 
 void Manager::HandleFormDelete(const FormID a_refid) {
+    logger::info("HandleFormDelete: Formid {:x}", a_refid);
     SRC_UNIQUE_GUARD;
-    for (auto& src : sources) {
-        if (src.data.contains(a_refid)) {
-            logger::info("HandleFormDelete: Formid {:x}", a_refid);
-            for (auto& st_inst : src.data.at(a_refid)) {
-                st_inst.count = 0;
-            }
-        }
-    }
+    DeRegisterRef(a_refid);
 }
 
 void Manager::SendData() {
@@ -1441,13 +1458,11 @@ void Manager::HandleWOBaseChange(RE::TESObjectREFR* ref) {
         if (const auto* bound_expected = src->IsFakeStage(st_inst->no) ? src->GetBoundObject() : st_inst->GetBound();
             bound_expected->GetFormID() != bound->GetFormID()) {
             st_inst->count = 0;
-            QUE_UNIQUE_GUARD;
-            queue_delete_.insert(ref->GetFormID());
         }
     }
 }
 
-bool Manager::IsStageItem(FormID a_formid) {
+bool Manager::IsStageItem(const FormID a_formid) {
     if (const auto it = stages_fast_lookup.find(a_formid); it != stages_fast_lookup.end()) {
         return true;
     }

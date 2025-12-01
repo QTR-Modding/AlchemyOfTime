@@ -16,6 +16,13 @@ class Manager final : public Ticker, public SaveLoadData {
 
     // 0x0003eb42 damage health
 
+    // LOCKING CONVENTION (debug assertions enforce this in Manager.cpp):
+    // Acquire sourceMutex_ before queueMutex_ when both are needed.
+    // It is legal to lock queueMutex_ while holding sourceMutex_.
+    // It is ILLEGAL to acquire sourceMutex_ while any shared/unique lock on queueMutex_ is held (deadlock prevention).
+    // No re-entrancy: the same thread must not take the same mutex twice (shared or unique) and no upgrade/downgrade.
+    // Methods are annotated with [expects: ...] or [locks: ...] to indicate required / performed locking.
+    // Use SRC_SHARED_GUARD / SRC_UNIQUE_GUARD then QUE_SHARED_GUARD / QUE_UNIQUE_GUARD in that order.
     std::shared_mutex sourceMutex_;
     std::shared_mutex queueMutex_;
 
@@ -98,6 +105,10 @@ class Manager final : public Ticker, public SaveLoadData {
 
     // queue access helper, only safe under queueMutex_. Prefer using GetUpdateQueue() which locks internally.
     RefStop* GetRefStop(RefID refid);
+
+    static bool RefIsUpdatable(const RE::TESObjectREFR* ref);
+    // [expects: sourceMutex_] (unique)
+    void DeRegisterRef(RefID refid);
 
 public:
     Manager(const std::vector<Source>& data, const std::chrono::milliseconds interval)
