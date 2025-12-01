@@ -56,19 +56,13 @@ get_target_property(COMMONLIB_SRC_DIR CommonLibSSE SOURCE_DIR)
 find_path(CLIB_UTIL_INCLUDE_DIRS "ClibUtil/utils.hpp")
 find_path(CLIB_UTILS_QTR_INCLUDE_DIRS "ClibUtilsQTR/utils.hpp")
 find_path(SKSE_MCP_INCLUDE_DIRS "SKSEMCP/utils.hpp")
-#YAML-CPP
-FetchContent_Declare(
- yaml-cpp
- GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
- GIT_TAG master # Can be a tag (yaml-cpp-x.x.x), a commit hash, or a branch name (master)
-)
-FetchContent_GetProperties(yaml-cpp)
 
-if(NOT yaml-cpp_POPULATED)
- message(STATUS "Fetching yaml-cpp...")
- FetchContent_Populate(yaml-cpp)
- add_subdirectory(${yaml-cpp_SOURCE_DIR} ${yaml-cpp_BINARY_DIR})
-endif()
+# YAML-CPP (archive, no git)
+FetchContent_Declare(
+  yaml-cpp
+  URL https://github.com/jbeder/yaml-cpp/archive/refs/heads/master.zip
+)
+FetchContent_MakeAvailable(yaml-cpp)
 
 file(
  GLOB_RECURSE
@@ -170,4 +164,4 @@ set(steam_owrt_output false)
 set(steam_mods_output true)
 set(lorerim_mods_output false)
 set(lorerim3_mods_output true)
-automaticGameFolderOutput(wildlander_output, steam_owrt_output, steam_mods_output lorerim_mods_output lorerim3_mods_output)
+automaticGameFolderOutput(wildlander_output, steam_owrt_output, steam_mods_output, lorerim_mods_output, lorerim3_mods_output)
