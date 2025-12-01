@@ -857,9 +857,7 @@ bool Manager::RefIsUpdatable(const RE::TESObjectREFR* ref) {
 void Manager::DeRegisterRef(const RefID refid) {
     for (auto& src : sources) {
         if (auto it = src.data.find(refid); it != src.data.end()) {
-            for (auto& st_inst : it->second) {
-                st_inst.count = 0;
-            }
+            src.data.erase(it);
         }
     }
 }
@@ -1090,6 +1088,10 @@ void Manager::Update(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::T
 
             if (count > 0) Register(what_formid, count, to_refid);
             CleanUpSourceData(src);
+            if (!src->data.contains(from_refid)) {
+                QUE_UNIQUE_GUARD;
+                queue_delete_.insert(from_refid);
+            }
 
             if (to_is_world_object && src->data.contains(to_refid)) {
                 // need to break down the count of the item out in the world into the counts of the instances
