@@ -212,7 +212,6 @@ void EquipItem(RE::TESBoundObject* item, const bool unequip) {
 }
 
 bool IsEquipped(RE::TESBoundObject* item) {
-
     if (!item) {
         logger::trace("Item is null");
         return false;
@@ -507,15 +506,15 @@ RE::NiPoint3 WorldObject::GetPosition(const RE::TESObjectREFR* obj) {
 }
 
 bool WorldObject::AreClose(const RE::TESObjectREFR* a_obj1, const RE::TESObjectREFR* a_obj2, const float threshold) {
-    const auto c1 = WorldObject::GetPosition(a_obj1);
+    const auto c1 = GetPosition(a_obj1);
     const auto closestOn2 = BoundingBox::ClosestPoint(c1, a_obj2);
     const auto closestOn1 = BoundingBox::ClosestPoint(closestOn2, a_obj1);
     if (closestOn2.GetDistance(closestOn1) < threshold) {
-#ifndef NDEBUG
+        #ifndef NDEBUG
         if (UI::draw_debug) {
             draw_line(closestOn2, closestOn1, 3, glm::vec4(1.f, 1.f, 1.f, 1.f));
         }
-#endif
+        #endif
         return true;
     }
     return false;

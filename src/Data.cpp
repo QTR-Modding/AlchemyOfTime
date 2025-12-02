@@ -3,7 +3,7 @@
 #ifndef NDEBUG
 #include "DrawDebug.h"
 #endif
-#include "BoundingBox.h" 
+#include "BoundingBox.h"
 
 void Source::Init(const DefaultSettings* defaultsettings) {
     if (!defaultsettings) {

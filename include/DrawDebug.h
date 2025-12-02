@@ -84,8 +84,8 @@ namespace DebugAPI_IMPL {
 
     class DebugOverlayMenu : RE::IMenu {
     public:
-        static constexpr const char* MENU_PATH = "BetterThirdPersonSelection/overlay_menu";
-        static constexpr const char* MENU_NAME = "HUD Menu";
+        static constexpr auto MENU_PATH = "BetterThirdPersonSelection/overlay_menu";
+        static constexpr auto MENU_NAME = "HUD Menu";
 
         DebugOverlayMenu();
 
@@ -94,7 +94,7 @@ namespace DebugAPI_IMPL {
         static void Show();
         static void Hide();
 
-        static RE::stl::owner<RE::IMenu*> Creator() { return new DebugOverlayMenu(); }
+        static RE::stl::owner<IMenu*> Creator() { return new DebugOverlayMenu(); }
 
         void AdvanceMovie(float a_interval, std::uint32_t a_currentTime) override;
 
@@ -109,7 +109,7 @@ namespace DebugAPI_IMPL {
 
                 std::va_list args;
                 va_copy(args, a_argList);
-                std::vector<char> buf(static_cast<std::size_t>(std::vsnprintf(0, 0, fmt.c_str(), a_argList) + 1));
+                std::vector<char> buf(static_cast<std::size_t>(std::vsnprintf(nullptr, 0, fmt.c_str(), a_argList) + 1));
                 std::vsnprintf(buf.data(), buf.size(), fmt.c_str(), args);
                 va_end(args);
 
@@ -120,13 +120,13 @@ namespace DebugAPI_IMPL {
 
     namespace DrawDebug {
         namespace Colors {
-            static constexpr glm::vec4 RED = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
-            static constexpr glm::vec4 GRN = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
-            static constexpr glm::vec4 BLU = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
+            static constexpr auto RED = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
+            static constexpr auto GRN = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
+            static constexpr auto BLU = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
         }
 
         template <int time = 100>
-        void draw_line(const RE::NiPoint3 & _from, const RE::NiPoint3& _to, const float size = 5.0f,
+        void draw_line(const RE::NiPoint3& _from, const RE::NiPoint3& _to, const float size = 5.0f,
                        const glm::vec4 Color = Colors::RED) {
             const glm::vec3 from(_from.x, _from.y, _from.z);
             const glm::vec3 to(_to.x, _to.y, _to.z);
@@ -135,10 +135,12 @@ namespace DebugAPI_IMPL {
 
 
         template <glm::vec4 Color = Colors::RED>
-        void draw_sphere(const RE::NiPoint3& _center, const float r = 5.0f, const float size = 5.0f, const int time = 3000) {
+        void draw_sphere(const RE::NiPoint3& _center, const float r = 5.0f, const float size = 5.0f,
+                         const int time = 3000) {
             const glm::vec3 center(_center.x, _center.y, _center.z);
             DebugAPI::DrawSphere(center, r, time, Color, size);
         }
     }
 }
+
 using namespace DebugAPI_IMPL::DrawDebug;

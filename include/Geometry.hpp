@@ -77,15 +77,20 @@ public:
     }
 
     [[nodiscard]] std::pair<RE::NiPoint3, RE::NiPoint3> GetBoundingBox() const {
-        auto min = RE::NiPoint3{ std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity() };
-        auto max = RE::NiPoint3{ -std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity() };
+        auto min = RE::NiPoint3{std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity(),
+                                std::numeric_limits<float>::infinity()};
+        auto max = RE::NiPoint3{-std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity(),
+                                -std::numeric_limits<float>::infinity()};
 
         const float scale = obj->GetScale();
         for (const auto& p : positions) {
             const auto p1 = p * scale;
-            if (p1.x < min.x) min.x = p1.x; if (p1.x > max.x) max.x = p1.x;
-            if (p1.y < min.y) min.y = p1.y; if (p1.y > max.y) max.y = p1.y;
-            if (p1.z < min.z) min.z = p1.z; if (p1.z > max.z) max.z = p1.z;
+            if (p1.x < min.x) min.x = p1.x;
+            if (p1.x > max.x) max.x = p1.x;
+            if (p1.y < min.y) min.y = p1.y;
+            if (p1.y > max.y) max.y = p1.y;
+            if (p1.z < min.z) min.z = p1.z;
+            if (p1.z > max.z) max.z = p1.z;
         }
 
         return {min, max};

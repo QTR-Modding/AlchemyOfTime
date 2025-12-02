@@ -19,7 +19,8 @@ namespace BoundingBox {
         if (const auto body = GetRigidBody(a_obj)) {
             RE::hkAabb aabb;
             body->GetAabbWorldspace(aabb);
-            float minComp[4]{}; float maxComp[4]{};
+            float minComp[4]{};
+            float maxComp[4]{};
             _mm_store_ps(minComp, aabb.min.quad);
             _mm_store_ps(maxComp, aabb.max.quad);
             constexpr float havokToSkyrim = 69.9915f;
@@ -44,12 +45,18 @@ namespace BoundingBox {
         maxLocal *= scale;
 
         const auto node = a_obj->GetCurrent3D();
-        RE::NiMatrix3 R; RE::NiPoint3 T;
-        if (node) { R = node->world.rotate; T = node->world.translate; }
-        else { R.SetEulerAnglesXYZ(a_obj->GetAngle()); T = a_obj->GetPosition(); }
+        RE::NiMatrix3 R;
+        RE::NiPoint3 T;
+        if (node) {
+            R = node->world.rotate;
+            T = node->world.translate;
+        } else {
+            R.SetEulerAnglesXYZ(a_obj->GetAngle());
+            T = a_obj->GetPosition();
+        }
 
-        auto makeCorner = [&](float x, float y, float z) -> RE::NiPoint3 {
-            RE::NiPoint3 local{x, y, z};
+        auto makeCorner = [&](const float x, const float y, const float z) -> RE::NiPoint3 {
+            const RE::NiPoint3 local{x, y, z};
             return T + R * local;
         };
 
@@ -100,28 +107,34 @@ namespace BoundingBox {
     RE::NiPoint3 ClosestPoint(const RE::NiPoint3& a_point_from, const RE::TESObjectREFR* a_obj_to) {
         using RE::NiPoint3;
         // Use ref local bounds for consistency with Get()
-        RE::NiPoint3 minLocal = a_obj_to->GetBoundMin();
-        RE::NiPoint3 maxLocal = a_obj_to->GetBoundMax();
+        NiPoint3 minLocal = a_obj_to->GetBoundMin();
+        NiPoint3 maxLocal = a_obj_to->GetBoundMax();
         const float scale = a_obj_to->GetScale();
         minLocal *= scale;
         maxLocal *= scale;
 
         const auto node = a_obj_to->GetCurrent3D();
-        RE::NiMatrix3 R; RE::NiPoint3 T;
-        if (node) { R = node->world.rotate; T = node->world.translate; }
-        else { R.SetEulerAnglesXYZ(a_obj_to->GetAngle()); T = WorldObject::GetPosition(a_obj_to); }
+        RE::NiMatrix3 R;
+        NiPoint3 T;
+        if (node) {
+            R = node->world.rotate;
+            T = node->world.translate;
+        } else {
+            R.SetEulerAnglesXYZ(a_obj_to->GetAngle());
+            T = WorldObject::GetPosition(a_obj_to);
+        }
 
         const NiPoint3 localCenter = (minLocal + maxLocal) * 0.5f;
         const NiPoint3 half = (maxLocal - minLocal) * 0.5f;
         const NiPoint3 worldCenter = T + R * localCenter;
 
         // Transform point to OBB local space
-        RE::NiMatrix3 RT = R.Transpose();
+        const RE::NiMatrix3 RT = R.Transpose();
         const NiPoint3 d = a_point_from - worldCenter;
         const NiPoint3 localP = RT * d;
 
         // Clamp
-        NiPoint3 clamped{
+        const NiPoint3 clamped{
             std::clamp(localP.x, -half.x, half.x),
             std::clamp(localP.y, -half.y, half.y),
             std::clamp(localP.z, -half.z, half.z)

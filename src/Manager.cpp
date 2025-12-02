@@ -777,7 +777,7 @@ void Manager::SyncWithInventory(RE::TESObjectREFR* ref) {
 
 void Manager::UpdateWO(RE::TESObjectREFR* ref) {
     HandleDynamicWO(ref);
-    
+
     const RefID refid = ref->GetFormID();
     if (!RefIsUpdatable(ref)) {
         DeRegisterRef(refid);
@@ -850,7 +850,8 @@ bool Manager::RefIsUpdatable(const RE::TESObjectREFR* ref) {
     if (!Settings::world_objects_evolve.load()) return false;
     if (ref->IsDeleted() || ref->IsDisabled() || ref->IsMarkedForDeletion()) return false;
     if (ref->IsActivationBlocked()) return false;
-    if (!Settings::unowned_objects_evolve.load() && RE::PlayerCharacter::GetSingleton()->WouldBeStealing(ref)) return false;
+    if (!Settings::unowned_objects_evolve.load() && RE::PlayerCharacter::GetSingleton()->WouldBeStealing(ref)) return
+        false;
     return true;
 }
 
@@ -1193,7 +1194,6 @@ void Manager::SendData() {
     logger::info("--------Sending data---------");
     Print();
     Clear();
-
 
     for (SRC_UNIQUE_GUARD; auto& src : sources) {
         CleanUpSourceData(&src);

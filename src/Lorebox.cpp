@@ -11,7 +11,7 @@ namespace {
 
     constexpr auto INFINITY_SYM = L"~"; // ∞
 
-    std::wstring FormNameW(FormID fid) {
+    std::wstring FormNameW(const FormID fid) {
         if (!fid) return L"";
         if (auto f = RE::TESForm::LookupByID(fid)) {
             const char* nm = f->GetName();
@@ -241,7 +241,7 @@ bool Lorebox::HasKW(const RE::TESForm* a_form) {
     return kw_added.contains(a_form->GetFormID());
 }
 
-bool Lorebox::IsRemoved(FormID a_formid) {
+bool Lorebox::IsRemoved(const FormID a_formid) {
     std::shared_lock lock(kw_mutex);
     return kw_removed.contains(a_formid);
 }

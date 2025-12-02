@@ -77,8 +77,8 @@ class Manager final : public Ticker, public SaveLoadData {
                                   RE::TESBoundObject* source_bound = nullptr);
 
     [[nodiscard]] static bool ApplyEvolutionInInventory(RE::TESObjectREFR* inventory_owner,
-                                                 Count update_count,
-                                                 FormID old_item, FormID new_item);
+                                                        Count update_count,
+                                                        FormID old_item, FormID new_item);
 
     static inline void RemoveItem(RE::TESObjectREFR* moveFrom, FormID item_id, Count count);
 

@@ -77,7 +77,6 @@ namespace String {
 }
 
 
-
 namespace Types {
     struct FormFormID {
         FormID form_id1;

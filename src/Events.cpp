@@ -54,8 +54,9 @@ RE::BSEventNotifyControl OurEventSink::ProcessEvent(const RE::TESActivateEvent* 
     if (M->isLoading.load()) return RE::BSEventNotifyControl::kContinue;
     if (!event) return RE::BSEventNotifyControl::kContinue;
     if (!event->objectActivated) return RE::BSEventNotifyControl::kContinue;
-    if (event->objectActivated == RE::PlayerCharacter::GetSingleton()->GetGrabbedRef()) return
-        RE::BSEventNotifyControl::kContinue;
+    if (event->objectActivated == RE::PlayerCharacter::GetSingleton()->GetGrabbedRef())
+        return
+            RE::BSEventNotifyControl::kContinue;
     if (event->objectActivated->IsActivationBlocked()) return RE::BSEventNotifyControl::kContinue;
 
     if (!M->RefIsRegistered(event->objectActivated->GetFormID())) return RE::BSEventNotifyControl::kContinue;

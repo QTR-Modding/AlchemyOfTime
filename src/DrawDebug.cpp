@@ -103,7 +103,9 @@ namespace DebugAPI_IMPL {
         return mesh;
     }
 
-    bool IsRoughlyEqual(const float first, const float second, const float maxDif) { return abs(first - second) <= maxDif; }
+    bool IsRoughlyEqual(const float first, const float second, const float maxDif) {
+        return abs(first - second) <= maxDif;
+    }
 
     glm::vec3 QuatToEuler(const glm::quat q) {
         const auto matrix = glm::toMat4(q);
@@ -173,7 +175,8 @@ namespace DebugAPI_IMPL {
         return angleDif > glm::root_two<float>();
     }
 
-    glm::vec3 GetPointOnRotatedCircle(const glm::vec3 origin, const float radius, const float i, const float maxI, const glm::vec3 eulerAngles) {
+    glm::vec3 GetPointOnRotatedCircle(const glm::vec3 origin, const float radius, const float i, const float maxI,
+                                      const glm::vec3 eulerAngles) {
         const float currAngle = i / maxI * glm::two_pi<float>();
 
         const glm::vec3 targetPos(radius * cos(currAngle), radius * sin(currAngle), 0.0f);
@@ -212,7 +215,8 @@ namespace DebugAPI_IMPL {
         DestroyTickCount = destroyTickCount;
     }
 
-    void DebugAPI::DrawLineForMS(const glm::vec3& from, const glm::vec3& to, const int liftetimeMS, const glm::vec4& color,
+    void DebugAPI::DrawLineForMS(const glm::vec3& from, const glm::vec3& to, const int liftetimeMS,
+                                 const glm::vec4& color,
                                  const float lineThickness) {
         if (DebugAPILine* oldLine = GetExistingLine(from, to, color, lineThickness)) {
             oldLine->From = from;
@@ -223,7 +227,7 @@ namespace DebugAPI_IMPL {
         }
 
         const auto newLine = new DebugAPILine(from, to, color, lineThickness, GetTickCount64() + liftetimeMS);
-		std::unique_lock lock(mutex_);
+        std::unique_lock lock(mutex_);
         LinesToDraw.push_back(newLine);
     }
 
@@ -234,7 +238,7 @@ namespace DebugAPI_IMPL {
         CacheMenuData();
         ClearLines2D(hud->uiMovie);
 
-		std::unique_lock lock(mutex_);
+        std::unique_lock lock(mutex_);
         for (int i = 0; i < LinesToDraw.size(); i++) {
             const DebugAPILine* line = LinesToDraw[i];
 
@@ -254,14 +258,17 @@ namespace DebugAPI_IMPL {
         DrawCircle(origin, radius, glm::vec3(glm::half_pi<float>(), 0.0f, 0.0f), liftetimeMS, color, lineThickness);
     }
 
-    void DebugAPI::DrawCircle(const glm::vec3 origin, const float radius, const glm::vec3 eulerAngles, const int liftetimeMS,
+    void DebugAPI::DrawCircle(const glm::vec3 origin, const float radius, const glm::vec3 eulerAngles,
+                              const int liftetimeMS,
                               const glm::vec4& color, const float lineThickness) {
         glm::vec3 lastEndPos =
-            GetPointOnRotatedCircle(origin, radius, CIRCLE_NUM_SEGMENTS, static_cast<float>(CIRCLE_NUM_SEGMENTS - 1), eulerAngles);
+            GetPointOnRotatedCircle(origin, radius, CIRCLE_NUM_SEGMENTS, static_cast<float>(CIRCLE_NUM_SEGMENTS - 1),
+                                    eulerAngles);
 
         for (int i = 0; i <= CIRCLE_NUM_SEGMENTS; i++) {
             glm::vec3 currEndPos =
-                GetPointOnRotatedCircle(origin, radius, static_cast<float>(i), static_cast<float>(CIRCLE_NUM_SEGMENTS - 1), eulerAngles);
+                GetPointOnRotatedCircle(origin, radius, static_cast<float>(i),
+                                        static_cast<float>(CIRCLE_NUM_SEGMENTS - 1), eulerAngles);
 
             DrawLineForMS(lastEndPos, currEndPos, liftetimeMS, color, lineThickness);
 
@@ -271,7 +278,7 @@ namespace DebugAPI_IMPL {
 
     DebugAPILine* DebugAPI::GetExistingLine(const glm::vec3& from, const glm::vec3& to, const glm::vec4& color,
                                             const float lineThickness) {
-		std::shared_lock lock(mutex_);
+        std::shared_lock lock(mutex_);
         for (int i = 0; i < LinesToDraw.size(); i++) {
             DebugAPILine* line = LinesToDraw[i];
 
@@ -289,7 +296,8 @@ namespace DebugAPI_IMPL {
         return nullptr;
     }
 
-    void DebugAPI::DrawLine3D(const RE::GPtr<RE::GFxMovieView>& movie, const glm::vec3 from, const glm::vec3 to, const float color,
+    void DebugAPI::DrawLine3D(const RE::GPtr<RE::GFxMovieView>& movie, const glm::vec3 from, const glm::vec3 to,
+                              const float color,
                               const float lineThickness, const float alpha) {
         if (IsPosBehindPlayerCamera(from) && IsPosBehindPlayerCamera(to)) return;
 
@@ -298,7 +306,8 @@ namespace DebugAPI_IMPL {
         DrawLine2D(movie, screenLocFrom, screenLocTo, color, lineThickness, alpha);
     }
 
-    void DebugAPI::DrawLine3D(const RE::GPtr<RE::GFxMovieView>& movie, const glm::vec3 from, const glm::vec3 to, const glm::vec4 color,
+    void DebugAPI::DrawLine3D(const RE::GPtr<RE::GFxMovieView>& movie, const glm::vec3 from, const glm::vec3 to,
+                              const glm::vec4 color,
                               const float lineThickness) {
         DrawLine3D(movie, from, to, RGBToHex(glm::vec3(color.r, color.g, color.b)), lineThickness, color.a * 100.0f);
     }
@@ -329,12 +338,15 @@ namespace DebugAPI_IMPL {
         movie->Invoke("endFill", nullptr, nullptr, 0);
     }
 
-    void DebugAPI::DrawLine2D(const RE::GPtr<RE::GFxMovieView>& movie, const glm::vec2 from, const glm::vec2 to, const glm::vec4 color,
+    void DebugAPI::DrawLine2D(const RE::GPtr<RE::GFxMovieView>& movie, const glm::vec2 from, const glm::vec2 to,
+                              const glm::vec4 color,
                               const float lineThickness) {
         DrawLine2D(movie, from, to, RGBToHex(glm::vec3(color.r, color.g, color.b)), lineThickness, color.a * 100.0f);
     }
 
-    void DebugAPI::ClearLines2D(const RE::GPtr<RE::GFxMovieView>& movie) { movie->Invoke("clear", nullptr, nullptr, 0); }
+    void DebugAPI::ClearLines2D(const RE::GPtr<RE::GFxMovieView>& movie) {
+        movie->Invoke("clear", nullptr, nullptr, 0);
+    }
 
     RE::GPtr<RE::IMenu> DebugAPI::GetHUD() {
         RE::GPtr<RE::IMenu> hud = RE::UI::GetSingleton()->GetMenu(DebugOverlayMenu::MENU_NAME);
@@ -354,6 +366,7 @@ namespace DebugAPI_IMPL {
     // between two points and scale the vector accordingly. Might implement that at some point, but the inaccuracy is
     // barely noticeable
     constexpr float CLAMP_MAX_OVERSHOOT = 10000.0f;
+
     void DebugAPI::FastClampToScreen(glm::vec2& point) {
         if (point.x < 0.0) {
             const float overshootX = abs(point.x);
@@ -379,9 +392,9 @@ namespace DebugAPI_IMPL {
     float DebugAPI::ConvertComponentB(const float value) { return value; }
 
     glm::vec2 DebugAPI::WorldToScreenLoc(const RE::GPtr<RE::GFxMovieView>& movie, const glm::vec3 worldLoc) {
-        static uintptr_t g_worldToCamMatrix = RELOCATION_ID(519579, 406126).address();  // 2F4C910, 2FE75F0
+        static uintptr_t g_worldToCamMatrix = RELOCATION_ID(519579, 406126).address(); // 2F4C910, 2FE75F0
         static auto g_viewPort =
-            (RE::NiRect<float>*)RELOCATION_ID(519618, 406160).address();  // 2F4DED0, 2FE8B98
+            (RE::NiRect<float>*)RELOCATION_ID(519618, 406160).address(); // 2F4DED0, 2FE8B98
 
         glm::vec2 screenLocOut;
         const RE::NiPoint3 niWorldLoc(worldLoc.x, worldLoc.y, worldLoc.z);
@@ -393,7 +406,7 @@ namespace DebugAPI_IMPL {
         const RE::GRectF rect = movie->GetVisibleFrameRect();
 
         screenLocOut.x = rect.left + (rect.right - rect.left) * screenLocOut.x;
-        screenLocOut.y = 1.0f - screenLocOut.y;  // Flip y for Flash coordinate system
+        screenLocOut.y = 1.0f - screenLocOut.y; // Flip y for Flash coordinate system
         screenLocOut.y = rect.top + (rect.bottom - rect.top) * screenLocOut.y;
 
         return screenLocOut;
@@ -419,21 +432,21 @@ namespace DebugAPI_IMPL {
         if (ui) {
             ui->Register(MENU_NAME, Creator);
 
-            DebugOverlayMenu::Show();
+            Show();
         }
     }
 
     void DebugOverlayMenu::Show() {
         const auto msgQ = RE::UIMessageQueue::GetSingleton();
         if (msgQ) {
-            msgQ->AddMessage(DebugOverlayMenu::MENU_NAME, RE::UI_MESSAGE_TYPE::kShow, nullptr);
+            msgQ->AddMessage(MENU_NAME, RE::UI_MESSAGE_TYPE::kShow, nullptr);
         }
     }
 
     void DebugOverlayMenu::Hide() {
         const auto msgQ = RE::UIMessageQueue::GetSingleton();
         if (msgQ) {
-            msgQ->AddMessage(DebugOverlayMenu::MENU_NAME, RE::UI_MESSAGE_TYPE::kHide, nullptr);
+            msgQ->AddMessage(MENU_NAME, RE::UI_MESSAGE_TYPE::kHide, nullptr);
         }
     }
 
@@ -458,7 +471,7 @@ namespace DebugAPI_IMPL {
     }
 
     void DebugOverlayMenu::AdvanceMovie(const float a_interval, const std::uint32_t a_currentTime) {
-        RE::IMenu::AdvanceMovie(a_interval, a_currentTime);
+        IMenu::AdvanceMovie(a_interval, a_currentTime);
 
         DebugAPI::Update();
     }

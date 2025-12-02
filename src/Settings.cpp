@@ -836,13 +836,16 @@ void PresetParse::LoadINISettings() {
     writeHex("ColorSeparator", Lorebox::color_separator.load());
 
     // Write symbol defaults only if missing; preserve user's raw codes/entities (use escaped ASCII)
-    if (!ini.KeyExists("LoreBox", "SeparatorSymbol")) ini.SetValue("LoreBox", "SeparatorSymbol",
-                                                                   String::EncodeEscapesToAscii(
-                                                                       Lorebox::separator_symbol).c_str());
-    if (!ini.KeyExists("LoreBox", "ArrowRight")) ini.SetValue("LoreBox", "ArrowRight",
-                                                              String::EncodeEscapesToAscii(Lorebox::arrow_right).c_str());
-    if (!ini.KeyExists("LoreBox", "ArrowLeft")) ini.SetValue("LoreBox", "ArrowLeft",
-                                                             String::EncodeEscapesToAscii(Lorebox::arrow_left).c_str());
+    if (!ini.KeyExists("LoreBox", "SeparatorSymbol"))
+        ini.SetValue("LoreBox", "SeparatorSymbol",
+                     String::EncodeEscapesToAscii(
+                         Lorebox::separator_symbol).c_str());
+    if (!ini.KeyExists("LoreBox", "ArrowRight"))
+        ini.SetValue("LoreBox", "ArrowRight",
+                     String::EncodeEscapesToAscii(Lorebox::arrow_right).c_str());
+    if (!ini.KeyExists("LoreBox", "ArrowLeft"))
+        ini.SetValue("LoreBox", "ArrowLeft",
+                     String::EncodeEscapesToAscii(Lorebox::arrow_left).c_str());
 
     ini.SaveFile(Settings::INI_path);
 }

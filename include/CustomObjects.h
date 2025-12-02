@@ -39,7 +39,8 @@ struct Stage {
     uint32_t color;
 
 
-    Stage(){};
+    Stage() {
+    };
 
     Stage(const FormID f, const Duration d, const StageNo s, StageName n, const bool ca,
           const std::vector<StageEffect>& e, const uint32_t color_ = 0)
