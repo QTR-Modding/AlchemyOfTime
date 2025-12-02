@@ -1,11 +1,13 @@
 #include "Settings.h"
-#include <future>
-#include <utility>
 #include "SimpleIni.h"
 #include "Threading.h"
 #include "CLibUtilsQTR/PresetHelpers/PresetHelpersTXT.hpp"
 #include "CLibUtilsQTR/PresetHelpers/PresetHelpersYAML.hpp"
+#include "CLibUtilsQTR/StringHelpers.hpp"
 #include "Lorebox.h"
+#include "rapidjson/stringbuffer.h"
+#include <rapidjson/istreamwrapper.h>
+#include <rapidjson/writer.h>
 
 using QFormChecker = bool(*)(const RE::TESForm*);
 
@@ -68,12 +70,12 @@ bool Settings::IsInExclude(const FormID formid, std::string type) {
     const auto form_string = std::string(form->GetName());
 
     if (const std::string form_editorid = clib_util::editorID::get_editorID(form);
-        !form_editorid.empty() && String::includesWord(form_editorid, exclude_list[type])) {
+        !form_editorid.empty() && StringHelpers::includesWord(form_editorid, exclude_list[type])) {
         return true;
     }
 
     /*const auto exlude_list = LoadExcludeList(postfix);*/
-    if (String::includesWord(form_string, exclude_list[type])) {
+    if (StringHelpers::includesWord(form_string, exclude_list[type])) {
         return true;
     }
     return false;
@@ -148,7 +150,7 @@ DefaultSettings* Settings::GetCustomSetting(const RE::TESForm* form) {
                     }
                 }
             }
-            if (String::includesWord(form->GetName(), names)) {
+            if (StringHelpers::includesWord(form->GetName(), names)) {
                 return &sttng;
             }
         }
@@ -726,6 +728,7 @@ DefaultSettings PresetParse::parseDefaults(const std::string& _type) {
     return temp_settings;
 }
 
+
 void PresetParse::LoadINISettings() {
     logger::info("Loading ini settings");
 
@@ -837,8 +840,7 @@ void PresetParse::LoadINISettings() {
                                                                    String::EncodeEscapesToAscii(
                                                                        Lorebox::separator_symbol).c_str());
     if (!ini.KeyExists("LoreBox", "ArrowRight")) ini.SetValue("LoreBox", "ArrowRight",
-                                                              String::EncodeEscapesToAscii(Lorebox::arrow_right).
-                                                              c_str());
+                                                              String::EncodeEscapesToAscii(Lorebox::arrow_right).c_str());
     if (!ini.KeyExists("LoreBox", "ArrowLeft")) ini.SetValue("LoreBox", "ArrowLeft",
                                                              String::EncodeEscapesToAscii(Lorebox::arrow_left).c_str());
 

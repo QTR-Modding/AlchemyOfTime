@@ -3,6 +3,7 @@
 #ifndef NDEBUG
 #include "DrawDebug.h"
 #endif
+#include "BoundingBox.h" 
 
 void Source::Init(const DefaultSettings* defaultsettings) {
     if (!defaultsettings) {
@@ -1131,7 +1132,7 @@ namespace {
         if (UI::draw_debug) {
             draw_line(WorldObject::GetPosition(ref), WorldObject::GetPosition(RE::PlayerCharacter::GetSingleton()), 3.f,
                       glm::vec4(0.f, 0.f, 1.f, 1.f));
-            WorldObject::DrawBoundingBox(ref);
+            BoundingBox::Draw(ref);
         }
         #endif
         if (!WorldObject::AreClose(a_origin, ref, proximity)) {

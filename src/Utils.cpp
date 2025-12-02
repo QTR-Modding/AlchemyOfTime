@@ -1,41 +1,9 @@
 #include "Utils.h"
-#include <numbers>
+#include "BoundingBox.h"
 #include "CLibUtilsQTR/FormReader.hpp"
 #include "Settings.h"
 #include "DrawDebug.h"
 #include "MCP.h"
-#pragma comment(lib, "d3d11.lib")
-
-
-namespace {
-    UINT GetBufferLength(RE::ID3D11Buffer* reBuffer) {
-        const auto buffer = reinterpret_cast<ID3D11Buffer*>(reBuffer);
-        D3D11_BUFFER_DESC bufferDesc = {};
-        buffer->GetDesc(&bufferDesc);
-        return bufferDesc.ByteWidth;
-    }
-
-    void EachGeometry(const RE::TESObjectREFR* obj,
-                      const std::function<void(RE::BSGeometry* o3d, RE::BSGraphics::TriShape*)>& callback) {
-        if (const auto d3d = obj->Get3D()) {
-            RE::BSVisit::TraverseScenegraphGeometries(
-                d3d, [&](RE::BSGeometry* a_geometry) -> RE::BSVisit::BSVisitControl {
-                    const auto& model = a_geometry->GetGeometryRuntimeData();
-
-                    if (const auto triShape = model.rendererData) {
-                        callback(a_geometry, triShape);
-                    }
-
-                    return RE::BSVisit::BSVisitControl::kContinue;
-                });
-        }
-    }
-
-    float clampf(const float x, const float lo, const float hi) {
-        return x < lo ? lo : x > hi ? hi : x;
-    }
-};
-
 
 bool Types::FormEditorID::operator<(const FormEditorID& other) const {
     // Compare form_id first
@@ -276,6 +244,104 @@ bool AreAdjacentCells(RE::TESObjectCELL* cellA, RE::TESObjectCELL* cellB) {
     return false;
 }
 
+std::string String::EncodeEscapesToAscii(const std::wstring& ws) {
+    std::string out;
+    for (const auto& wc : ws) {
+        switch (wc) {
+            case L'\n':
+                out += "\\n";
+                break;
+            case L'\r':
+                out += "\\r";
+                break;
+            case L'\t':
+                out += "\\t";
+                break;
+            case L'\\':
+                out += "\\\\";
+                break;
+            default:
+                if (wc < 0x20 || wc > 0x7E) {
+                    char buffer[7];
+                    snprintf(buffer, sizeof(buffer), "\\u%04x", static_cast<unsigned int>(wc));
+                    out += buffer;
+                } else {
+                    out += static_cast<char>(wc);
+                }
+                break;
+        }
+    }
+    return out;
+}
+
+std::wstring String::DecodeEscapesFromAscii(const char* s) {
+    auto hexVal = [](const char ch) -> int {
+        if (ch >= '0' && ch <= '9') return ch - '0';
+        if (ch >= 'a' && ch <= 'f') return 10 + (ch - 'a');
+        if (ch >= 'A' && ch <= 'F') return 10 + (ch - 'A');
+        return -1;
+    };
+
+    std::wstring out;
+    for (size_t i = 0; s && s[i];) {
+        char c = s[i++];
+        if (c == '\\' && s[i]) {
+            char t = s[i++];
+            switch (t) {
+                case 'n':
+                    out.push_back(L'\n');
+                    break;
+                case 'r':
+                    out.push_back(L'\r');
+                    break;
+                case 't':
+                    out.push_back(L'\t');
+                    break;
+                case '\\':
+                    out.push_back(L'\\');
+                    break;
+                case 'x': {
+                    int val = 0, digits = 0;
+                    while (s[i]) {
+                        int hv = hexVal(s[i]);
+                        if (hv < 0) break;
+                        val = val << 4 | hv;
+                        ++i;
+                        ++digits;
+                        if (digits >= 2) break;
+                    }
+                    if (digits > 0)
+                        out.push_back(static_cast<wchar_t>(val));
+                    else
+                        out.push_back(L'x');
+                    break;
+                }
+                case 'u': {
+                    int val = 0, digits = 0;
+                    while (s[i] && digits < 4) {
+                        int hv = hexVal(s[i]);
+                        if (hv < 0) break;
+                        val = val << 4 | hv;
+                        ++i;
+                        ++digits;
+                    }
+                    if (digits == 4)
+                        out.push_back(static_cast<wchar_t>(val));
+                    else
+                        out.push_back(L'u');
+                    break;
+                }
+                default:
+                    out.push_back(static_cast<unsigned char>(t));
+                    break;
+            }
+        } else {
+            out.push_back(static_cast<unsigned char>(c));
+        }
+    }
+    return out;
+}
+
 int16_t WorldObject::GetObjectCount(RE::TESObjectREFR* ref) {
     if (!ref) {
         logger::error("Ref is null.");
@@ -412,7 +478,7 @@ bool WorldObject::IsPlacedObject(RE::TESObjectREFR* ref) {
 }
 
 RE::bhkRigidBody* WorldObject::GetRigidBody(const RE::TESObjectREFR* refr) {
-    const auto object3D = refr->Get3D();
+    const auto object3D = refr->GetCurrent3D();
     if (!object3D) {
         return nullptr;
     }
@@ -423,6 +489,11 @@ RE::bhkRigidBody* WorldObject::GetRigidBody(const RE::TESObjectREFR* refr) {
 }
 
 RE::NiPoint3 WorldObject::GetPosition(const RE::TESObjectREFR* obj) {
+    // Prefer accurate mesh world translate when available
+    if (const auto mesh = obj->GetCurrent3D()) {
+        return mesh->world.translate;
+    }
+    // Fallback to Havok/body or ref pos
     const auto body = GetRigidBody(obj);
     if (!body) return obj->GetPosition();
     RE::hkVector4 havockPosition;
@@ -435,265 +506,19 @@ RE::NiPoint3 WorldObject::GetPosition(const RE::TESObjectREFR* obj) {
     return newPosition;
 }
 
-std::array<RE::NiPoint3, 8> WorldObject::GetBoundingBox(const RE::TESObjectREFR* a_obj) {
-    //using namespace Math::LinAlg;
-    const auto center = GetPosition(a_obj);
-    const Math::LinAlg::Geometry geometry(a_obj);
-    auto [min, max] = geometry.GetBoundingBox();
-
-    min = center + min;
-    max = center + max;
-
-    const auto obj_angle = a_obj->GetAngle();
-
-    const auto v1 = Math::LinAlg::Geometry::Rotate(RE::NiPoint3(min.x, min.y, min.z) - center, obj_angle) + center;
-    const auto v2 = Math::LinAlg::Geometry::Rotate(RE::NiPoint3(max.x, min.y, min.z) - center, obj_angle) + center;
-    const auto v3 = Math::LinAlg::Geometry::Rotate(RE::NiPoint3(max.x, max.y, min.z) - center, obj_angle) + center;
-    const auto v4 = Math::LinAlg::Geometry::Rotate(RE::NiPoint3(min.x, max.y, min.z) - center, obj_angle) + center;
-
-    const auto v5 = Math::LinAlg::Geometry::Rotate(RE::NiPoint3(min.x, min.y, max.z) - center, obj_angle) + center;
-    const auto v6 = Math::LinAlg::Geometry::Rotate(RE::NiPoint3(max.x, min.y, max.z) - center, obj_angle) + center;
-    const auto v7 = Math::LinAlg::Geometry::Rotate(RE::NiPoint3(max.x, max.y, max.z) - center, obj_angle) + center;
-    const auto v8 = Math::LinAlg::Geometry::Rotate(RE::NiPoint3(min.x, max.y, max.z) - center, obj_angle) + center;
-
-    //logger::trace("v1 ({},{},{}), v2 ({},{},{}), v3 ({},{},{}), v4 ({},{},{}), v5 ({},{},{}), v6 ({},{},{}), v7 ({},{},{}), v8 ({},{},{})",
-    //		v1.x, v1.y, v1.z,
-    //		v2.x, v2.y, v2.z,
-    //		v3.x, v3.y, v3.z,
-    //		v4.x, v4.y, v4.z,
-    //		v5.x, v5.y, v5.z,
-    //		v6.x, v6.y, v6.z,
-    //		v7.x, v7.y, v7.z,
-    //	    v8.x, v8.y, v8.z
-    //);
-
-    return {v1, v2, v3, v4, v5, v6, v7, v8};
-}
-
-void WorldObject::DrawBoundingBox(const RE::TESObjectREFR* a_obj) {
-    const auto boundingBox = GetBoundingBox(a_obj);
-    DrawBoundingBox(boundingBox);
-}
-
-void WorldObject::DrawBoundingBox(const std::array<RE::NiPoint3, 8>& a_box) {
-    const auto& v1 = a_box[0];
-    const auto& v2 = a_box[1];
-    const auto& v3 = a_box[2];
-    const auto& v4 = a_box[3];
-    const auto& v5 = a_box[4];
-    const auto& v6 = a_box[5];
-    const auto& v7 = a_box[6];
-    const auto& v8 = a_box[7];
-
-    // Draw bottom face
-    draw_line(v1, v2, 1);
-    draw_line(v2, v3, 1);
-    draw_line(v3, v4, 1);
-    draw_line(v4, v1, 1);
-
-    // Draw top face
-    draw_line(v5, v6, 1);
-    draw_line(v6, v7, 1);
-    draw_line(v7, v8, 1);
-    draw_line(v8, v5, 1);
-
-    // Connect bottom and top faces
-    draw_line(v1, v5, 1);
-    draw_line(v2, v6, 1);
-    draw_line(v3, v7, 1);
-    draw_line(v4, v8, 1);
-}
-
-RE::NiPoint3 WorldObject::GetClosestPoint(const RE::NiPoint3& a_point_from, const RE::TESObjectREFR* a_obj_to) {
-    using RE::NiPoint3;
-    using namespace Math::LinAlg;
-
-    // Center and orientation
-    const NiPoint3 C = GetPosition(a_obj_to);
-    const NiPoint3 angles = a_obj_to->GetAngle();
-
-    // Local-space AABB (after uniform scale)
-    const Geometry geom(a_obj_to);
-    auto [minLocal, maxLocal] = geom.GetBoundingBox(); // local min/max
-
-    // Build the box's world axes by rotating the canonical basis
-    const NiPoint3 ux = Geometry::Rotate(NiPoint3{1.f, 0.f, 0.f}, angles); // world X-axis of the box
-    const NiPoint3 uy = Geometry::Rotate(NiPoint3{0.f, 1.f, 0.f}, angles); // world Y-axis of the box
-    const NiPoint3 uz = Geometry::Rotate(NiPoint3{0.f, 0.f, 1.f}, angles); // world Z-axis of the box
-
-    // Project world point into the box's local coordinates (via dot with world axes)
-    const NiPoint3 dP = a_point_from - C;
-    const float px = dP.Dot(ux);
-    const float py = dP.Dot(uy);
-    const float pz = dP.Dot(uz);
-
-    // Clamp per axis in local space
-    const float qx = clampf(px, minLocal.x, maxLocal.x);
-    const float qy = clampf(py, minLocal.y, maxLocal.y);
-    const float qz = clampf(pz, minLocal.z, maxLocal.z);
-
-    // Reconstruct closest point in world space
-    // (linear combination of the world axes from the center)
-    const NiPoint3 closest = C + ux * qx + uy * qy + uz * qz;
-    return closest;
-}
-
 bool WorldObject::AreClose(const RE::TESObjectREFR* a_obj1, const RE::TESObjectREFR* a_obj2, const float threshold) {
-    const auto a_obj1_center = GetPosition(a_obj1);
-    const auto closest1 = GetClosestPoint(a_obj1_center, a_obj2);
-    const auto closest2 = GetClosestPoint(closest1, a_obj1);
-    if (closest1.GetDistance(closest2) < threshold) {
-        #ifndef NDEBUG
+    const auto c1 = WorldObject::GetPosition(a_obj1);
+    const auto closestOn2 = BoundingBox::ClosestPoint(c1, a_obj2);
+    const auto closestOn1 = BoundingBox::ClosestPoint(closestOn2, a_obj1);
+    if (closestOn2.GetDistance(closestOn1) < threshold) {
+#ifndef NDEBUG
         if (UI::draw_debug) {
-            draw_line(closest1, closest2, 3, glm::vec4(1.f, 1.f, 1.f, 1.f));
+            draw_line(closestOn2, closestOn1, 3, glm::vec4(1.f, 1.f, 1.f, 1.f));
         }
-        #endif
+#endif
         return true;
     }
     return false;
-}
-
-std::string String::toLowercase(const std::string& str) {
-    std::string result = str;
-    std::ranges::transform(result, result.begin(),
-                           [](const unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    return result;
-}
-
-std::string String::replaceLineBreaksWithSpace(const std::string& input) {
-    std::string result = input;
-    std::ranges::replace(result, '\n', ' ');
-    return result;
-}
-
-std::string String::trim(const std::string& str) {
-    // Find the first non-whitespace character from the beginning
-    const size_t start = str.find_first_not_of(" \t\n\r");
-
-    // If the string is all whitespace, return an empty string
-    if (start == std::string::npos) return "";
-
-    // Find the last non-whitespace character from the end
-    const size_t end = str.find_last_not_of(" \t\n\r");
-
-    // Return the substring containing the trimmed characters
-    return str.substr(start, end - start + 1);
-}
-
-bool String::includesWord(const std::string& input, const std::vector<std::string>& strings) {
-    std::string lowerInput = toLowercase(input);
-    lowerInput = replaceLineBreaksWithSpace(lowerInput);
-    lowerInput = trim(lowerInput);
-    lowerInput = " " + lowerInput + " "; // Add spaces to the beginning and end of the string
-
-    for (const auto& str : strings) {
-        std::string lowerStr = str;
-        lowerStr = trim(lowerStr);
-        lowerStr = " " + lowerStr + " "; // Add spaces to the beginning and end of the string
-        std::ranges::transform(lowerStr, lowerStr.begin(),
-                               [](const unsigned char c) { return static_cast<char>(std::tolower(c)); });
-
-        //logger::trace("lowerInput: {} lowerStr: {}", lowerInput, lowerStr);
-
-        if (lowerInput.find(lowerStr) != std::string::npos) {
-            return true; // The input string includes one of the strings
-        }
-    }
-    return false; // None of the strings in 'strings' were found in the input string
-}
-
-std::string String::EncodeEscapesToAscii(const std::wstring& ws) {
-    std::string out;
-    for (const auto& wc : ws) {
-        switch (wc) {
-            case L'\n':
-                out += "\\n";
-                break;
-            case L'\r':
-                out += "\\r";
-                break;
-            case L'\t':
-                out += "\\t";
-                break;
-            case L'\\':
-                out += "\\\\";
-                break;
-            default:
-                if (wc < 0x20 || wc > 0x7E) {
-                    char buffer[7];
-                    snprintf(buffer, sizeof(buffer), "\\u%04x", static_cast<unsigned int>(wc));
-                    out += buffer;
-                } else {
-                    out += static_cast<char>(wc);
-                }
-                break;
-        }
-    }
-    return out;
-}
-
-std::wstring String::DecodeEscapesFromAscii(const char* s) {
-    auto hexVal = [](const char ch) -> int {
-        if (ch >= '0' && ch <= '9') return ch - '0';
-        if (ch >= 'a' && ch <= 'f') return 10 + (ch - 'a');
-        if (ch >= 'A' && ch <= 'F') return 10 + (ch - 'A');
-        return -1;
-    };
-
-    std::wstring out;
-    for (size_t i = 0; s && s[i];) {
-        char c = s[i++];
-        if (c == '\\' && s[i]) {
-            char t = s[i++];
-            switch (t) {
-                case 'n':
-                    out.push_back(L'\n');
-                    break;
-                case 'r':
-                    out.push_back(L'\r');
-                    break;
-                case 't':
-                    out.push_back(L'\t');
-                    break;
-                case '\\':
-                    out.push_back(L'\\');
-                    break;
-                case 'x': {
-                    int val = 0, digits = 0;
-                    while (s[i]) {
-                        int hv = hexVal(s[i]);
-                        if (hv < 0) break;
-                        val = val << 4 | hv;
-                        ++i;
-                        ++digits;
-                        if (digits >= 2) break;
-                    }
-                    if (digits > 0) out.push_back(static_cast<wchar_t>(val));
-                    else out.push_back(L'x');
-                    break;
-                }
-                case 'u': {
-                    int val = 0, digits = 0;
-                    while (s[i] && digits < 4) {
-                        int hv = hexVal(s[i]);
-                        if (hv < 0) break;
-                        val = val << 4 | hv;
-                        ++i;
-                        ++digits;
-                    }
-                    if (digits == 4) out.push_back(static_cast<wchar_t>(val));
-                    else out.push_back(L'u');
-                    break;
-                }
-                default:
-                    out.push_back(static_cast<unsigned char>(t));
-                    break;
-            }
-        } else {
-            out.push_back(static_cast<unsigned char>(c));
-        }
-    }
-    return out;
 }
 
 void Math::LinAlg::R3::rotateX(RE::NiPoint3& v, const float angle) {
@@ -1062,88 +887,4 @@ RE::NiPoint3 Math::LinAlg::intersectLine(const std::array<RE::NiPoint3, 3>& vert
     }
 
     return orthogonal_vertex;
-}
-
-void Math::LinAlg::Geometry::FetchVertices(const RE::BSGeometry* o3d, RE::BSGraphics::TriShape* triShape) {
-    if (const uint8_t* vertexData = triShape->rawVertexData) {
-        const uint32_t stride = triShape->vertexDesc.GetSize();
-        const auto numPoints = GetBufferLength(triShape->vertexBuffer);
-        const auto numPositions = numPoints / stride;
-        positions.reserve(positions.size() + numPositions);
-        for (uint32_t i = 0; i < numPoints; i += stride) {
-            const uint8_t* currentVertex = vertexData + i;
-
-            const auto position =
-                reinterpret_cast<const float*>(currentVertex + triShape->vertexDesc.GetAttributeOffset(
-                                                   RE::BSGraphics::Vertex::Attribute::VA_POSITION));
-
-            auto pos = RE::NiPoint3{position[0], position[1], position[2]};
-            pos = o3d->local * pos;
-            positions.push_back(pos);
-        }
-    }
-}
-
-RE::NiPoint3 Math::LinAlg::Geometry::Rotate(const RE::NiPoint3& A, const RE::NiPoint3& angles) {
-    RE::NiMatrix3 R;
-    R.SetEulerAnglesXYZ(angles);
-    return R * A;
-}
-
-Math::LinAlg::Geometry::Geometry(const RE::TESObjectREFR* obj) {
-    this->obj = obj;
-    EachGeometry(obj, [this](const RE::BSGeometry* o3d, RE::BSGraphics::TriShape* triShape) -> void {
-        FetchVertices(o3d, triShape);
-        //FetchIndexes(triShape);
-    });
-
-    if (positions.empty()) {
-        auto from = obj->GetBoundMin();
-        auto to = obj->GetBoundMax();
-
-        if ((to - from).Length() < 1) {
-            from = {-5, -5, -5};
-            to = {5, 5, 5};
-        }
-        positions.emplace_back(from.x, from.y, from.z);
-        positions.emplace_back(to.x, from.y, from.z);
-        positions.emplace_back(to.x, to.y, from.z);
-        positions.emplace_back(from.x, to.y, from.z);
-
-        positions.emplace_back(from.x, from.y, to.z);
-        positions.emplace_back(to.x, from.y, to.z);
-        positions.emplace_back(to.x, to.y, to.z);
-        positions.emplace_back(from.x, to.y, to.z);
-    }
-}
-
-std::pair<RE::NiPoint3, RE::NiPoint3> Math::LinAlg::Geometry::GetBoundingBox() const {
-    auto min = RE::NiPoint3{0, 0, 0};
-    auto max = RE::NiPoint3{0, 0, 0};
-
-    for (auto i = 0; i < positions.size(); i++) {
-        //const auto p1 = Rotate(positions[i] * scale, angle);
-        const auto p1 = positions[i] * obj->GetScale();
-
-        if (p1.x < min.x) {
-            min.x = p1.x;
-        }
-        if (p1.x > max.x) {
-            max.x = p1.x;
-        }
-        if (p1.y < min.y) {
-            min.y = p1.y;
-        }
-        if (p1.y > max.y) {
-            max.y = p1.y;
-        }
-        if (p1.z < min.z) {
-            min.z = p1.z;
-        }
-        if (p1.z > max.z) {
-            max.z = p1.z;
-        }
-    }
-
-    return std::pair(min, max);
 }

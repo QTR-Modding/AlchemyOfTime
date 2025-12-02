@@ -15,4 +15,6 @@ set(headers ${headers}
 	include/Threading.h
 	include/Logger.h
 	include/Lorebox.h
+	include/BoundingBox.h
+	include/Geometry.hpp
 )
