@@ -1,6 +1,7 @@
 #pragma once
 #include "DynamicFormTracker.h"
 #include "Lorebox.h"
+#include "CLibUtilsQTR/FormReader.hpp"
 
 struct Source {
     using SourceData = std::unordered_map<RefID, std::vector<StageInstance>>;
@@ -27,9 +28,7 @@ struct Source {
 
     void UpdateAddons();
 
-    [[nodiscard]] RE::TESBoundObject* GetBoundObject() const {
-        return FormReader::GetFormByID<RE::TESBoundObject>(formid, editorid);
-    };
+    [[nodiscard]] RE::TESBoundObject* GetBoundObject() const;;
 
     std::unordered_map<RefID, std::vector<StageUpdate>> UpdateAllStages(const std::vector<RefID>& filter, float time);
 
@@ -186,50 +185,7 @@ private:
     void RegisterStage(FormID stage_formid, StageNo stage_no);
 
     template <typename T>
-    FormID FetchFake(const StageNo st_no) {
-        auto* DFT = DynamicFormTracker::GetSingleton();
-        if (editorid.empty()) {
-            logger::error("Editorid is empty.");
-            return 0;
-        }
-        const FormID new_formid = DFT->FetchCreate<T>(formid, editorid, static_cast<uint32_t>(st_no));
-
-        if (auto stage_form = FormReader::GetFormByID<T>(new_formid)) {
-            RegisterStage(new_formid, st_no);
-            if (!stages.contains(st_no)) {
-                logger::error("Stage {} not found in stages.", st_no);
-                return 0;
-            }
-
-            // Update name of the fake form
-            const auto& name = stages.at(st_no).name;
-            const auto og_name = RE::TESForm::LookupByID(formid)->GetName();
-            const auto new_name = std::string(og_name) + " (" + name + ")";
-            if (!name.empty() && std::strcmp(stage_form->fullName.c_str(), new_name.c_str()) != 0) {
-                stage_form->fullName = new_name;
-                logger::trace("Updated name of fake form to {}", name);
-            }
-
-            // Update value of the fake form
-            const auto temp_value = settings.costoverrides.contains(st_no) ? settings.costoverrides.at(st_no) : -1;
-            if (temp_value >= 0) FormTraits<T>::SetValue(stage_form, temp_value);
-            // Update weight of the fake form
-            const auto temp_weight = settings.weightoverrides.contains(st_no) ? settings.weightoverrides.at(st_no) : -1;
-            if (temp_weight >= 0) FormTraits<T>::SetWeight(stage_form, temp_weight);
-
-            // Update magic effects of the fake form
-            if (settings.effects.contains(st_no) && !settings.effects.at(st_no).empty() &&
-                std::ranges::contains(Settings::mgeffs_allowedQFORMS, qFormType)) {
-                // change mgeff of fake form
-                ApplyMGEFFSettings(stage_form, settings.effects.at(st_no));
-            }
-        } else {
-            logger::error("Could not create copy form for source {}", editorid);
-            return 0;
-        }
-
-        return new_formid;
-    };
+    FormID FetchFake(StageNo st_no);;
 
     // also registers to stages
     FormID FetchFake(StageNo st_no);
@@ -242,3 +198,49 @@ private:
                                       const RE::TESObjectCELL* a_cell, const std::unordered_set<FormID>&
                                       modulators, float range = 0);
 };
+
+template <typename T>
+FormID Source::FetchFake(const StageNo st_no) {
+    auto* DFT = DynamicFormTracker::GetSingleton();
+    if (editorid.empty()) {
+        logger::error("Editorid is empty.");
+        return 0;
+    }
+    const FormID new_formid = DFT->FetchCreate<T>(formid, editorid, static_cast<uint32_t>(st_no));
+
+    if (auto stage_form = FormReader::GetFormByID<T>(new_formid)) {
+        RegisterStage(new_formid, st_no);
+        if (!stages.contains(st_no)) {
+            logger::error("Stage {} not found in stages.", st_no);
+            return 0;
+        }
+
+        // Update name of the fake form
+        const auto& name = stages.at(st_no).name;
+        const auto og_name = RE::TESForm::LookupByID(formid)->GetName();
+        const auto new_name = std::string(og_name) + " (" + name + ")";
+        if (!name.empty() && std::strcmp(stage_form->fullName.c_str(), new_name.c_str()) != 0) {
+            stage_form->fullName = new_name;
+            logger::trace("Updated name of fake form to {}", name);
+        }
+
+        // Update value of the fake form
+        const auto temp_value = settings.costoverrides.contains(st_no) ? settings.costoverrides.at(st_no) : -1;
+        if (temp_value >= 0) FormTraits<T>::SetValue(stage_form, temp_value);
+        // Update weight of the fake form
+        const auto temp_weight = settings.weightoverrides.contains(st_no) ? settings.weightoverrides.at(st_no) : -1;
+        if (temp_weight >= 0) FormTraits<T>::SetWeight(stage_form, temp_weight);
+
+        // Update magic effects of the fake form
+        if (settings.effects.contains(st_no) && !settings.effects.at(st_no).empty() &&
+            std::ranges::contains(Settings::mgeffs_allowedQFORMS, qFormType)) {
+            // change mgeff of fake form
+            ApplyMGEFFSettings(stage_form, settings.effects.at(st_no));
+        }
+    } else {
+        logger::error("Could not create copy form for source {}", editorid);
+        return 0;
+    }
+
+    return new_formid;
+}

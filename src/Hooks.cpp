@@ -1,11 +1,7 @@
 #include "Hooks.h"
-#include "Utils.h"
-#include "DrawDebug.h"
+#include "DrawDebug.hpp"
 #include "Lorebox.h"
-#include "ClibUtilsQTR/Tasker.hpp"
-
-using namespace Hooks;
-
+#include "Manager.h"
 
 namespace {
     std::string wide_to_utf8(const wchar_t* w) {
@@ -31,7 +27,7 @@ namespace {
             // Let the current translator do its work first
             g_OrigTranslateAny(a_this, a_info);
 
-            if (is_menu_open && keyUtf8 == Lorebox::aot_kw_name_lorebox) {
+            if (Hooks::is_menu_open && keyUtf8 == Lorebox::aot_kw_name_lorebox) {
                 const std::wstring body = Lorebox::BuildLoreForHover();
                 a_info->SetResult(body.c_str(), body.size());
             }
@@ -88,14 +84,13 @@ namespace {
 
 
 template <typename MenuType>
-void MenuHook<MenuType>::InstallHook(const REL::VariantID& varID, Manager* mngr) {
+void Hooks::MenuHook<MenuType>::InstallHook(const REL::VariantID& varID) {
     REL::Relocation<std::uintptr_t> vTable(varID);
     _ProcessMessage = vTable.write_vfunc(0x4, &MenuHook<MenuType>::ProcessMessage_Hook);
-    M = mngr;
 }
 
 template <typename MenuType>
-RE::UI_MESSAGE_RESULTS MenuHook<MenuType>::ProcessMessage_Hook(RE::UIMessage& a_message) {
+RE::UI_MESSAGE_RESULTS Hooks::MenuHook<MenuType>::ProcessMessage_Hook(RE::UIMessage& a_message) {
     if (const std::string_view menuname = MenuType::MENU_NAME; a_message.menu == menuname) {
         const auto msg_type = static_cast<int>(a_message.type.get());
         if (msg_type == 1) {
@@ -124,11 +119,11 @@ RE::UI_MESSAGE_RESULTS MenuHook<MenuType>::ProcessMessage_Hook(RE::UIMessage& a_
     return _ProcessMessage(this, a_message);
 }
 
-void Hooks::Install(Manager* mngr) {
-    MenuHook<RE::ContainerMenu>::InstallHook(RE::VTABLE_ContainerMenu[0], mngr);
-    MenuHook<RE::BarterMenu>::InstallHook(RE::VTABLE_BarterMenu[0], mngr);
-    MenuHook<RE::FavoritesMenu>::InstallHook(RE::VTABLE_FavoritesMenu[0], mngr);
-    MenuHook<RE::InventoryMenu>::InstallHook(RE::VTABLE_InventoryMenu[0], mngr);
+void Hooks::Install() {
+    MenuHook<RE::ContainerMenu>::InstallHook(RE::VTABLE_ContainerMenu[0]);
+    MenuHook<RE::BarterMenu>::InstallHook(RE::VTABLE_BarterMenu[0]);
+    MenuHook<RE::FavoritesMenu>::InstallHook(RE::VTABLE_FavoritesMenu[0]);
+    MenuHook<RE::InventoryMenu>::InstallHook(RE::VTABLE_InventoryMenu[0]);
 
     #ifndef NDEBUG
     UpdateHook::Install();
@@ -150,12 +145,12 @@ void Hooks::Install(Manager* mngr) {
     InstallTranslatorVtableHook();
 }
 
-void UpdateHook::Update(RE::Actor* a_this, float a_delta) {
+void Hooks::UpdateHook::Update(RE::Actor* a_this, float a_delta) {
     Update_(a_this, a_delta);
-    DebugAPI_IMPL::DebugAPI::Update();
+    DebugAPI_IMPL::DebugAPI::GetSingleton()->Update();
 }
 
-void UpdateHook::Install() {
+void Hooks::UpdateHook::Install() {
     #ifndef NDEBUG
     REL::Relocation<std::uintptr_t> PlayerCharacterVtbl{RE::VTABLE_PlayerCharacter[0]};
     Update_ = PlayerCharacterVtbl.write_vfunc(0xAD, Update);
@@ -174,8 +169,9 @@ void Hooks::add_item_functor(RE::TESObjectREFR* a_this, RE::TESObjectREFR* a_obj
 }
 
 template <typename RefType>
-void MoveItemHooks<RefType>::pickUpObject(RefType* a_this, RE::TESObjectREFR* a_object, int32_t a_count, bool a_arg3,
-                                          bool a_play_sound) {
+void Hooks::MoveItemHooks<RefType>::pickUpObject(RefType* a_this, RE::TESObjectREFR* a_object, int32_t a_count,
+                                                 bool a_arg3,
+                                                 bool a_play_sound) {
     if (M->isUninstalled.load() || M->isLoading.load() || !M->listen_container_change.load() || a_count <= 0) {
         return pick_up_object_(a_this, a_object, a_count, a_arg3, a_play_sound);
     }
@@ -188,12 +184,14 @@ void MoveItemHooks<RefType>::pickUpObject(RefType* a_this, RE::TESObjectREFR* a_
 }
 
 template <typename RefType>
-RE::ObjectRefHandle* MoveItemHooks<RefType>::RemoveItem(RefType* a_this, RE::ObjectRefHandle& a_hidden_return_argument,
-                                                        RE::TESBoundObject* a_item, std::int32_t a_count,
-                                                        RE::ITEM_REMOVE_REASON a_reason,
-                                                        RE::ExtraDataList* a_extra_list,
-                                                        RE::TESObjectREFR* a_move_to_ref,
-                                                        const RE::NiPoint3* a_drop_loc, const RE::NiPoint3* a_rotate) {
+RE::ObjectRefHandle* Hooks::MoveItemHooks<RefType>::RemoveItem(RefType* a_this,
+                                                               RE::ObjectRefHandle& a_hidden_return_argument,
+                                                               RE::TESBoundObject* a_item, std::int32_t a_count,
+                                                               RE::ITEM_REMOVE_REASON a_reason,
+                                                               RE::ExtraDataList* a_extra_list,
+                                                               RE::TESObjectREFR* a_move_to_ref,
+                                                               const RE::NiPoint3* a_drop_loc,
+                                                               const RE::NiPoint3* a_rotate) {
     if (a_move_to_ref || M->isUninstalled.load() || M->isLoading.load() || !M->listen_container_change.load() || a_count
         <= 0 || a_this == a_move_to_ref) {
         return remove_item_(a_this, a_hidden_return_argument, a_item, a_count, a_reason, a_extra_list, a_move_to_ref,
@@ -209,9 +207,9 @@ RE::ObjectRefHandle* MoveItemHooks<RefType>::RemoveItem(RefType* a_this, RE::Obj
 }
 
 template <typename RefType>
-void MoveItemHooks<RefType>::addObjectToContainer(RefType* a_this, RE::TESBoundObject* a_object,
-                                                  RE::ExtraDataList* a_extraList, std::int32_t a_count,
-                                                  RE::TESObjectREFR* a_fromRefr) {
+void Hooks::MoveItemHooks<RefType>::addObjectToContainer(RefType* a_this, RE::TESBoundObject* a_object,
+                                                         RE::ExtraDataList* a_extraList, std::int32_t a_count,
+                                                         RE::TESObjectREFR* a_fromRefr) {
     if (M->isUninstalled.load() || M->isLoading.load() || !M->listen_container_change.load() || a_count <= 0 || a_this
         == a_fromRefr) {
         return add_object_to_container_(a_this, a_object, a_extraList, a_count, a_fromRefr);

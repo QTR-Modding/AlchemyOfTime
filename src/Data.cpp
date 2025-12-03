@@ -1,9 +1,10 @@
 #include "Data.h"
+#include "Serialization.h"
 #include "MCP.h"
+#include "Utils.h"
 #ifndef NDEBUG
-#include "DrawDebug.h"
+#include "BoundingBox.hpp"
 #endif
-#include "BoundingBox.h"
 
 void Source::Init(const DefaultSettings* defaultsettings) {
     if (!defaultsettings) {
@@ -121,6 +122,10 @@ void Source::UpdateAddons() {
         logger::critical("Default settings integrity check failed.");
         InitFailed();
     }
+}
+
+RE::TESBoundObject* Source::GetBoundObject() const {
+    return FormReader::GetFormByID<RE::TESBoundObject>(formid, editorid);
 }
 
 std::unordered_map<RefID, std::vector<StageUpdate>> Source::UpdateAllStages(

@@ -34,3 +34,10 @@ public:
 
     [[nodiscard]] bool Load(SKSE::SerializationInterface* serializationInterface);
 };
+
+
+void SaveCallback(SKSE::SerializationInterface* serializationInterface);
+
+void LoadCallback(SKSE::SerializationInterface* serializationInterface);
+
+void InitializeSerialization();

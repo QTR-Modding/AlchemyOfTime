@@ -1,6 +1,4 @@
 #pragma once
-#include "CLibUtilsQTR/FormReader.hpp"
-#include "CLibUtilsQTR/StringHelpers.hpp"
 
 const auto mod_name = std::string(SKSE::PluginDeclaration::GetSingleton()->GetName());
 const auto plugin_version = SKSE::PluginDeclaration::GetSingleton()->GetVersion();
@@ -41,31 +39,21 @@ void FavoriteItem(RE::TESBoundObject* item, RE::TESObjectREFR* inventory_owner);
 
 [[nodiscard]] bool IsFavorited(RE::TESBoundObject* item, RE::TESObjectREFR* inventory_owner);
 
-[[nodiscard]] inline bool IsFavorited(const RE::FormID formid, const RE::FormID refid) {
-    return IsFavorited(FormReader::GetFormByID<RE::TESBoundObject>(formid),
-                       FormReader::GetFormByID<RE::TESObjectREFR>(refid));
-}
+[[nodiscard]] bool IsFavorited(RE::FormID formid, RE::FormID refid);
 
-inline void FavoriteItem(const FormID formid, const FormID refid) {
-    FavoriteItem(FormReader::GetFormByID<RE::TESBoundObject>(formid),
-                 FormReader::GetFormByID<RE::TESObjectREFR>(refid));
-}
+void FavoriteItem(FormID formid, FormID refid);
 
 [[nodiscard]] inline bool IsPlayerFavorited(RE::TESBoundObject* item) {
     return IsFavorited(item, RE::PlayerCharacter::GetSingleton()->AsReference());
 }
 
-void EquipItem(RE::TESBoundObject* item, bool unequip = false);
+void EquipItem(const RE::TESBoundObject* item, bool unequip = false);
 
-inline void EquipItem(const FormID formid, const bool unequip = false) {
-    EquipItem(FormReader::GetFormByID<RE::TESBoundObject>(formid), unequip);
-}
+void EquipItem(FormID formid, bool unequip = false);
 
 [[nodiscard]] bool IsEquipped(RE::TESBoundObject* item);
 
-[[nodiscard]] inline bool IsEquipped(const FormID formid) {
-    return IsEquipped(FormReader::GetFormByID<RE::TESBoundObject>(formid));
-}
+[[nodiscard]] bool IsEquipped(FormID formid);
 
 // https://github.com/SteveTownsend/SmartHarvestSE/blob/f709333c4cedba061ad21b4d92c90a720e20d2b1/src/WorldState/LocationTracker.cpp#L756
 bool AreAdjacentCells(RE::TESObjectCELL* cellA, RE::TESObjectCELL* cellB);

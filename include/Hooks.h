@@ -1,20 +1,18 @@
 #pragma once
-#include "Manager.h"
 
 namespace Hooks {
     inline bool is_menu_open = false;
 
-    void Install(Manager* mngr);
+    void Install();
 
     template <typename MenuType>
     class MenuHook : public MenuType {
         using ProcessMessage_t = decltype(&MenuType::ProcessMessage);
         static inline REL::Relocation<ProcessMessage_t> _ProcessMessage;
         RE::UI_MESSAGE_RESULTS ProcessMessage_Hook(RE::UIMessage& a_message);
-        static inline Manager* M = nullptr;
 
     public:
-        static void InstallHook(const REL::VariantID& varID, Manager* mngr);
+        static void InstallHook(const REL::VariantID& varID);
     };
 
     struct UpdateHook {

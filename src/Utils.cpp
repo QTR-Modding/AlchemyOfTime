@@ -1,8 +1,8 @@
 #include "Utils.h"
-#include "BoundingBox.h"
+#include "BoundingBox.hpp"
 #include "CLibUtilsQTR/FormReader.hpp"
 #include "Settings.h"
-#include "DrawDebug.h"
+#include "DrawDebug.hpp"
 #include "MCP.h"
 
 bool Types::FormEditorID::operator<(const FormEditorID& other) const {
@@ -152,6 +152,12 @@ void FavoriteItem(RE::TESBoundObject* item, RE::TESObjectREFR* inventory_owner) 
     logger::error("Item not found in inventory");
 }
 
+void FavoriteItem(const FormID formid, const FormID refid) {
+    FavoriteItem(FormReader::GetFormByID<RE::TESBoundObject>(formid),
+                 FormReader::GetFormByID<RE::TESObjectREFR>(refid));
+}
+
+// ReSharper disable once CppParameterMayBeConstPtrOrRef
 bool IsFavorited(RE::TESBoundObject* item, RE::TESObjectREFR* inventory_owner) {
     if (!item) {
         logger::warn("Item is null");
@@ -169,7 +175,12 @@ bool IsFavorited(RE::TESBoundObject* item, RE::TESObjectREFR* inventory_owner) {
     return false;
 }
 
-void EquipItem(RE::TESBoundObject* item, const bool unequip) {
+bool IsFavorited(const RE::FormID formid, const RE::FormID refid) {
+    return IsFavorited(FormReader::GetFormByID<RE::TESBoundObject>(formid),
+                       FormReader::GetFormByID<RE::TESObjectREFR>(refid));
+}
+
+void EquipItem(const RE::TESBoundObject* item, const bool unequip) {
     logger::trace("EquipItem");
 
     if (!item) {
@@ -211,6 +222,10 @@ void EquipItem(RE::TESBoundObject* item, const bool unequip) {
     }
 }
 
+void EquipItem(const FormID formid, const bool unequip) {
+    EquipItem(FormReader::GetFormByID<RE::TESBoundObject>(formid), unequip);
+}
+
 bool IsEquipped(RE::TESBoundObject* item) {
     if (!item) {
         logger::trace("Item is null");
@@ -224,6 +239,10 @@ bool IsEquipped(RE::TESBoundObject* item) {
         return it->second.second->IsWorn();
     }
     return false;
+}
+
+bool IsEquipped(const FormID formid) {
+    return IsEquipped(FormReader::GetFormByID<RE::TESBoundObject>(formid));
 }
 
 bool AreAdjacentCells(RE::TESObjectCELL* cellA, RE::TESObjectCELL* cellB) {
@@ -283,9 +302,9 @@ std::wstring String::DecodeEscapesFromAscii(const char* s) {
 
     std::wstring out;
     for (size_t i = 0; s && s[i];) {
-        char c = s[i++];
+        const char c = s[i++];
         if (c == '\\' && s[i]) {
-            char t = s[i++];
+            const char t = s[i++];
             switch (t) {
                 case 'n':
                     out.push_back(L'\n');
@@ -302,7 +321,7 @@ std::wstring String::DecodeEscapesFromAscii(const char* s) {
                 case 'x': {
                     int val = 0, digits = 0;
                     while (s[i]) {
-                        int hv = hexVal(s[i]);
+                        const int hv = hexVal(s[i]);
                         if (hv < 0) break;
                         val = val << 4 | hv;
                         ++i;
@@ -318,7 +337,7 @@ std::wstring String::DecodeEscapesFromAscii(const char* s) {
                 case 'u': {
                     int val = 0, digits = 0;
                     while (s[i] && digits < 4) {
-                        int hv = hexVal(s[i]);
+                        const int hv = hexVal(s[i]);
                         if (hv < 0) break;
                         val = val << 4 | hv;
                         ++i;
@@ -548,7 +567,7 @@ void Math::LinAlg::R3::rotate(RE::NiPoint3& v, const float angleX, const float a
 }
 
 bool Inventory::IsQuestItem(const FormID formid, RE::TESObjectREFR* inv_owner) {
-    if (auto item = FormReader::GetFormByID<RE::TESBoundObject>(formid)) {
+    if (const auto item = FormReader::GetFormByID<RE::TESBoundObject>(formid)) {
         const auto inventory = inv_owner->GetInventory();
         if (const auto it = inventory.find(item); it != inventory.end()) {
             if (it->second.second->IsQuestObject()) return true;
@@ -720,18 +739,18 @@ RE::TESObjectREFR* Menu::GetVendorChestFromMenu() {
 void Menu::UpdateItemList() {
     if (const auto ui = RE::UI::GetSingleton()) {
         if (ui->IsMenuOpen(RE::InventoryMenu::MENU_NAME)) {
-            auto inventory_menu = ui->GetMenu<RE::InventoryMenu>();
-            if (auto itemlist = inventory_menu->GetRuntimeData().itemList) {
+            const auto inventory_menu = ui->GetMenu<RE::InventoryMenu>();
+            if (const auto itemlist = inventory_menu->GetRuntimeData().itemList) {
                 itemlist->Update();
             } else logger::error("Itemlist is null.");
         } else if (ui->IsMenuOpen(RE::BarterMenu::MENU_NAME)) {
-            auto barter_menu = ui->GetMenu<RE::BarterMenu>();
-            if (auto itemlist = barter_menu->GetRuntimeData().itemList) {
+            const auto barter_menu = ui->GetMenu<RE::BarterMenu>();
+            if (const auto itemlist = barter_menu->GetRuntimeData().itemList) {
                 itemlist->Update();
             } else logger::error("Itemlist is null.");
         } else if (ui->IsMenuOpen(RE::ContainerMenu::MENU_NAME)) {
-            auto container_menu = ui->GetMenu<RE::ContainerMenu>();
-            if (auto itemlist = container_menu->GetRuntimeData().itemList) {
+            const auto container_menu = ui->GetMenu<RE::ContainerMenu>();
+            if (const auto itemlist = container_menu->GetRuntimeData().itemList) {
                 itemlist->Update();
             } else logger::error("Itemlist is null.");
         }
@@ -763,10 +782,10 @@ RE::StandardItemData* Menu::GetSelectedItemDataInMenu() {
 
 RE::TESObjectREFR* Menu::GetOwnerOfItem(const RE::StandardItemData* a_itemdata) {
     auto& refHandle = a_itemdata->owner;
-    if (auto owner = RE::TESObjectREFR::LookupByHandle(refHandle)) {
+    if (const auto owner = RE::TESObjectREFR::LookupByHandle(refHandle)) {
         return owner.get();
     }
-    if (auto owner_actor = RE::Actor::LookupByHandle(refHandle)) {
+    if (const auto owner_actor = RE::Actor::LookupByHandle(refHandle)) {
         return owner_actor->AsReference();
     }
     return nullptr;

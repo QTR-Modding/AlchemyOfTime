@@ -1,18 +1,19 @@
 #include "Events.h"
+#include "Manager.h"
+#include "Settings.h"
 #include "Threading.h"
 
-void OurEventSink::HandleWO(RE::TESObjectREFR* ref) {
+void EventSink::HandleWO(RE::TESObjectREFR* ref) {
     if (!ref) return;
     //if (ref->extraList.GetOwner() && !ref->extraList.GetOwner()->IsPlayer()) return;
     if (!Settings::IsItem(ref)) return;
 
     if (!Settings::placed_objects_evolve.load() && WorldObject::IsPlacedObject(ref)) return;
 
-    logger::trace("Handle WO: Calling Update.");
     M->Update(ref);
 }
 
-void OurEventSink::HandleWOsInCell() const {
+void EventSink::HandleWOsInCell() const {
     logger::trace("HandleWOsInCell: Calling Update.");
     const auto* player = RE::PlayerCharacter::GetSingleton();
     //M->Update(player);
@@ -26,8 +27,8 @@ void OurEventSink::HandleWOsInCell() const {
     });
 }
 
-RE::BSEventNotifyControl OurEventSink::ProcessEvent(const RE::TESEquipEvent* event,
-                                                    RE::BSTEventSource<RE::TESEquipEvent>*) {
+RE::BSEventNotifyControl EventSink::ProcessEvent(const RE::TESEquipEvent* event,
+                                                 RE::BSTEventSource<RE::TESEquipEvent>*) {
     if (M->isLoading.load()) return RE::BSEventNotifyControl::kContinue;
     if (!M->listen_equip.load()) return RE::BSEventNotifyControl::kContinue;
     if (!event) return RE::BSEventNotifyControl::kContinue;
@@ -49,8 +50,8 @@ RE::BSEventNotifyControl OurEventSink::ProcessEvent(const RE::TESEquipEvent* eve
     return RE::BSEventNotifyControl::kContinue;
 }
 
-RE::BSEventNotifyControl OurEventSink::ProcessEvent(const RE::TESActivateEvent* event,
-                                                    RE::BSTEventSource<RE::TESActivateEvent>*) {
+RE::BSEventNotifyControl EventSink::ProcessEvent(const RE::TESActivateEvent* event,
+                                                 RE::BSTEventSource<RE::TESActivateEvent>*) {
     if (M->isLoading.load()) return RE::BSEventNotifyControl::kContinue;
     if (!event) return RE::BSEventNotifyControl::kContinue;
     if (!event->objectActivated) return RE::BSEventNotifyControl::kContinue;
@@ -75,8 +76,8 @@ RE::BSEventNotifyControl OurEventSink::ProcessEvent(const RE::TESActivateEvent* 
     return RE::BSEventNotifyControl::kContinue;
 }
 
-RE::BSEventNotifyControl OurEventSink::ProcessEvent(const SKSE::CrosshairRefEvent* event,
-                                                    RE::BSTEventSource<SKSE::CrosshairRefEvent>*) {
+RE::BSEventNotifyControl EventSink::ProcessEvent(const SKSE::CrosshairRefEvent* event,
+                                                 RE::BSTEventSource<SKSE::CrosshairRefEvent>*) {
     if (M->isLoading.load()) return RE::BSEventNotifyControl::kContinue;
     if (!event) return RE::BSEventNotifyControl::kContinue;
     if (!event->crosshairRef) return RE::BSEventNotifyControl::kContinue;
@@ -92,8 +93,8 @@ RE::BSEventNotifyControl OurEventSink::ProcessEvent(const SKSE::CrosshairRefEven
     return RE::BSEventNotifyControl::kContinue;
 }
 
-RE::BSEventNotifyControl OurEventSink::ProcessEvent(const RE::TESFurnitureEvent* event,
-                                                    RE::BSTEventSource<RE::TESFurnitureEvent>*) {
+RE::BSEventNotifyControl EventSink::ProcessEvent(const RE::TESFurnitureEvent* event,
+                                                 RE::BSTEventSource<RE::TESFurnitureEvent>*) {
     if (M->isLoading.load()) return RE::BSEventNotifyControl::kContinue;
     if (!event) return RE::BSEventNotifyControl::kContinue;
     if (!event->actor->IsPlayerRef()) return RE::BSEventNotifyControl::kContinue;
@@ -130,24 +131,24 @@ RE::BSEventNotifyControl OurEventSink::ProcessEvent(const RE::TESFurnitureEvent*
     return RE::BSEventNotifyControl::kContinue;
 }
 
-RE::BSEventNotifyControl OurEventSink::ProcessEvent(const RE::TESSleepStopEvent*,
-                                                    RE::BSTEventSource<RE::TESSleepStopEvent>*) {
+RE::BSEventNotifyControl EventSink::ProcessEvent(const RE::TESSleepStopEvent*,
+                                                 RE::BSTEventSource<RE::TESSleepStopEvent>*) {
     if (M->isLoading.load()) return RE::BSEventNotifyControl::kContinue;
     logger::trace("Sleep stop event.");
     HandleWOsInCell();
     return RE::BSEventNotifyControl::kContinue;
 }
 
-RE::BSEventNotifyControl OurEventSink::ProcessEvent(const RE::TESWaitStopEvent*,
-                                                    RE::BSTEventSource<RE::TESWaitStopEvent>*) {
+RE::BSEventNotifyControl EventSink::ProcessEvent(const RE::TESWaitStopEvent*,
+                                                 RE::BSTEventSource<RE::TESWaitStopEvent>*) {
     if (M->isLoading.load()) return RE::BSEventNotifyControl::kContinue;
     logger::trace("Wait stop event.");
     HandleWOsInCell();
     return RE::BSEventNotifyControl::kContinue;
 }
 
-RE::BSEventNotifyControl OurEventSink::ProcessEvent(const RE::BGSActorCellEvent* a_event,
-                                                    RE::BSTEventSource<RE::BGSActorCellEvent>*) {
+RE::BSEventNotifyControl EventSink::ProcessEvent(const RE::BGSActorCellEvent* a_event,
+                                                 RE::BSTEventSource<RE::BGSActorCellEvent>*) {
     if (M->isLoading.load()) return RE::BSEventNotifyControl::kContinue;
     if (!listen_cellchange.load()) return RE::BSEventNotifyControl::kContinue;
     if (!a_event) return RE::BSEventNotifyControl::kContinue;
@@ -174,8 +175,8 @@ RE::BSEventNotifyControl OurEventSink::ProcessEvent(const RE::BGSActorCellEvent*
     return RE::BSEventNotifyControl::kContinue;
 }
 
-RE::BSEventNotifyControl OurEventSink::ProcessEvent(const RE::TESFormDeleteEvent* a_event,
-                                                    RE::BSTEventSource<RE::TESFormDeleteEvent>*) {
+RE::BSEventNotifyControl EventSink::ProcessEvent(const RE::TESFormDeleteEvent* a_event,
+                                                 RE::BSTEventSource<RE::TESFormDeleteEvent>*) {
     if (!a_event) return RE::BSEventNotifyControl::kContinue;
     if (!a_event->formID) return RE::BSEventNotifyControl::kContinue;
     M->HandleFormDelete(a_event->formID);

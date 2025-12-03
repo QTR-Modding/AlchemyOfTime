@@ -1,5 +1,6 @@
 ﻿#pragma once
 #include "Serialization.h"
+#include "CLibUtilsQTR/FormReader.hpp"
 
 struct ActEff {
     FormID baseFormid;

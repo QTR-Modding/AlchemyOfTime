@@ -1,11 +1,11 @@
-#include "BoundingBox.h"
+#pragma once
 #include "Utils.h"
-#include "DrawDebug.h"
+#include "DrawDebug.hpp"
 
 using DebugAPI_IMPL::DrawDebug::draw_line;
 
 namespace BoundingBox {
-    static RE::bhkRigidBody* GetRigidBody(const RE::TESObjectREFR* refr) {
+    inline RE::bhkRigidBody* GetRigidBody(const RE::TESObjectREFR* refr) {
         const auto object3D = refr->GetCurrent3D();
         if (!object3D) return nullptr;
         if (const auto body = object3D->GetCollisionObject()) {
@@ -14,7 +14,7 @@ namespace BoundingBox {
         return nullptr;
     }
 
-    std::array<RE::NiPoint3, 8> Get(const RE::TESObjectREFR* a_obj) {
+    inline std::array<RE::NiPoint3, 8> Get(const RE::TESObjectREFR* a_obj) {
         // Prefer Havok worldspace AABB if available
         if (const auto body = GetRigidBody(a_obj)) {
             RE::hkAabb aabb;
@@ -72,12 +72,7 @@ namespace BoundingBox {
         return {v1, v2, v3, v4, v5, v6, v7, v8};
     }
 
-    void Draw(const RE::TESObjectREFR* a_obj) {
-        const auto box = Get(a_obj);
-        Draw(box);
-    }
-
-    void Draw(const std::array<RE::NiPoint3, 8>& a_box) {
+    inline void Draw(const std::array<RE::NiPoint3, 8>& a_box) {
         const auto& v1 = a_box[0];
         const auto& v2 = a_box[1];
         const auto& v3 = a_box[2];
@@ -104,7 +99,12 @@ namespace BoundingBox {
         draw_line(v4, v8, 1);
     }
 
-    RE::NiPoint3 ClosestPoint(const RE::NiPoint3& a_point_from, const RE::TESObjectREFR* a_obj_to) {
+    inline void Draw(const RE::TESObjectREFR* a_obj) {
+        const auto box = Get(a_obj);
+        Draw(box);
+    }
+
+    inline RE::NiPoint3 ClosestPoint(const RE::NiPoint3& a_point_from, const RE::TESObjectREFR* a_obj_to) {
         using RE::NiPoint3;
         // Use ref local bounds for consistency with Get()
         NiPoint3 minLocal = a_obj_to->GetBoundMin();
