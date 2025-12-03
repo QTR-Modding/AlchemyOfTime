@@ -1,145 +1,172 @@
 #pragma once
-#include "Utils.h"
 #include "DrawDebug.hpp"
+#include <DirectXCollision.h>
+#include <algorithm>  // std::clamp if you need it elsewhere
+#include <cmath>      // std::sqrt
 
 using DebugAPI_IMPL::DrawDebug::draw_line;
 
 namespace BoundingBox {
+    using RE::NiPoint3;
+
+    // You already have this:
     inline RE::bhkRigidBody* GetRigidBody(const RE::TESObjectREFR* refr) {
         const auto object3D = refr->GetCurrent3D();
-        if (!object3D) return nullptr;
+        if (!object3D) {
+            return nullptr;
+        }
         if (const auto body = object3D->GetCollisionObject()) {
             return body->GetRigidBody();
         }
         return nullptr;
     }
 
-    inline std::array<RE::NiPoint3, 8> Get(const RE::TESObjectREFR* a_obj) {
-        // Prefer Havok worldspace AABB if available
-        if (const auto body = GetRigidBody(a_obj)) {
+    // ---- helper: NiMatrix3 -> DirectX quaternion (x,y,z,w) ----
+    inline DirectX::XMFLOAT4 MatrixToDXQuaternion(const RE::NiMatrix3& R) {
+        // Assuming NiMatrix3::entry[row][col] and R * v uses the usual row-major form:
+        // x' = m00*x + m01*y + m02*z, etc.
+        const float m00 = R.entry[0][0], m01 = R.entry[0][1], m02 = R.entry[0][2];
+        const float m10 = R.entry[1][0], m11 = R.entry[1][1], m12 = R.entry[1][2];
+        const float m20 = R.entry[2][0], m21 = R.entry[2][1], m22 = R.entry[2][2];
+
+        float qw, qx, qy, qz;
+
+        const float trace = m00 + m11 + m22;
+        if (trace > 0.0f) {
+            const float s = std::sqrt(trace + 1.0f) * 2.0f; // s = 4*qw
+            qw = 0.25f * s;
+            qx = (m21 - m12) / s;
+            qy = (m02 - m20) / s;
+            qz = (m10 - m01) / s;
+        } else if (m00 > m11 && m00 > m22) {
+            const float s = std::sqrt(1.0f + m00 - m11 - m22) * 2.0f; // s = 4*qx
+            qw = (m21 - m12) / s;
+            qx = 0.25f * s;
+            qy = (m01 + m10) / s;
+            qz = (m02 + m20) / s;
+        } else if (m11 > m22) {
+            const float s = std::sqrt(1.0f + m11 - m00 - m22) * 2.0f; // s = 4*qy
+            qw = (m02 - m20) / s;
+            qx = (m01 + m10) / s;
+            qy = 0.25f * s;
+            qz = (m12 + m21) / s;
+        } else {
+            const float s = std::sqrt(1.0f + m22 - m00 - m11) * 2.0f; // s = 4*qz
+            qw = (m10 - m01) / s;
+            qx = (m02 + m20) / s;
+            qy = (m12 + m21) / s;
+            qz = 0.25f * s;
+        }
+
+        // Optional: normalize to be safe (should already be very close)
+        const float lenSq = qx * qx + qy * qy + qz * qz + qw * qw;
+        if (lenSq > 0.0f) {
+            const float invLen = 1.0f / std::sqrt(lenSq);
+            qx *= invLen;
+            qy *= invLen;
+            qz *= invLen;
+            qw *= invLen;
+        }
+
+        // DirectX uses (x,y,z,w)
+        return DirectX::XMFLOAT4(qx, qy, qz, qw);
+    }
+
+    // ---- helper: build OBB from Havok world AABB (fast path) ----
+    inline bool GetOBBFromHavok(const RE::TESObjectREFR* obj, DirectX::BoundingOrientedBox& out) {
+        if (auto body = GetRigidBody(obj)) {
             RE::hkAabb aabb;
             body->GetAabbWorldspace(aabb);
+
             float minComp[4]{};
             float maxComp[4]{};
             _mm_store_ps(minComp, aabb.min.quad);
             _mm_store_ps(maxComp, aabb.max.quad);
+
+            // Same factor you used before
             constexpr float havokToSkyrim = 69.9915f;
-            RE::NiPoint3 minWorld{minComp[0] * havokToSkyrim, minComp[1] * havokToSkyrim, minComp[2] * havokToSkyrim};
-            RE::NiPoint3 maxWorld{maxComp[0] * havokToSkyrim, maxComp[1] * havokToSkyrim, maxComp[2] * havokToSkyrim};
 
-            auto v1 = RE::NiPoint3{minWorld.x, minWorld.y, minWorld.z};
-            auto v2 = RE::NiPoint3{maxWorld.x, minWorld.y, minWorld.z};
-            auto v3 = RE::NiPoint3{maxWorld.x, maxWorld.y, minWorld.z};
-            auto v4 = RE::NiPoint3{minWorld.x, maxWorld.y, minWorld.z};
-            auto v5 = RE::NiPoint3{minWorld.x, minWorld.y, maxWorld.z};
-            auto v6 = RE::NiPoint3{maxWorld.x, minWorld.y, maxWorld.z};
-            auto v7 = RE::NiPoint3{maxWorld.x, maxWorld.y, maxWorld.z};
-            auto v8 = RE::NiPoint3{minWorld.x, maxWorld.y, maxWorld.z};
-            return {v1, v2, v3, v4, v5, v6, v7, v8};
+            NiPoint3 minWorld{minComp[0] * havokToSkyrim, minComp[1] * havokToSkyrim, minComp[2] * havokToSkyrim};
+            NiPoint3 maxWorld{maxComp[0] * havokToSkyrim, maxComp[1] * havokToSkyrim, maxComp[2] * havokToSkyrim};
+
+            const NiPoint3 center = (minWorld + maxWorld) * 0.5f;
+            const NiPoint3 half = (maxWorld - minWorld) * 0.5f;
+
+            out.Center = DirectX::XMFLOAT3(center.x, center.y, center.z);
+            out.Extents = DirectX::XMFLOAT3(half.x, half.y, half.z);
+            // Havok gave us a world AABB, so orientation is identity
+            out.Orientation = DirectX::XMFLOAT4(0.f, 0.f, 0.f, 1.f);
+
+            return true;
         }
-        // Fallback: use ref local bounds (intended gameplay bounds), then rotate/translate
-        RE::NiPoint3 minLocal = a_obj->GetBoundMin();
-        RE::NiPoint3 maxLocal = a_obj->GetBoundMax();
-        const float scale = a_obj->GetScale();
+        return false;
+    }
+
+    // ---- main: build a world-space OBB for a TESObjectREFR ----
+    inline void GetOBB(const RE::TESObjectREFR* obj, DirectX::BoundingOrientedBox& out, const bool allowAABB) {
+        // 1) Prefer Havok: cheap, already in world space.
+        if (allowAABB && GetOBBFromHavok(obj, out)) {
+            return;
+        }
+
+        // 2) Fallback: use gameplay bounds + world transform (tight OBB)
+        NiPoint3 minLocal = obj->GetBoundMin();
+        NiPoint3 maxLocal = obj->GetBoundMax();
+
+        const float scale = obj->GetScale();
         minLocal *= scale;
         maxLocal *= scale;
 
-        const auto node = a_obj->GetCurrent3D();
-        RE::NiMatrix3 R;
-        RE::NiPoint3 T;
-        if (node) {
-            R = node->world.rotate;
-            T = node->world.translate;
-        } else {
-            R.SetEulerAnglesXYZ(a_obj->GetAngle());
-            T = a_obj->GetPosition();
-        }
-
-        auto makeCorner = [&](const float x, const float y, const float z) -> RE::NiPoint3 {
-            const RE::NiPoint3 local{x, y, z};
-            return T + R * local;
-        };
-
-        auto v1 = makeCorner(minLocal.x, minLocal.y, minLocal.z);
-        auto v2 = makeCorner(maxLocal.x, minLocal.y, minLocal.z);
-        auto v3 = makeCorner(maxLocal.x, maxLocal.y, minLocal.z);
-        auto v4 = makeCorner(minLocal.x, maxLocal.y, minLocal.z);
-        auto v5 = makeCorner(minLocal.x, minLocal.y, maxLocal.z);
-        auto v6 = makeCorner(maxLocal.x, minLocal.y, maxLocal.z);
-        auto v7 = makeCorner(maxLocal.x, maxLocal.y, maxLocal.z);
-        auto v8 = makeCorner(minLocal.x, maxLocal.y, maxLocal.z);
-
-        return {v1, v2, v3, v4, v5, v6, v7, v8};
-    }
-
-    inline void Draw(const std::array<RE::NiPoint3, 8>& a_box) {
-        const auto& v1 = a_box[0];
-        const auto& v2 = a_box[1];
-        const auto& v3 = a_box[2];
-        const auto& v4 = a_box[3];
-        const auto& v5 = a_box[4];
-        const auto& v6 = a_box[5];
-        const auto& v7 = a_box[6];
-        const auto& v8 = a_box[7];
-
-        // bottom
-        draw_line(v1, v2, 1);
-        draw_line(v2, v3, 1);
-        draw_line(v3, v4, 1);
-        draw_line(v4, v1, 1);
-        // top
-        draw_line(v5, v6, 1);
-        draw_line(v6, v7, 1);
-        draw_line(v7, v8, 1);
-        draw_line(v8, v5, 1);
-        // sides
-        draw_line(v1, v5, 1);
-        draw_line(v2, v6, 1);
-        draw_line(v3, v7, 1);
-        draw_line(v4, v8, 1);
-    }
-
-    inline void Draw(const RE::TESObjectREFR* a_obj) {
-        const auto box = Get(a_obj);
-        Draw(box);
-    }
-
-    inline RE::NiPoint3 ClosestPoint(const RE::NiPoint3& a_point_from, const RE::TESObjectREFR* a_obj_to) {
-        using RE::NiPoint3;
-        // Use ref local bounds for consistency with Get()
-        NiPoint3 minLocal = a_obj_to->GetBoundMin();
-        NiPoint3 maxLocal = a_obj_to->GetBoundMax();
-        const float scale = a_obj_to->GetScale();
-        minLocal *= scale;
-        maxLocal *= scale;
-
-        const auto node = a_obj_to->GetCurrent3D();
         RE::NiMatrix3 R;
         NiPoint3 T;
-        if (node) {
+
+        if (auto node = obj->GetCurrent3D()) {
             R = node->world.rotate;
             T = node->world.translate;
         } else {
-            R.SetEulerAnglesXYZ(a_obj_to->GetAngle());
-            T = WorldObject::GetPosition(a_obj_to);
+            // If no 3D, approximate from ref’s angle/pos
+            R.SetEulerAnglesXYZ(obj->GetAngle());
+            T = obj->GetPosition();
         }
 
         const NiPoint3 localCenter = (minLocal + maxLocal) * 0.5f;
-        const NiPoint3 half = (maxLocal - minLocal) * 0.5f;
+        const NiPoint3 halfLocal = (maxLocal - minLocal) * 0.5f;
+
         const NiPoint3 worldCenter = T + R * localCenter;
 
-        // Transform point to OBB local space
-        const RE::NiMatrix3 RT = R.Transpose();
-        const NiPoint3 d = a_point_from - worldCenter;
-        const NiPoint3 localP = RT * d;
+        out.Center = DirectX::XMFLOAT3(worldCenter.x, worldCenter.y, worldCenter.z);
+        out.Extents = DirectX::XMFLOAT3(halfLocal.x, halfLocal.y, halfLocal.z);
+        out.Orientation = MatrixToDXQuaternion(R);
+    }
 
-        // Clamp
-        const NiPoint3 clamped{
-            std::clamp(localP.x, -half.x, half.x),
-            std::clamp(localP.y, -half.y, half.y),
-            std::clamp(localP.z, -half.z, half.z)
-        };
+    inline void DrawOBB(const DirectX::BoundingOrientedBox& obb) {
+        DirectX::XMFLOAT3 c[8];
+        obb.GetCorners(c);
 
-        return worldCenter + R * clamped;
+        auto P = [&](const int i) { return RE::NiPoint3{c[i].x, c[i].y, c[i].z}; };
+
+        // bottom face: 0-1-2-3
+        draw_line(P(0), P(1));
+        draw_line(P(1), P(2));
+        draw_line(P(2), P(3));
+        draw_line(P(3), P(0));
+
+        // top face: 4-5-6-7
+        draw_line(P(4), P(5));
+        draw_line(P(5), P(6));
+        draw_line(P(6), P(7));
+        draw_line(P(7), P(4));
+
+        // vertical edges
+        draw_line(P(0), P(4));
+        draw_line(P(1), P(5));
+        draw_line(P(2), P(6));
+        draw_line(P(3), P(7));
+    }
+
+    inline void DrawOBB(const RE::TESObjectREFR* obj, const bool allowAABB) {
+        DirectX::BoundingOrientedBox obb{};
+        GetOBB(obj, obb, allowAABB);
+        DrawOBB(obb);
     }
 }

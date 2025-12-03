@@ -14,6 +14,8 @@ const auto po3_err_msgbox = std::format(
 const auto general_err_msgbox = std::format("{}: Something went wrong. Please contact the mod author.", mod_name);
 const auto init_err_msgbox = std::format("{}: The mod failed to initialize and will be terminated.", mod_name);
 
+constexpr auto allow_havokAABB = false;
+
 std::string DecodeTypeCode(std::uint32_t typeCode);
 
 bool FileIsEmpty(const std::string& filename);
@@ -22,7 +24,6 @@ std::vector<std::pair<int, bool>> encodeString(const std::string& inputString);
 std::string decodeString(const std::vector<std::pair<int, bool>>& encodedValues);
 
 void hexToRGBA(uint32_t color_code, RE::NiColorA& nicolora);
-
 
 bool IsFoodItem(const RE::TESForm* form);
 

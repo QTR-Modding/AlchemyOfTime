@@ -1137,12 +1137,17 @@ namespace {
         if (UI::draw_debug) {
             draw_line(WorldObject::GetPosition(ref), WorldObject::GetPosition(RE::PlayerCharacter::GetSingleton()), 3.f,
                       glm::vec4(0.f, 0.f, 1.f, 1.f));
-            BoundingBox::Draw(ref);
+            BoundingBox::DrawOBB(ref, allow_havokAABB);
         }
         #endif
+
         if (!WorldObject::AreClose(a_origin, ref, proximity)) {
             return false;
         }
+
+        #ifndef NDEBUG
+        BoundingBox::DrawOBB(a_origin, allow_havokAABB);
+        #endif
 
         return true;
     }

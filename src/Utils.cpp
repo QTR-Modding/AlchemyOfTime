@@ -4,23 +4,7 @@
 #include "Settings.h"
 #include "DrawDebug.hpp"
 #include "MCP.h"
-
-bool Types::FormEditorID::operator<(const FormEditorID& other) const {
-    // Compare form_id first
-    if (form_id < other.form_id) {
-        return true;
-    }
-    // If form_id is equal, compare editor_id
-    if (form_id == other.form_id && editor_id < other.editor_id) {
-        return true;
-    }
-    // If both form_id and editor_id are equal or if form_id is greater, return false
-    return false;
-}
-
-bool Types::FormEditorIDX::operator==(const FormEditorIDX& other) const {
-    return form_id == other.form_id;
-}
+#include <directxmath/DirectXCollision.h>
 
 std::string DecodeTypeCode(const std::uint32_t typeCode) {
     char buf[4];
@@ -152,11 +136,6 @@ void FavoriteItem(RE::TESBoundObject* item, RE::TESObjectREFR* inventory_owner) 
     logger::error("Item not found in inventory");
 }
 
-void FavoriteItem(const FormID formid, const FormID refid) {
-    FavoriteItem(FormReader::GetFormByID<RE::TESBoundObject>(formid),
-                 FormReader::GetFormByID<RE::TESObjectREFR>(refid));
-}
-
 // ReSharper disable once CppParameterMayBeConstPtrOrRef
 bool IsFavorited(RE::TESBoundObject* item, RE::TESObjectREFR* inventory_owner) {
     if (!item) {
@@ -178,6 +157,11 @@ bool IsFavorited(RE::TESBoundObject* item, RE::TESObjectREFR* inventory_owner) {
 bool IsFavorited(const RE::FormID formid, const RE::FormID refid) {
     return IsFavorited(FormReader::GetFormByID<RE::TESBoundObject>(formid),
                        FormReader::GetFormByID<RE::TESObjectREFR>(refid));
+}
+
+void FavoriteItem(const FormID formid, const FormID refid) {
+    FavoriteItem(FormReader::GetFormByID<RE::TESBoundObject>(formid),
+                 FormReader::GetFormByID<RE::TESObjectREFR>(refid));
 }
 
 void EquipItem(const RE::TESBoundObject* item, const bool unequip) {
@@ -360,6 +344,23 @@ std::wstring String::DecodeEscapesFromAscii(const char* s) {
     return out;
 }
 
+bool Types::FormEditorID::operator<(const FormEditorID& other) const {
+    // Compare form_id first
+    if (form_id < other.form_id) {
+        return true;
+    }
+    // If form_id is equal, compare editor_id
+    if (form_id == other.form_id && editor_id < other.editor_id) {
+        return true;
+    }
+    // If both form_id and editor_id are equal or if form_id is greater, return false
+    return false;
+}
+
+bool Types::FormEditorIDX::operator==(const FormEditorIDX& other) const {
+    return form_id == other.form_id;
+}
+
 int16_t WorldObject::GetObjectCount(RE::TESObjectREFR* ref) {
     if (!ref) {
         logger::error("Ref is null.");
@@ -524,19 +525,27 @@ RE::NiPoint3 WorldObject::GetPosition(const RE::TESObjectREFR* obj) {
     return newPosition;
 }
 
-bool WorldObject::AreClose(const RE::TESObjectREFR* a_obj1, const RE::TESObjectREFR* a_obj2, const float threshold) {
-    const auto c1 = GetPosition(a_obj1);
-    const auto closestOn2 = BoundingBox::ClosestPoint(c1, a_obj2);
-    const auto closestOn1 = BoundingBox::ClosestPoint(closestOn2, a_obj1);
-    if (closestOn2.GetDistance(closestOn1) < threshold) {
-        #ifndef NDEBUG
-        if (UI::draw_debug) {
-            draw_line(closestOn2, closestOn1, 3, glm::vec4(1.f, 1.f, 1.f, 1.f));
-        }
-        #endif
-        return true;
-    }
-    return false;
+static bool AreClose_Sub(const DirectX::BoundingOrientedBox& obb1_in, const DirectX::BoundingOrientedBox& obb2_in,
+                         const float threshold) {
+    DirectX::BoundingOrientedBox obb1 = obb1_in;
+
+    obb1.Extents.x += threshold;
+    obb1.Extents.y += threshold;
+    obb1.Extents.z += threshold;
+
+    return obb1.Intersects(obb2_in);
+}
+
+
+float Math::Round(const float value, const int n) {
+    const float factor = std::powf(10.0f, static_cast<float>(n));
+    return std::round(value * factor) / factor;
+}
+
+
+float Math::Ceil(const float value, const int n) {
+    const float factor = std::powf(10.0f, static_cast<float>(n));
+    return std::ceil(value * factor) / factor;
 }
 
 void Math::LinAlg::R3::rotateX(RE::NiPoint3& v, const float angle) {
@@ -564,242 +573,6 @@ void Math::LinAlg::R3::rotate(RE::NiPoint3& v, const float angleX, const float a
     rotateX(v, angleX);
     rotateY(v, angleY);
     rotateZ(v, angleZ);
-}
-
-bool Inventory::IsQuestItem(const FormID formid, RE::TESObjectREFR* inv_owner) {
-    if (const auto item = FormReader::GetFormByID<RE::TESBoundObject>(formid)) {
-        const auto inventory = inv_owner->GetInventory();
-        if (const auto it = inventory.find(item); it != inventory.end()) {
-            if (it->second.second->IsQuestObject()) return true;
-        }
-    }
-    return false;
-}
-
-void DynamicForm::copyBookAppearence(RE::TESForm* source, RE::TESForm* target) {
-    const auto* sourceBook = source->As<RE::TESObjectBOOK>();
-
-    auto* targetBook = target->As<RE::TESObjectBOOK>();
-
-    if (sourceBook && targetBook) {
-        targetBook->inventoryModel = sourceBook->inventoryModel;
-    }
-}
-
-void DynamicForm::copyFormArmorModel(RE::TESForm* source, RE::TESForm* target) {
-    const auto* sourceModelBipedForm = source->As<RE::TESObjectARMO>();
-
-    auto* targeteModelBipedForm = target->As<RE::TESObjectARMO>();
-
-    if (sourceModelBipedForm && targeteModelBipedForm) {
-        logger::info("armor");
-
-        targeteModelBipedForm->armorAddons = sourceModelBipedForm->armorAddons;
-    }
-}
-
-void DynamicForm::copyFormObjectWeaponModel(RE::TESForm* source, RE::TESForm* target) {
-    const auto* sourceModelWeapon = source->As<RE::TESObjectWEAP>();
-
-    auto* targeteModelWeapon = target->As<RE::TESObjectWEAP>();
-
-    if (sourceModelWeapon && targeteModelWeapon) {
-        logger::info("weapon");
-
-        targeteModelWeapon->firstPersonModelObject = sourceModelWeapon->firstPersonModelObject;
-
-        targeteModelWeapon->attackSound = sourceModelWeapon->attackSound;
-
-        targeteModelWeapon->attackSound2D = sourceModelWeapon->attackSound2D;
-
-        targeteModelWeapon->attackSound = sourceModelWeapon->attackSound;
-
-        targeteModelWeapon->attackFailSound = sourceModelWeapon->attackFailSound;
-
-        targeteModelWeapon->idleSound = sourceModelWeapon->idleSound;
-
-        targeteModelWeapon->equipSound = sourceModelWeapon->equipSound;
-
-        targeteModelWeapon->unequipSound = sourceModelWeapon->unequipSound;
-
-        targeteModelWeapon->soundLevel = sourceModelWeapon->soundLevel;
-    }
-}
-
-void DynamicForm::copyMagicEffect(RE::TESForm* source, RE::TESForm* target) {
-    const auto* sourceEffect = source->As<RE::EffectSetting>();
-
-    auto* targetEffect = target->As<RE::EffectSetting>();
-
-    if (sourceEffect && targetEffect) {
-        targetEffect->effectSounds = sourceEffect->effectSounds;
-
-        targetEffect->data.castingArt = sourceEffect->data.castingArt;
-
-        targetEffect->data.light = sourceEffect->data.light;
-
-        targetEffect->data.hitEffectArt = sourceEffect->data.hitEffectArt;
-
-        targetEffect->data.effectShader = sourceEffect->data.effectShader;
-
-        targetEffect->data.hitVisuals = sourceEffect->data.hitVisuals;
-
-        targetEffect->data.enchantShader = sourceEffect->data.enchantShader;
-
-        targetEffect->data.enchantEffectArt = sourceEffect->data.enchantEffectArt;
-
-        targetEffect->data.enchantVisuals = sourceEffect->data.enchantVisuals;
-
-        targetEffect->data.projectileBase = sourceEffect->data.projectileBase;
-
-        targetEffect->data.explosion = sourceEffect->data.explosion;
-
-        targetEffect->data.impactDataSet = sourceEffect->data.impactDataSet;
-
-        targetEffect->data.imageSpaceMod = sourceEffect->data.imageSpaceMod;
-    }
-}
-
-void DynamicForm::copyAppearence(RE::TESForm* source, RE::TESForm* target) {
-    copyFormArmorModel(source, target);
-
-    copyFormObjectWeaponModel(source, target);
-
-    copyMagicEffect(source, target);
-
-    copyBookAppearence(source, target);
-
-    copyComponent<RE::BGSPickupPutdownSounds>(source, target);
-
-    copyComponent<RE::BGSMenuDisplayObject>(source, target);
-
-    copyComponent<RE::TESModel>(source, target);
-
-    copyComponent<RE::TESBipedModelForm>(source, target);
-}
-
-RE::TESObjectREFR* Menu::GetContainerFromMenu() {
-    const auto ui = RE::UI::GetSingleton()->GetMenu<RE::ContainerMenu>();
-    if (!ui) {
-        logger::warn("GetContainerFromMenu: Container menu is null");
-        return nullptr;
-    }
-    auto ui_refid = ui->GetTargetRefHandle();
-    if (!ui_refid) {
-        logger::warn("GetContainerFromMenu: Container menu reference id is null");
-        return nullptr;
-    }
-    logger::trace("UI Reference id {}", ui_refid);
-    if (const auto ui_ref = RE::TESObjectREFR::LookupByHandle(ui_refid)) {
-        return ui_ref.get();
-    }
-    return nullptr;
-}
-
-RE::TESObjectREFR* Menu::GetVendorChestFromMenu() {
-    const auto ui = RE::UI::GetSingleton()->GetMenu<RE::BarterMenu>();
-    if (!ui) {
-        logger::warn("GetVendorChestFromMenu: Barter menu is null");
-        return nullptr;
-    }
-    const auto ui_ref = RE::TESObjectREFR::LookupByHandle(ui->GetTargetRefHandle());
-    if (!ui_ref) {
-        logger::warn("GetVendorChestFromMenu: Barter menu reference is null");
-        return nullptr;
-    }
-    if (ui_ref->IsPlayerRef()) return nullptr;
-
-    if (const auto barter_actor = ui_ref->GetBaseObject()->As<RE::Actor>()) {
-        if (const auto* faction = barter_actor->GetVendorFaction()) {
-            if (auto* merchant_chest = faction->vendorData.merchantContainer) {
-                return merchant_chest;
-            }
-        }
-    }
-
-    if (const auto barter_npc = ui_ref->GetBaseObject()->As<RE::TESNPC>()) {
-        for (const auto& faction_rank : barter_npc->factions) {
-            if (const auto merchant_chest = faction_rank.faction->vendorData.merchantContainer) {
-                return merchant_chest;
-            }
-        }
-    }
-
-    //auto chest = RE::TESObjectREFR::LookupByHandle(ui->GetTargetRefHandle());
-
-    /*for (size_t i = 0; i < 192; i++) {
-        if (ui_ref->extraList.HasType(static_cast<RE::ExtraDataType>(i))) {
-            logger::trace("ExtraData type: {:x}", i);
-        }
-    }*/
-
-    return nullptr;
-}
-
-void Menu::UpdateItemList() {
-    if (const auto ui = RE::UI::GetSingleton()) {
-        if (ui->IsMenuOpen(RE::InventoryMenu::MENU_NAME)) {
-            const auto inventory_menu = ui->GetMenu<RE::InventoryMenu>();
-            if (const auto itemlist = inventory_menu->GetRuntimeData().itemList) {
-                itemlist->Update();
-            } else logger::error("Itemlist is null.");
-        } else if (ui->IsMenuOpen(RE::BarterMenu::MENU_NAME)) {
-            const auto barter_menu = ui->GetMenu<RE::BarterMenu>();
-            if (const auto itemlist = barter_menu->GetRuntimeData().itemList) {
-                itemlist->Update();
-            } else logger::error("Itemlist is null.");
-        } else if (ui->IsMenuOpen(RE::ContainerMenu::MENU_NAME)) {
-            const auto container_menu = ui->GetMenu<RE::ContainerMenu>();
-            if (const auto itemlist = container_menu->GetRuntimeData().itemList) {
-                itemlist->Update();
-            } else logger::error("Itemlist is null.");
-        }
-    }
-}
-
-RE::StandardItemData* Menu::GetSelectedItemDataInMenu(std::string& a_menuOut) {
-    if (const auto ui = RE::UI::GetSingleton()) {
-        if (ui->IsMenuOpen(RE::InventoryMenu::MENU_NAME)) {
-            a_menuOut = RE::InventoryMenu::MENU_NAME;
-            return GetSelectedItemData<RE::InventoryMenu>();
-        }
-        if (ui->IsMenuOpen(RE::ContainerMenu::MENU_NAME)) {
-            a_menuOut = RE::ContainerMenu::MENU_NAME;
-            return GetSelectedItemData<RE::ContainerMenu>();
-        }
-        if (ui->IsMenuOpen(RE::BarterMenu::MENU_NAME)) {
-            a_menuOut = RE::BarterMenu::MENU_NAME;
-            return GetSelectedItemData<RE::BarterMenu>();
-        }
-    }
-    return nullptr;
-}
-
-RE::StandardItemData* Menu::GetSelectedItemDataInMenu() {
-    std::string menu_name;
-    return GetSelectedItemDataInMenu(menu_name);
-}
-
-RE::TESObjectREFR* Menu::GetOwnerOfItem(const RE::StandardItemData* a_itemdata) {
-    auto& refHandle = a_itemdata->owner;
-    if (const auto owner = RE::TESObjectREFR::LookupByHandle(refHandle)) {
-        return owner.get();
-    }
-    if (const auto owner_actor = RE::Actor::LookupByHandle(refHandle)) {
-        return owner_actor->AsReference();
-    }
-    return nullptr;
-}
-
-
-float Math::Round(const float value, const int n) {
-    const float factor = std::powf(10.0f, static_cast<float>(n));
-    return std::round(value * factor) / factor;
-}
-
-float Math::Ceil(const float value, const int n) {
-    const float factor = std::powf(10.0f, static_cast<float>(n));
-    return std::ceil(value * factor) / factor;
 }
 
 std::array<RE::NiPoint3, 3> Math::LinAlg::GetClosest3Vertices(const std::array<RE::NiPoint3, 8>& a_bounding_box,
@@ -905,4 +678,260 @@ RE::NiPoint3 Math::LinAlg::intersectLine(const std::array<RE::NiPoint3, 3>& vert
     }
 
     return orthogonal_vertex;
+}
+
+bool WorldObject::AreClose(const RE::TESObjectREFR* a_obj1, const RE::TESObjectREFR* a_obj2, float threshold) {
+
+    if (!a_obj1 || !a_obj2) {
+        return false;
+    }
+
+    // Clamp negative thresholds to “no margin”
+    threshold = std::max(threshold, 0.0f);
+
+    DirectX::BoundingOrientedBox obb1{};
+    DirectX::BoundingOrientedBox obb2{};
+
+    // Build tight OBBs in world space from the game refs
+    BoundingBox::GetOBB(a_obj1, obb1, allow_havokAABB);
+    BoundingBox::GetOBB(a_obj2, obb2, allow_havokAABB);
+
+    const bool close = AreClose_Sub(obb1, obb2, threshold);
+
+    #ifndef NDEBUG
+    if (close && UI::draw_debug) {
+        RE::NiPoint3 c1{obb1.Center.x, obb1.Center.y, obb1.Center.z};
+        RE::NiPoint3 c2{obb2.Center.x, obb2.Center.y, obb2.Center.z};
+        // yellow debug line between centers
+        draw_line(c1, c2, 2, glm::vec4(1.f, 1.f, 0.f, 1.f));
+    }
+    #endif
+
+    return close;
+}
+
+bool Inventory::IsQuestItem(const FormID formid, RE::TESObjectREFR* inv_owner) {
+    if (const auto item = FormReader::GetFormByID<RE::TESBoundObject>(formid)) {
+        const auto inventory = inv_owner->GetInventory();
+        if (const auto it = inventory.find(item); it != inventory.end()) {
+            if (it->second.second->IsQuestObject()) return true;
+        }
+    }
+    return false;
+}
+
+RE::TESObjectREFR* Menu::GetContainerFromMenu() {
+    const auto ui = RE::UI::GetSingleton()->GetMenu<RE::ContainerMenu>();
+    if (!ui) {
+        logger::warn("GetContainerFromMenu: Container menu is null");
+        return nullptr;
+    }
+    auto ui_refid = ui->GetTargetRefHandle();
+    if (!ui_refid) {
+        logger::warn("GetContainerFromMenu: Container menu reference id is null");
+        return nullptr;
+    }
+    logger::trace("UI Reference id {}", ui_refid);
+    if (const auto ui_ref = RE::TESObjectREFR::LookupByHandle(ui_refid)) {
+        return ui_ref.get();
+    }
+    return nullptr;
+}
+
+RE::TESObjectREFR* Menu::GetVendorChestFromMenu() {
+    const auto ui = RE::UI::GetSingleton()->GetMenu<RE::BarterMenu>();
+    if (!ui) {
+        logger::warn("GetVendorChestFromMenu: Barter menu is null");
+        return nullptr;
+    }
+    const auto ui_ref = RE::TESObjectREFR::LookupByHandle(ui->GetTargetRefHandle());
+    if (!ui_ref) {
+        logger::warn("GetVendorChestFromMenu: Barter menu reference is null");
+        return nullptr;
+    }
+    if (ui_ref->IsPlayerRef()) return nullptr;
+
+    if (const auto barter_actor = ui_ref->GetBaseObject()->As<RE::Actor>()) {
+        if (const auto* faction = barter_actor->GetVendorFaction()) {
+            if (auto* merchant_chest = faction->vendorData.merchantContainer) {
+                return merchant_chest;
+            }
+        }
+    }
+
+    if (const auto barter_npc = ui_ref->GetBaseObject()->As<RE::TESNPC>()) {
+        for (const auto& faction_rank : barter_npc->factions) {
+            if (const auto merchant_chest = faction_rank.faction->vendorData.merchantContainer) {
+                return merchant_chest;
+            }
+        }
+    }
+
+    //auto chest = RE::TESObjectREFR::LookupByHandle(ui->GetTargetRefHandle());
+
+    /*for (size_t i = 0; i < 192; i++) {
+        if (ui_ref->extraList.HasType(static_cast<RE::ExtraDataType>(i))) {
+            logger::trace("ExtraData type: {:x}", i);
+        }
+    }*/
+
+    return nullptr;
+}
+
+void Menu::UpdateItemList() {
+    if (const auto ui = RE::UI::GetSingleton()) {
+        if (ui->IsMenuOpen(RE::InventoryMenu::MENU_NAME)) {
+            const auto inventory_menu = ui->GetMenu<RE::InventoryMenu>();
+            if (const auto itemlist = inventory_menu->GetRuntimeData().itemList) {
+                itemlist->Update();
+            } else logger::error("Itemlist is null.");
+        } else if (ui->IsMenuOpen(RE::BarterMenu::MENU_NAME)) {
+            const auto barter_menu = ui->GetMenu<RE::BarterMenu>();
+            if (const auto itemlist = barter_menu->GetRuntimeData().itemList) {
+                itemlist->Update();
+            } else logger::error("Itemlist is null.");
+        } else if (ui->IsMenuOpen(RE::ContainerMenu::MENU_NAME)) {
+            const auto container_menu = ui->GetMenu<RE::ContainerMenu>();
+            if (const auto itemlist = container_menu->GetRuntimeData().itemList) {
+                itemlist->Update();
+            } else logger::error("Itemlist is null.");
+        }
+    }
+}
+
+RE::StandardItemData* Menu::GetSelectedItemDataInMenu(std::string& a_menuOut) {
+    if (const auto ui = RE::UI::GetSingleton()) {
+        if (ui->IsMenuOpen(RE::InventoryMenu::MENU_NAME)) {
+            a_menuOut = RE::InventoryMenu::MENU_NAME;
+            return GetSelectedItemData<RE::InventoryMenu>();
+        }
+        if (ui->IsMenuOpen(RE::ContainerMenu::MENU_NAME)) {
+            a_menuOut = RE::ContainerMenu::MENU_NAME;
+            return GetSelectedItemData<RE::ContainerMenu>();
+        }
+        if (ui->IsMenuOpen(RE::BarterMenu::MENU_NAME)) {
+            a_menuOut = RE::BarterMenu::MENU_NAME;
+            return GetSelectedItemData<RE::BarterMenu>();
+        }
+    }
+    return nullptr;
+}
+
+
+RE::StandardItemData* Menu::GetSelectedItemDataInMenu() {
+    std::string menu_name;
+    return GetSelectedItemDataInMenu(menu_name);
+}
+
+RE::TESObjectREFR* Menu::GetOwnerOfItem(const RE::StandardItemData* a_itemdata) {
+    auto& refHandle = a_itemdata->owner;
+    if (const auto owner = RE::TESObjectREFR::LookupByHandle(refHandle)) {
+        return owner.get();
+    }
+    if (const auto owner_actor = RE::Actor::LookupByHandle(refHandle)) {
+        return owner_actor->AsReference();
+    }
+    return nullptr;
+}
+
+void DynamicForm::copyBookAppearence(RE::TESForm* source, RE::TESForm* target) {
+    const auto* sourceBook = source->As<RE::TESObjectBOOK>();
+
+    auto* targetBook = target->As<RE::TESObjectBOOK>();
+
+    if (sourceBook && targetBook) {
+        targetBook->inventoryModel = sourceBook->inventoryModel;
+    }
+}
+
+void DynamicForm::copyFormArmorModel(RE::TESForm* source, RE::TESForm* target) {
+    const auto* sourceModelBipedForm = source->As<RE::TESObjectARMO>();
+
+    auto* targeteModelBipedForm = target->As<RE::TESObjectARMO>();
+
+    if (sourceModelBipedForm && targeteModelBipedForm) {
+        logger::info("armor");
+
+        targeteModelBipedForm->armorAddons = sourceModelBipedForm->armorAddons;
+    }
+}
+
+void DynamicForm::copyFormObjectWeaponModel(RE::TESForm* source, RE::TESForm* target) {
+    const auto* sourceModelWeapon = source->As<RE::TESObjectWEAP>();
+
+    auto* targeteModelWeapon = target->As<RE::TESObjectWEAP>();
+
+    if (sourceModelWeapon && targeteModelWeapon) {
+        logger::info("weapon");
+
+        targeteModelWeapon->firstPersonModelObject = sourceModelWeapon->firstPersonModelObject;
+
+        targeteModelWeapon->attackSound = sourceModelWeapon->attackSound;
+
+        targeteModelWeapon->attackSound2D = sourceModelWeapon->attackSound2D;
+
+        targeteModelWeapon->attackSound = sourceModelWeapon->attackSound;
+
+        targeteModelWeapon->attackFailSound = sourceModelWeapon->attackFailSound;
+
+        targeteModelWeapon->idleSound = sourceModelWeapon->idleSound;
+
+        targeteModelWeapon->equipSound = sourceModelWeapon->equipSound;
+
+        targeteModelWeapon->unequipSound = sourceModelWeapon->unequipSound;
+
+        targeteModelWeapon->soundLevel = sourceModelWeapon->soundLevel;
+    }
+}
+
+void DynamicForm::copyMagicEffect(RE::TESForm* source, RE::TESForm* target) {
+    const auto* sourceEffect = source->As<RE::EffectSetting>();
+
+    auto* targetEffect = target->As<RE::EffectSetting>();
+
+    if (sourceEffect && targetEffect) {
+        targetEffect->effectSounds = sourceEffect->effectSounds;
+
+        targetEffect->data.castingArt = sourceEffect->data.castingArt;
+
+        targetEffect->data.light = sourceEffect->data.light;
+
+        targetEffect->data.hitEffectArt = sourceEffect->data.hitEffectArt;
+
+        targetEffect->data.effectShader = sourceEffect->data.effectShader;
+
+        targetEffect->data.hitVisuals = sourceEffect->data.hitVisuals;
+
+        targetEffect->data.enchantShader = sourceEffect->data.enchantShader;
+
+        targetEffect->data.enchantEffectArt = sourceEffect->data.enchantEffectArt;
+
+        targetEffect->data.enchantVisuals = sourceEffect->data.enchantVisuals;
+
+        targetEffect->data.projectileBase = sourceEffect->data.projectileBase;
+
+        targetEffect->data.explosion = sourceEffect->data.explosion;
+
+        targetEffect->data.impactDataSet = sourceEffect->data.impactDataSet;
+
+        targetEffect->data.imageSpaceMod = sourceEffect->data.imageSpaceMod;
+    }
+}
+
+void DynamicForm::copyAppearence(RE::TESForm* source, RE::TESForm* target) {
+    copyFormArmorModel(source, target);
+
+    copyFormObjectWeaponModel(source, target);
+
+    copyMagicEffect(source, target);
+
+    copyBookAppearence(source, target);
+
+    copyComponent<RE::BGSPickupPutdownSounds>(source, target);
+
+    copyComponent<RE::BGSMenuDisplayObject>(source, target);
+
+    copyComponent<RE::TESModel>(source, target);
+
+    copyComponent<RE::TESBipedModelForm>(source, target);
 }
