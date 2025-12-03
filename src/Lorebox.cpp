@@ -11,9 +11,9 @@ namespace {
 
     constexpr auto INFINITY_SYM = L"~"; // ∞
 
-    std::wstring FormNameW(FormID fid) {
+    std::wstring FormNameW(const FormID fid) {
         if (!fid) return L"";
-        if (auto f = RE::TESForm::LookupByID(fid)) {
+        if (const auto f = RE::TESForm::LookupByID(fid)) {
             const char* nm = f->GetName();
             if (nm && std::strlen(nm) > 0) return Widen(nm);
         }
@@ -91,7 +91,7 @@ namespace {
             } else {
                 t.nextFormId = src.settings.decayed_id;
                 t.hasNext = t.nextFormId != 0;
-                auto decayed_form = RE::TESForm::LookupByID(t.nextFormId);
+                const auto decayed_form = RE::TESForm::LookupByID(t.nextFormId);
                 t.label = std::format(L"{} {}", Lorebox::arrow_right,
                                       decayed_form ? Widen(decayed_form->GetName()) : L"");
             }
@@ -184,7 +184,7 @@ bool Lorebox::ReAddKW(RE::TESForm* a_form) {
 
     if (!kw_form) return false;
 
-    auto a_formid = a_form->GetFormID();
+    const auto a_formid = a_form->GetFormID();
 
     if (std::shared_lock lock(kw_mutex);
         !kw_removed.contains(a_formid)) {
@@ -241,14 +241,14 @@ bool Lorebox::HasKW(const RE::TESForm* a_form) {
     return kw_added.contains(a_form->GetFormID());
 }
 
-bool Lorebox::IsRemoved(FormID a_formid) {
+bool Lorebox::IsRemoved(const FormID a_formid) {
     std::shared_lock lock(kw_mutex);
     return kw_removed.contains(a_formid);
 }
 
 std::wstring Lorebox::BuildLoreForHover() {
     std::string menu_name;
-    auto item_data = Menu::GetSelectedItemDataInMenu(menu_name);
+    const auto item_data = Menu::GetSelectedItemDataInMenu(menu_name);
 
     if (!item_data) {
         logger::error("No selected item data in menu '{}'.", menu_name);

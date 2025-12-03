@@ -1,5 +1,8 @@
 #include "Serialization.h"
 
+#include "DynamicFormTracker.h"
+#include "Manager.h"
+
 bool SaveLoadData::Save(SKSE::SerializationInterface* serializationInterface) {
     assert(serializationInterface);
     Locker locker(m_Lock);
@@ -189,4 +192,94 @@ bool DFSaveLoadData::Load(SKSE::SerializationInterface* serializationInterface) 
     }
 
     return true;
+}
+
+#define DISABLE_IF_UNINSTALLED \
+    if (!M || M->isUninstalled.load()) return;
+
+void SaveCallback(SKSE::SerializationInterface* serializationInterface) {
+    DISABLE_IF_UNINSTALLED
+    M->SendData();
+    if (!M->Save(serializationInterface, Settings::kDataKey, Settings::kSerializationVersion)) {
+        logger::critical("Failed to save Data");
+    }
+    auto* DFT = DynamicFormTracker::GetSingleton();
+    DFT->SendData();
+    if (!DFT->Save(serializationInterface, Settings::kDFDataKey, Settings::kSerializationVersion)) {
+        logger::critical("Failed to save Data");
+    }
+}
+
+void LoadCallback(SKSE::SerializationInterface* serializationInterface) {
+    DISABLE_IF_UNINSTALLED
+
+    M->isLoading.store(true);
+    logger::info("Loading Data from skse co-save.");
+
+    M->Reset();
+    auto* DFT = DynamicFormTracker::GetSingleton();
+    DFT->Reset();
+
+    std::uint32_t type;
+    std::uint32_t version;
+    std::uint32_t length;
+
+    unsigned int cosave_found = 0;
+    while (serializationInterface->GetNextRecordInfo(type, version, length)) {
+        auto temp = DecodeTypeCode(type);
+
+        if (version == Settings::kSerializationVersion - 1) {
+            logger::info("Older version of Alchemy of Time detected.");
+            /*Utilities::MsgBoxesNotifs::InGame::CustomMsg("You are using an older"
+                " version of Alchemy of Time (AoT). Versions older than 0.1.4 are unfortunately not supported."
+                "Please roll back to a save game where AoT was not installed or AoT version is 0.1.4 or newer.");*/
+            // continue;
+            cosave_found = 1; // DFT is not saved in older versions
+        } else if (version != Settings::kSerializationVersion) {
+            logger::critical("Loaded data has incorrect version. Recieved ({}) - Expected ({}) for Data Key ({})",
+                             version, Settings::kSerializationVersion, temp);
+            continue;
+        }
+        switch (type) {
+            case Settings::kDataKey: {
+                logger::info("Manager: Loading Data.");
+                logger::trace("Loading Record: {} - Version: {} - Length: {}", temp, version, length);
+                if (!M->Load(serializationInterface))
+                    logger::critical("Failed to Load Data for Manager");
+                else
+                    cosave_found++;
+            }
+            break;
+            case Settings::kDFDataKey: {
+                logger::info("DFT: Loading Data.");
+                logger::trace("Loading Record: {} - Version: {} - Length: {}", temp, version, length);
+                if (!DFT->Load(serializationInterface))
+                    logger::critical("Failed to Load Data for DFT");
+                else
+                    cosave_found++;
+            }
+            break;
+            default:
+                logger::critical("Unrecognized Record Type: {}", temp);
+                break;
+        }
+    }
+
+    if (cosave_found == 2) {
+        DFT->ReceiveData();
+        M->ReceiveData();
+        logger::info("Data loaded from skse co-save.");
+    } else
+        logger::info("No cosave data found.");
+
+    M->isLoading.store(false);
+}
+#undef DISABLE_IF_UNINSTALLED
+
+void InitializeSerialization() {
+    auto* serialization = SKSE::GetSerializationInterface();
+    serialization->SetUniqueID(Settings::kDataKey);
+    serialization->SetSaveCallback(SaveCallback);
+    serialization->SetLoadCallback(LoadCallback);
+    SKSE::log::trace("Cosave serialization initialized.");
 }

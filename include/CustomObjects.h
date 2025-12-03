@@ -1,4 +1,5 @@
 #pragma once
+#include <shared_mutex>
 #include <unordered_set>
 #include "Utils.h"
 #include "ClibUtil/singleton.hpp"
@@ -38,7 +39,9 @@ struct Stage {
     uint32_t color;
 
 
-    Stage(){};
+    // ReSharper disable once CppPossiblyUninitializedMember
+    Stage() {
+    }
 
     Stage(const FormID f, const Duration d, const StageNo s, StageName n, const bool ca,
           const std::vector<StageEffect>& e, const uint32_t color_ = 0)
@@ -62,7 +65,7 @@ struct Stage {
         return no == other.no && formid == other.formid && duration == other.duration;
     }
 
-    [[nodiscard]] RE::TESBoundObject* GetBound() const { return FormReader::GetFormByID<RE::TESBoundObject>(formid); }
+    [[nodiscard]] RE::TESBoundObject* GetBound() const;
 
     [[nodiscard]] bool CheckIntegrity() const;
 
@@ -116,9 +119,7 @@ struct StageInstance {
 
     StageInstance& operator=(const StageInstance& other);
 
-    [[nodiscard]] RE::TESBoundObject* GetBound() const {
-        return FormReader::GetFormByID<RE::TESBoundObject>(xtra.form_id);
-    };
+    [[nodiscard]] RE::TESBoundObject* GetBound() const;;
 
     [[nodiscard]] inline float GetElapsed(float curr_time) const;
 

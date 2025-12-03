@@ -1,7 +1,7 @@
 #pragma once
-#include "Events.h"
-#include "SKSEMCP/SKSEMenuFramework.hpp"
+#include "Data.h"
 #include "Logger.h"
+#include "SKSEMCP/SKSEMenuFramework.hpp"
 
 
 static void HelpMarker(const char* desc);
@@ -78,15 +78,15 @@ namespace UI {
     inline std::string sub_item_current = "##item";
     inline std::string source_current = "##source";
     inline bool is_list_box_focused = false;
-    inline ImGuiTextFilter* filter;
-    inline ImGuiTextFilter* filter2;
+    inline ImGuiMCP::ImGuiTextFilter* filter;
+    inline ImGuiMCP::ImGuiTextFilter* filter2;
     inline std::string filter_module = "None";
     inline int selected_source_index = 0;
-    inline ImGuiTableFlags table_flags = ImGuiTableFlags_Resizable | ImGuiTableFlags_SizingFixedFit |
-                                         ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_Borders |
-                                         ImGuiTableFlags_RowBg;
+    inline ImGuiMCP::ImGuiTableFlags table_flags =
+        ImGuiMCP::ImGuiTableFlags_Resizable | ImGuiMCP::ImGuiTableFlags_SizingFixedFit |
+        ImGuiMCP::ImGuiTableFlags_SizingStretchProp | ImGuiMCP::ImGuiTableFlags_Borders |
+        ImGuiMCP::ImGuiTableFlags_RowBg;
 
-    inline Manager* M;
     void __stdcall RenderSettings();
     void __stdcall RenderStatus();
     void __stdcall RenderInspect();
@@ -95,7 +95,7 @@ namespace UI {
     void __stdcall RenderDFT();
     void __stdcall RenderLog();
     void __stdcall RenderLoreBox();
-    void Register(Manager* manager);
+    void Register();
 
     inline std::map<FormID, std::pair<std::string, int>> dynamic_forms;
     inline int dft_form_limit = DynamicFormTracker::GetSingleton()->form_limit;
@@ -118,5 +118,5 @@ namespace UI {
 
     std::string GetName(FormID formid);
 
-    inline bool draw_debug = false;
+    inline bool draw_debug = true;
 };

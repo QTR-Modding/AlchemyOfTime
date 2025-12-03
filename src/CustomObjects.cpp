@@ -1,5 +1,6 @@
 #include "CustomObjects.h"
 #include "Settings.h"
+#include "CLibUtilsQTR/FormReader.hpp"
 
 bool StageInstance::operator==(const StageInstance& other) const {
     return no == other.no && count == other.count &&
@@ -32,6 +33,10 @@ StageInstance& StageInstance::operator=(const StageInstance& other) {
         _delay_formid = other._delay_formid;
     }
     return *this;
+}
+
+RE::TESBoundObject* StageInstance::GetBound() const {
+    return FormReader::GetFormByID<RE::TESBoundObject>(xtra.form_id);
 }
 
 float StageInstance::GetElapsed(const float curr_time) const {
@@ -119,6 +124,8 @@ void StageInstance::SetDelay(const StageInstancePlain& plain) {
     _delay_mag = plain._delay_mag;
     _delay_formid = plain._delay_formid;
 }
+
+RE::TESBoundObject* Stage::GetBound() const { return FormReader::GetFormByID<RE::TESBoundObject>(formid); }
 
 bool Stage::CheckIntegrity() const {
     if (!formid || !GetBound()) {

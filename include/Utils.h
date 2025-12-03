@@ -1,10 +1,4 @@
 #pragma once
-#include <windows.h>
-#include <shared_mutex>
-#include <rapidjson/stringbuffer.h>
-#include <rapidjson/istreamwrapper.h>
-#include <rapidjson/writer.h>
-#include "CLibUtilsQTR/FormReader.hpp"
 
 const auto mod_name = std::string(SKSE::PluginDeclaration::GetSingleton()->GetName());
 const auto plugin_version = SKSE::PluginDeclaration::GetSingleton()->GetVersion();
@@ -20,6 +14,8 @@ const auto po3_err_msgbox = std::format(
 const auto general_err_msgbox = std::format("{}: Something went wrong. Please contact the mod author.", mod_name);
 const auto init_err_msgbox = std::format("{}: The mod failed to initialize and will be terminated.", mod_name);
 
+constexpr auto allow_havokAABB = false;
+
 std::string DecodeTypeCode(std::uint32_t typeCode);
 
 bool FileIsEmpty(const std::string& filename);
@@ -28,7 +24,6 @@ std::vector<std::pair<int, bool>> encodeString(const std::string& inputString);
 std::string decodeString(const std::vector<std::pair<int, bool>>& encodedValues);
 
 void hexToRGBA(uint32_t color_code, RE::NiColorA& nicolora);
-
 
 bool IsFoodItem(const RE::TESForm* form);
 
@@ -45,34 +40,31 @@ void FavoriteItem(RE::TESBoundObject* item, RE::TESObjectREFR* inventory_owner);
 
 [[nodiscard]] bool IsFavorited(RE::TESBoundObject* item, RE::TESObjectREFR* inventory_owner);
 
-[[nodiscard]] inline bool IsFavorited(const RE::FormID formid, const RE::FormID refid) {
-    return IsFavorited(FormReader::GetFormByID<RE::TESBoundObject>(formid),
-                       FormReader::GetFormByID<RE::TESObjectREFR>(refid));
-}
+[[nodiscard]] bool IsFavorited(RE::FormID formid, RE::FormID refid);
 
-inline void FavoriteItem(const FormID formid, const FormID refid) {
-    FavoriteItem(FormReader::GetFormByID<RE::TESBoundObject>(formid),
-                 FormReader::GetFormByID<RE::TESObjectREFR>(refid));
-}
+void FavoriteItem(FormID formid, FormID refid);
 
 [[nodiscard]] inline bool IsPlayerFavorited(RE::TESBoundObject* item) {
     return IsFavorited(item, RE::PlayerCharacter::GetSingleton()->AsReference());
 }
 
-void EquipItem(RE::TESBoundObject* item, bool unequip = false);
+void EquipItem(const RE::TESBoundObject* item, bool unequip = false);
 
-inline void EquipItem(const FormID formid, const bool unequip = false) {
-    EquipItem(FormReader::GetFormByID<RE::TESBoundObject>(formid), unequip);
-}
+void EquipItem(FormID formid, bool unequip = false);
 
 [[nodiscard]] bool IsEquipped(RE::TESBoundObject* item);
 
-[[nodiscard]] inline bool IsEquipped(const FormID formid) {
-    return IsEquipped(FormReader::GetFormByID<RE::TESBoundObject>(formid));
-}
+[[nodiscard]] bool IsEquipped(FormID formid);
 
 // https://github.com/SteveTownsend/SmartHarvestSE/blob/f709333c4cedba061ad21b4d92c90a720e20d2b1/src/WorldState/LocationTracker.cpp#L756
 bool AreAdjacentCells(RE::TESObjectCELL* cellA, RE::TESObjectCELL* cellB);
+
+namespace String {
+    std::string EncodeEscapesToAscii(const std::wstring& ws);
+
+    std::wstring DecodeEscapesFromAscii(const char* s);
+}
+
 
 namespace Types {
     struct FormFormID {
@@ -128,21 +120,6 @@ namespace Math {
             void rotate(RE::NiPoint3& v, float angleX, float angleY, float angleZ);
         };
 
-        class Geometry {
-            std::vector<RE::NiPoint3> positions;
-            std::vector<uint16_t> indexes;
-            const RE::TESObjectREFR* obj;
-
-            void FetchVertices(const RE::BSGeometry* o3d, RE::BSGraphics::TriShape* triShape);
-
-        public:
-            static RE::NiPoint3 Rotate(const RE::NiPoint3& A, const RE::NiPoint3& angles);
-
-            ~Geometry() = default;
-            explicit Geometry(const RE::TESObjectREFR* obj);
-            [[nodiscard]] std::pair<RE::NiPoint3, RE::NiPoint3> GetBoundingBox() const;
-        };
-
         std::array<RE::NiPoint3, 3> GetClosest3Vertices(const std::array<RE::NiPoint3, 8>& a_bounding_box,
                                                         const RE::NiPoint3& outside_point);
         std::array<RE::NiPoint3, 3> GetClosest3Vertices(const std::array<RE::NiPoint3, 4>& a_bounded_plane,
@@ -153,39 +130,6 @@ namespace Math {
         RE::NiPoint3 intersectLine(const std::array<RE::NiPoint3, 3>& vertices,
                                    const RE::NiPoint3& outside_plane_point);
     };
-};
-
-namespace String {
-    template <typename T>
-    std::string join(const T& container, const std::string_view& delimiter) {
-        std::ostringstream oss;
-        auto iter = container.begin();
-
-        if (iter != container.end()) {
-            oss << *iter;
-            ++iter;
-        }
-
-        for (; iter != container.end(); ++iter) {
-            oss << delimiter << *iter;
-        }
-
-        return oss.str();
-    }
-
-    std::string toLowercase(const std::string& str);
-
-    std::string replaceLineBreaksWithSpace(const std::string& input);
-
-    std::string trim(const std::string& str);
-
-    bool includesWord(const std::string& input, const std::vector<std::string>& strings);
-
-    // Encode wide string to ASCII with C-style escapes for non-ASCII (e.g., L"\u2022").
-    std::string EncodeEscapesToAscii(const std::wstring& ws);
-
-    // Decode basic C-style escapes in ASCII buffer to wide string (\n, \r, \t, \\, \xHH, \uXXXX)
-    std::wstring DecodeEscapesFromAscii(const char* s);
 };
 
 namespace MsgBoxesNotifs {
@@ -218,11 +162,6 @@ namespace WorldObject {
     RE::bhkRigidBody* GetRigidBody(const RE::TESObjectREFR* refr);
 
     RE::NiPoint3 GetPosition(const RE::TESObjectREFR* obj);
-
-    std::array<RE::NiPoint3, 8> GetBoundingBox(const RE::TESObjectREFR* a_obj);
-    void DrawBoundingBox(const RE::TESObjectREFR* a_obj);
-    void DrawBoundingBox(const std::array<RE::NiPoint3, 8>& a_box);
-    RE::NiPoint3 GetClosestPoint(const RE::NiPoint3& a_point_from, const RE::TESObjectREFR* a_obj_to);
 
     bool AreClose(const RE::TESObjectREFR* a_obj1, const RE::TESObjectREFR* a_obj2, float threshold);
 };

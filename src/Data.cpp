@@ -1,7 +1,9 @@
 #include "Data.h"
+#include "Serialization.h"
 #include "MCP.h"
+#include "Utils.h"
 #ifndef NDEBUG
-#include "DrawDebug.h"
+#include "BoundingBox.hpp"
 #endif
 
 void Source::Init(const DefaultSettings* defaultsettings) {
@@ -120,6 +122,10 @@ void Source::UpdateAddons() {
         logger::critical("Default settings integrity check failed.");
         InitFailed();
     }
+}
+
+RE::TESBoundObject* Source::GetBoundObject() const {
+    return FormReader::GetFormByID<RE::TESBoundObject>(formid, editorid);
 }
 
 std::unordered_map<RefID, std::vector<StageUpdate>> Source::UpdateAllStages(
@@ -1131,12 +1137,17 @@ namespace {
         if (UI::draw_debug) {
             draw_line(WorldObject::GetPosition(ref), WorldObject::GetPosition(RE::PlayerCharacter::GetSingleton()), 3.f,
                       glm::vec4(0.f, 0.f, 1.f, 1.f));
-            WorldObject::DrawBoundingBox(ref);
+            BoundingBox::DrawOBB(ref, allow_havokAABB);
         }
         #endif
+
         if (!WorldObject::AreClose(a_origin, ref, proximity)) {
             return false;
         }
+
+        #ifndef NDEBUG
+        BoundingBox::DrawOBB(a_origin, allow_havokAABB);
+        #endif
 
         return true;
     }

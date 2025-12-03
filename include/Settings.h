@@ -36,12 +36,12 @@ namespace Settings {
     inline std::atomic world_objects_evolve = false;
     inline std::atomic placed_objects_evolve = false;
     inline std::atomic unowned_objects_evolve = false;
-    inline float proximity_range = 40.f;
+    inline float proximity_range = 20.f;
 
     inline float search_radius = 1000.f;
     inline float max_modulator_strength = 1000000.f;
     inline float critical_stage_dur = 9999.f;
-    inline float search_scaling = 0.5f; // for IsNextTo
+    
     namespace Ticker {
         enum Intervals {
             kSlower,

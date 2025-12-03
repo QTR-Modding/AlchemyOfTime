@@ -1,6 +1,5 @@
 set(headers ${headers}
 	include/Utils.h
-	include/DrawDebug.h
 	include/PCH.h
 	include/Settings.h
 	include/Manager.h
@@ -15,4 +14,7 @@ set(headers ${headers}
 	include/Threading.h
 	include/Logger.h
 	include/Lorebox.h
+	include/BoundingBox.hpp
+	include/DrawDebug.hpp
+	include/Geometry.hpp
 )

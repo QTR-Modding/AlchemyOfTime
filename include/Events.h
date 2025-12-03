@@ -3,15 +3,15 @@
 #include "ClibUtil/singleton.hpp"
 
 // MP <3
-class OurEventSink final : public clib_util::singleton::ISingleton<OurEventSink>,
-                           public RE::BSTEventSink<RE::TESEquipEvent>,
-                           public RE::BSTEventSink<RE::TESActivateEvent>,
-                           public RE::BSTEventSink<SKSE::CrosshairRefEvent>,
-                           public RE::BSTEventSink<RE::TESFurnitureEvent>,
-                           public RE::BSTEventSink<RE::TESSleepStopEvent>,
-                           public RE::BSTEventSink<RE::TESWaitStopEvent>,
-                           public RE::BSTEventSink<RE::BGSActorCellEvent>,
-                           public RE::BSTEventSink<RE::TESFormDeleteEvent> {
+class EventSink final : public clib_util::singleton::ISingleton<EventSink>,
+                        public RE::BSTEventSink<RE::TESEquipEvent>,
+                        public RE::BSTEventSink<RE::TESActivateEvent>,
+                        public RE::BSTEventSink<SKSE::CrosshairRefEvent>,
+                        public RE::BSTEventSink<RE::TESFurnitureEvent>,
+                        public RE::BSTEventSink<RE::TESSleepStopEvent>,
+                        public RE::BSTEventSink<RE::TESWaitStopEvent>,
+                        public RE::BSTEventSink<RE::BGSActorCellEvent>,
+                        public RE::BSTEventSink<RE::TESFormDeleteEvent> {
     std::atomic<bool> listen_cellchange = true;
 
     bool furniture_entered = false;

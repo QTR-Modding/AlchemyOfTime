@@ -1,9 +1,6 @@
 #pragma once
 #include <shared_mutex>
 #include <unordered_set>
-#include <atomic>
-#include <utility>
-#include <functional>
 
 namespace Lorebox {
     static std::string aot_kw_name = "LoreBox_quantAoT";

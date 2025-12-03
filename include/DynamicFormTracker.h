@@ -1,5 +1,6 @@
 ﻿#pragma once
 #include "Serialization.h"
+#include "CLibUtilsQTR/FormReader.hpp"
 
 struct ActEff {
     FormID baseFormid;
@@ -614,8 +615,9 @@ public:
         for (auto it = act_eff_list->begin(); it != act_eff_list->end(); ++it) {
             if (const auto* act_eff = *it) {
                 if (const auto act_eff_formid = act_eff->spell->GetFormID(); active_forms.contains(act_eff_formid)) {
-                    if (act_effs_temp.contains(act_eff_formid)) logger::warn(
-                        "Active effect already exists in act effs.");
+                    if (act_effs_temp.contains(act_eff_formid))
+                        logger::warn(
+                            "Active effect already exists in act effs.");
                     else n_act_effs++;
                     std::shared_lock lock(customIDforms_mutex);
                     std::unique_lock lock2(act_effs_mutex);
@@ -636,8 +638,9 @@ public:
             const DFSaveDataLHS lhs({base_pair.first, base_pair.second});
             DFSaveDataRHS rhs;
             for (const auto dyn_formid : dyn_formset) {
-                if (!IsActive(dyn_formid) && !IsProtected(dyn_formid)) logger::info(
-                    "Inactive form {:x} found in forms set.", dyn_formid);
+                if (!IsActive(dyn_formid) && !IsProtected(dyn_formid))
+                    logger::info(
+                        "Inactive form {:x} found in forms set.", dyn_formid);
                 std::shared_lock lock(customIDforms_mutex);
                 const auto has_customid = customIDforms.contains(dyn_formid);
                 const uint32_t customid = has_customid ? customIDforms.at(dyn_formid) : 0;
