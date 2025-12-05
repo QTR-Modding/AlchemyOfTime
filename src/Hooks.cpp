@@ -2,86 +2,7 @@
 #include "DrawDebug.hpp"
 #include "Lorebox.h"
 #include "Manager.h"
-
-namespace {
-    std::string wide_to_utf8(const wchar_t* w) {
-        if (!w) return {};
-        const int len = WideCharToMultiByte(CP_UTF8, 0, w, -1, nullptr, 0, nullptr, nullptr);
-        if (len <= 1) return {};
-        std::string out(len - 1, '\0'); // drop the trailing NUL
-        WideCharToMultiByte(CP_UTF8, 0, w, -1, out.data(), len, nullptr, nullptr);
-        return out;
-    }
-
-    using TranslateFn = void (*)(RE::GFxTranslator*, RE::GFxTranslator::TranslateInfo*);
-
-    TranslateFn g_OrigTranslateAny = nullptr;
-    void** g_TranslatorVTable = nullptr; // remembers which vtable we patched
-
-    // Generic hook for any GFxTranslator::Translate (vanilla or custom)
-    void AnyTranslator_Translate_Hook(RE::GFxTranslator* a_this, RE::GFxTranslator::TranslateInfo* a_info) {
-        // Always fall through to original unless we actually handle a specific key
-        if (g_OrigTranslateAny) {
-            const auto keyUtf8 = wide_to_utf8(a_info->GetKey());
-
-            // Let the current translator do its work first
-            g_OrigTranslateAny(a_this, a_info);
-
-            if (Hooks::is_menu_open && keyUtf8 == Lorebox::aot_kw_name_lorebox) {
-                const std::wstring body = Lorebox::BuildLoreForHover();
-                a_info->SetResult(body.c_str(), body.size());
-            }
-        }
-    }
-
-    bool InstallTranslatorVtableHook() {
-        const auto sfm = RE::BSScaleformManager::GetSingleton();
-        const auto loader = sfm ? sfm->loader : nullptr;
-        const auto tr = loader
-                            ? loader->GetState<RE::GFxTranslator>(RE::GFxState::StateType::kTranslator)
-                            : RE::GPtr<RE::GFxTranslator>{};
-
-        if (!tr) {
-            logger::warn("Translator not available yet; will skip vtable hook.");
-            return false;
-        }
-
-        // vtable of the active translator instance
-        auto** vtbl = *reinterpret_cast<void***>(tr.get());
-
-        // Resolve the vanilla BSScaleformTranslator vtable pointer for comparison
-        const REL::Relocation<std::uintptr_t> baseVtblRel{RE::BSScaleformTranslator::VTABLE[0]};
-        auto** baseVtbl = reinterpret_cast<void**>(baseVtblRel.address());
-
-        // Choose the vtable we will patch: if it's the vanilla class vtable, patch that one; otherwise, patch the instance's
-        auto** targetVtbl = vtbl == baseVtbl ? baseVtbl : vtbl;
-
-        // Already patched?
-        if (g_TranslatorVTable == targetVtbl && g_OrigTranslateAny) {
-            logger::info("Translator vtable already hooked {:p}", static_cast<void*>(targetVtbl));
-            return true;
-        }
-
-        // Patch vtable slot 0x2 (Translate)
-        DWORD oldProt{};
-        if (!VirtualProtect(&targetVtbl[2], sizeof(void*), PAGE_EXECUTE_READWRITE, &oldProt)) {
-            logger::error("VirtualProtect failed while preparing to patch translator vtable.");
-            return false;
-        }
-
-        g_OrigTranslateAny = reinterpret_cast<TranslateFn>(targetVtbl[2]);
-        targetVtbl[2] = reinterpret_cast<void*>(&AnyTranslator_Translate_Hook);
-
-        DWORD dummy{};
-        VirtualProtect(&targetVtbl[2], sizeof(void*), oldProt, &dummy);
-
-        g_TranslatorVTable = targetVtbl;
-
-        logger::info("Installed Translate vtable hook on translator {:p}", static_cast<void*>(targetVtbl));
-        return true;
-    }
-}
-
+#include "Utils.h"
 
 template <typename MenuType>
 void Hooks::MenuHook<MenuType>::InstallHook(const REL::VariantID& varID) {
@@ -140,9 +61,6 @@ void Hooks::Install() {
 
     const REL::Relocation<std::uintptr_t> add_item_functor_hook{RELOCATION_ID(55946, 56490)};
     add_item_functor_ = trampoline.write_call<5>(add_item_functor_hook.address() + 0x15D, add_item_functor);
-
-    // Install a Translate hook for whatever translator is currently active (vanilla or custom)
-    InstallTranslatorVtableHook();
 }
 
 void Hooks::UpdateHook::Update(RE::Actor* a_this, float a_delta) {

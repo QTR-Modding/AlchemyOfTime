@@ -86,7 +86,8 @@ namespace {
                 const auto ns = src.GetStage(st.no + 1);
                 t.nextFormId = ns->formid;
                 t.hasNext = true;
-                t.label = std::format(L"{} {}", Lorebox::arrow_right,
+                t.label = std::format(L"{} {}",
+                                      Lorebox::arrow_right,
                                       StageNameOrW(src, st.no + 1, std::format(L"Stage {}", st.no + 1)));
             } else {
                 t.nextFormId = src.settings.decayed_id;
@@ -102,7 +103,8 @@ namespace {
                 const auto ps = src.GetStage(st.no - 1);
                 t.nextFormId = ps->formid;
                 t.hasNext = true;
-                t.label = std::format(L"{} {}", Lorebox::arrow_left,
+                t.label = std::format(L"{} {}",
+                                      Lorebox::arrow_left,
                                       StageNameOrW(src, st.no - 1, std::format(L"Stage {}", st.no - 1)));
             } else {
                 t.label = std::format(L"{} Initial", Lorebox::arrow_left);
@@ -246,35 +248,31 @@ bool Lorebox::IsRemoved(const FormID a_formid) {
     return kw_removed.contains(a_formid);
 }
 
-std::wstring Lorebox::BuildLoreForHover() {
-    std::string menu_name;
-    const auto item_data = Menu::GetSelectedItemDataInMenu(menu_name);
-
-    if (!item_data) {
-        logger::error("No selected item data in menu '{}'.", menu_name);
-        return return_str;
+const wchar_t* Lorebox::BuildLoreForHover(RE::TESForm* item, RE::TESForm* owner) {
+    if (!item) {
+        return return_str.c_str();
     }
-
-    const auto owner = Menu::GetOwnerOfItem(item_data);
     if (!owner) {
-        if (menu_name == RE::BarterMenu::MENU_NAME) {
+        if (RE::UI::GetSingleton()->IsMenuOpen(RE::BarterMenu::MENU_NAME)) {
             // Try to resolve current stage name from the hovered form
-            if (const auto hovered = item_data->objDesc->GetObject()->GetFormID()) {
+            if (const auto hovered = item->GetFormID()) {
                 for (const auto& s : M->GetSources()) {
                     if (!s.IsHealthy()) continue;
                     if (!s.IsStage(hovered)) continue;
                     if (const auto name = s.GetStageName(s.GetStageNo(hovered)); !name.empty()) {
-                        return BuildFrozenLore(std::wstring{name.begin(), name.end()});
+                        loreboxStr = BuildFrozenLore(std::wstring{name.begin(), name.end()});
+                        return loreboxStr.c_str();
                     }
                     break; // found source, but no name
                 }
             }
-            return BuildFrozenLore();
+            loreboxStr = BuildFrozenLore();
+            return loreboxStr.c_str();
         }
-        return return_str;
+        return return_str.c_str();
     }
-
-    return BuildLoreFor(item_data->objDesc->GetObject()->GetFormID(), owner->GetFormID());
+    loreboxStr = BuildLoreFor(item->GetFormID(), owner->GetFormID());
+    return loreboxStr.c_str();
 }
 
 std::wstring Lorebox::BuildLoreFor(FormID hovered, RefID ownerId) {

@@ -5,7 +5,7 @@
 namespace Lorebox {
     static std::string aot_kw_name = "LoreBox_quantAoT";
     static std::string aot_kw_name_lorebox = "$LoreBox_quantAoT";
-    inline std::wstring return_str = L" ";
+    static std::wstring return_str = L" ";
     inline RE::BGSKeyword* aot_kw = nullptr;
 
     inline std::shared_mutex kw_mutex;
@@ -70,11 +70,14 @@ namespace Lorebox {
     bool HasKW(const RE::TESForm* a_form);
     bool IsRemoved(FormID a_formid);
 
-    // Returns a UTF-16 (wstring) body to be used as translation result
-    std::wstring BuildLoreForHover();
-    std::wstring BuildLoreFor(FormID hovered, RefID ownerId);
+    static std::wstring loreboxStr;
 
+    // Returns a UTF-16 (wstring) body to be used as translation result
+    std::wstring BuildLoreFor(FormID hovered, RefID ownerId);
     // Build a frozen-state lore string (title optional, time 9999d, percentage 0% if enabled)
     std::wstring BuildFrozenLore();
     std::wstring BuildFrozenLore(const std::wstring& currentStageName);
+
+    extern "C" __declspec(dllexport)
+    const wchar_t* BuildLoreForHover(RE::TESForm* item, RE::TESForm* owner);
 }
