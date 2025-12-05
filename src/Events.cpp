@@ -22,7 +22,7 @@ void EventSink::HandleWOsInCell() const {
     player_cell->ForEachReference([this](RE::TESObjectREFR* arg) {
         if (!arg) return RE::BSContainer::ForEachResult::kContinue;
         if (arg->HasContainer()) return RE::BSContainer::ForEachResult::kContinue;
-        this->HandleWO(arg);
+        HandleWO(arg);
         return RE::BSContainer::ForEachResult::kContinue;
     });
 }
