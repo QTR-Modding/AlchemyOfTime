@@ -78,6 +78,5 @@ namespace Lorebox {
     std::wstring BuildFrozenLore();
     std::wstring BuildFrozenLore(const std::wstring& currentStageName);
 
-    extern "C" __declspec(dllexport)
-    const wchar_t* BuildLoreForHover(RE::TESForm* item, RE::TESForm* owner);
+    extern "C" __declspec(dllexport) const wchar_t* OnDynamicTranslationRequest(std::string_view a_key);
 }

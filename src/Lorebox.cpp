@@ -127,42 +127,6 @@ namespace {
     };
 }
 
-std::wstring Lorebox::BuildFrozenLore() {
-    return BuildFrozenLore(L"");
-}
-
-std::wstring Lorebox::BuildFrozenLore(const std::wstring& currentStageName) {
-    std::wstring out;
-
-    // Optional title
-    if (show_title.load(std::memory_order_relaxed)) {
-        const auto titleHex = HexColor(color_title.load());
-        out += std::format(L"<b><font color=\"{}\">Alchemy of Time</font></b>", titleHex);
-        out += L"<br>";
-    }
-
-    const auto HEX_NEUTRAL = HexColor(color_neutral.load());
-
-    // Build single-line body: optional current stage name, then infinity and optional percentage
-    std::wstring line;
-    if (!currentStageName.empty()) {
-        line = std::format(L"{} | {}", currentStageName, INFINITY_SYM);
-    } else {
-        line = INFINITY_SYM;
-    }
-    if (show_percentage.load(std::memory_order_relaxed)) {
-        line += L" (0%)";
-    }
-
-    if (colorize_rows.load(std::memory_order_relaxed)) {
-        out += std::format(L"<font color=\"{}\">{}</font>", HEX_NEUTRAL, line);
-    } else {
-        out += line;
-    }
-
-    return out;
-}
-
 bool Lorebox::AddKeyword(RE::BGSKeywordForm* a_form, FormID a_formid) {
     if (std::shared_lock lock(kw_mutex);
         kw_added.contains(a_formid))
@@ -246,33 +210,6 @@ bool Lorebox::HasKW(const RE::TESForm* a_form) {
 bool Lorebox::IsRemoved(const FormID a_formid) {
     std::shared_lock lock(kw_mutex);
     return kw_removed.contains(a_formid);
-}
-
-const wchar_t* Lorebox::BuildLoreForHover(RE::TESForm* item, RE::TESForm* owner) {
-    if (!item) {
-        return return_str.c_str();
-    }
-    if (!owner) {
-        if (RE::UI::GetSingleton()->IsMenuOpen(RE::BarterMenu::MENU_NAME)) {
-            // Try to resolve current stage name from the hovered form
-            if (const auto hovered = item->GetFormID()) {
-                for (const auto& s : M->GetSources()) {
-                    if (!s.IsHealthy()) continue;
-                    if (!s.IsStage(hovered)) continue;
-                    if (const auto name = s.GetStageName(s.GetStageNo(hovered)); !name.empty()) {
-                        loreboxStr = BuildFrozenLore(std::wstring{name.begin(), name.end()});
-                        return loreboxStr.c_str();
-                    }
-                    break; // found source, but no name
-                }
-            }
-            loreboxStr = BuildFrozenLore();
-            return loreboxStr.c_str();
-        }
-        return return_str.c_str();
-    }
-    loreboxStr = BuildLoreFor(item->GetFormID(), owner->GetFormID());
-    return loreboxStr.c_str();
 }
 
 std::wstring Lorebox::BuildLoreFor(FormID hovered, RefID ownerId) {
@@ -473,4 +410,70 @@ std::wstring Lorebox::BuildLoreFor(FormID hovered, RefID ownerId) {
     }
 
     return out;
+}
+
+std::wstring Lorebox::BuildFrozenLore() {
+    return BuildFrozenLore(L"");
+}
+
+std::wstring Lorebox::BuildFrozenLore(const std::wstring& currentStageName) {
+    std::wstring out;
+
+    // Optional title
+    if (show_title.load(std::memory_order_relaxed)) {
+        const auto titleHex = HexColor(color_title.load());
+        out += std::format(L"<b><font color=\"{}\">Alchemy of Time</font></b>", titleHex);
+        out += L"<br>";
+    }
+
+    const auto HEX_NEUTRAL = HexColor(color_neutral.load());
+
+    // Build single-line body: optional current stage name, then infinity and optional percentage
+    std::wstring line;
+    if (!currentStageName.empty()) {
+        line = std::format(L"{} | {}", currentStageName, INFINITY_SYM);
+    } else {
+        line = INFINITY_SYM;
+    }
+    if (show_percentage.load(std::memory_order_relaxed)) {
+        line += L" (0%)";
+    }
+
+    if (colorize_rows.load(std::memory_order_relaxed)) {
+        out += std::format(L"<font color=\"{}\">{}</font>", HEX_NEUTRAL, line);
+    } else {
+        out += line;
+    }
+
+    return out;
+}
+
+const wchar_t* Lorebox::OnDynamicTranslationRequest(std::string_view) {
+    const auto item_data = Menu::GetSelectedItemDataInMenu();
+    const auto item = item_data->objDesc->GetObject();
+    if (!item) {
+        return return_str.c_str();
+    }
+    const auto owner = Menu::GetOwnerOfItem(item_data);
+    if (!owner) {
+        if (RE::UI::GetSingleton()->IsMenuOpen(RE::BarterMenu::MENU_NAME)) {
+            // Try to resolve current stage name from the hovered form
+            if (const auto hovered = item->GetFormID()) {
+                for (const auto& s : M->GetSources()) {
+                    if (!s.IsHealthy()) continue;
+                    if (!s.IsStage(hovered)) continue;
+                    if (const auto name = s.GetStageName(s.GetStageNo(hovered)); !name.empty()) {
+                        loreboxStr = BuildFrozenLore(std::wstring{name.begin(), name.end()});
+                        return loreboxStr.c_str();
+                    }
+                    break; // found source, but no name
+                }
+            }
+            loreboxStr = BuildFrozenLore();
+            return loreboxStr.c_str();
+        }
+        return return_str.c_str();
+    }
+    loreboxStr = BuildLoreFor(item->GetFormID(), owner->GetFormID());
+    return loreboxStr.c_str();
 }
