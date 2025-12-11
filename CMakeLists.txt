@@ -1,6 +1,5 @@
-
 if(NOT DEFINED ENV{COMMONLIB_SSE_FOLDER})
-  message(FATAL_ERROR "Missing COMMONLIB_SSE_FOLDER environment variable")
+ message(FATAL_ERROR "Missing COMMONLIB_SSE_FOLDER environment variable")
 endif()
 
 include(cmake/headerlist.cmake)
@@ -16,23 +15,30 @@ cmake_minimum_required(VERSION 3.21)
 # Set your project name. This will be the name of your SKSE .dll file.
 set(AUTHOR_NAME "Quantumyilmaz")
 set(PRODUCT_NAME "AlchemyOfTime")
-project(${PRODUCT_NAME} VERSION 0.4.6.0 LANGUAGES CXX)
+project(${PRODUCT_NAME} VERSION 1.0.0.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
 
+# Enable compile_commands.json for tooling (clang-tidy, IDEs)
+set(CMAKE_EXPORT_COMPILE_COMMANDS OFF)
+
+# Options to enable extra analysis tools
+option(ENABLE_MSVC_ANALYZE "Enable MSVC /analyze static analysis (slower builds)" ON)
+option(ENABLE_CLANG_TIDY "Enable clang-tidy static analysis for this target" OFF)
+
 configure_file(
-    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/version.rc.in
-    ${CMAKE_CURRENT_BINARY_DIR}/version.rc
-    @ONLY)
+ ${CMAKE_CURRENT_SOURCE_DIR}/cmake/version.rc.in
+ ${CMAKE_CURRENT_BINARY_DIR}/version.rc
+ @ONLY)
 
 set(RESOURCE_FILE ${CMAKE_CURRENT_BINARY_DIR}/version.rc)
 set(RESOURCE_OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/version.res)
 
 add_custom_command(
-    OUTPUT ${RESOURCE_OUTPUT}
-    COMMAND rc /fo ${RESOURCE_OUTPUT} ${RESOURCE_FILE}
-    DEPENDS ${RESOURCE_FILE}
+ OUTPUT ${RESOURCE_OUTPUT}
+ COMMAND rc /fo ${RESOURCE_OUTPUT} ${RESOURCE_FILE}
+ DEPENDS ${RESOURCE_FILE}
 )
 
 # Add a custom target to ensure the resource file is generated
@@ -48,57 +54,114 @@ add_subdirectory("$ENV{COMMONLIB_SSE_FOLDER}" ${CMAKE_CURRENT_BINARY_DIR}/_deps/
 get_target_property(COMMONLIB_SRC_DIR CommonLibSSE SOURCE_DIR)
 
 find_path(CLIB_UTIL_INCLUDE_DIRS "ClibUtil/utils.hpp")
+find_path(CLIB_UTILS_QTR_INCLUDE_DIRS "ClibUtilsQTR/utils.hpp")
 find_path(SKSE_MCP_INCLUDE_DIRS "SKSEMCP/utils.hpp")
-#YAML-CPP
+
+# YAML-CPP (archive, no git)
 FetchContent_Declare(
   yaml-cpp
-  GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
-  GIT_TAG master # Can be a tag (yaml-cpp-x.x.x), a commit hash, or a branch name (master)
+  URL https://github.com/jbeder/yaml-cpp/archive/refs/heads/master.zip
 )
-FetchContent_GetProperties(yaml-cpp)
-
-if(NOT yaml-cpp_POPULATED)
-  message(STATUS "Fetching yaml-cpp...")
-  FetchContent_Populate(yaml-cpp)
-  add_subdirectory(${yaml-cpp_SOURCE_DIR} ${yaml-cpp_BINARY_DIR})
-endif()
+FetchContent_MakeAvailable(yaml-cpp)
 
 file(
-  GLOB_RECURSE
-  sources
-  ${CMAKE_CURRENT_BINARY_DIR}/version.rc
-  ${sources}
+ GLOB_RECURSE
+ sources
+ ${CMAKE_CURRENT_BINARY_DIR}/version.rc
+ ${sources}
 )
 
 source_group(
-  TREE ${CMAKE_CURRENT_SOURCE_DIR}
-  FILES ${headers} ${sources}
+ TREE ${CMAKE_CURRENT_SOURCE_DIR}
+ FILES ${headers} ${sources}
 )
 
 set(BUILD_TESTS OFF)
 include(${COMMONLIB_SRC_DIR}/cmake/CommonLibSSE.cmake)
 
 add_commonlibsse_plugin(
-  ${PROJECT_NAME}
-  AUTHOR AUTHOR_NAME
-  SOURCES ${headers} ${sources}
+ ${PROJECT_NAME}
+ AUTHOR AUTHOR_NAME
+ SOURCES ${headers} ${sources}
 )
+
+# Target configuration
+
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_23) # <--- use C++23 standard
 target_precompile_headers(${PROJECT_NAME} PRIVATE include/PCH.h) # <--- PCH.h is required!
 target_include_directories(
 	${PROJECT_NAME}
 	PRIVATE
 	${CLIB_UTIL_INCLUDE_DIRS}
-    ${SKSE_MCP_INCLUDE_DIRS}
+	${CLIB_UTILS_QTR_INCLUDE_DIRS}
+ ${SKSE_MCP_INCLUDE_DIRS}
 	${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
 target_link_libraries(${PROJECT_NAME} PUBLIC yaml-cpp::yaml-cpp)
 target_compile_definitions(${PROJECT_NAME} PRIVATE IS_HOST_PLUGIN)
 
+# Ensure MSVC warning level4 is applied last (covers cl.exe and clang-cl)
+if (MSVC)
+ set_property(TARGET ${PROJECT_NAME} PROPERTY MSVC_WARNING_LEVEL4)
+endif()
+
+# Stricter warnings and unused checks per toolchain
+if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+ if (MSVC) # clang-cl
+ target_compile_options(${PROJECT_NAME} PRIVATE
+ -Wall -Wextra -Wpedantic
+ -Wunused-function
+ -Wunused-member-function
+ -Wunused-private-field
+ -Wunused-variable
+ -Wunused-parameter
+ -Wunreachable-code
+ )
+ else() # clang (GNU-like)
+ target_compile_options(${PROJECT_NAME} PRIVATE
+ -Wall -Wextra -Wpedantic
+ -Wunused-function
+ -Wunused-member-function
+ -Wunused-private-field
+ -Wunused-variable
+ -Wunused-parameter
+ -Wunreachable-code
+ )
+ endif()
+elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+ target_compile_options(${PROJECT_NAME} PRIVATE
+ -Wall -Wextra -Wpedantic
+ -Wunused
+ -Wunused-function
+ -Wunused-variable
+ -Wunused-parameter
+ -Wunused-but-set-variable
+ -Wunused-but-set-parameter
+ )
+elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+ # Add MSVC code analysis optionally
+ if (ENABLE_MSVC_ANALYZE)
+ target_compile_options(${PROJECT_NAME} PRIVATE /analyze)
+ endif()
+endif()
+
+# Optional: clang-tidy integration focused on unused checks
+if (ENABLE_CLANG_TIDY)
+ find_program(CLANG_TIDY_EXE NAMES clang-tidy)
+ if (CLANG_TIDY_EXE)
+ # Use project .clang-tidy if present; restrict headers to project dirs
+ set_target_properties(${PROJECT_NAME} PROPERTIES
+ CXX_CLANG_TIDY "${CLANG_TIDY_EXE};-header-filter=^(include|src)/"
+ )
+ else()
+ message(WARNING "ENABLE_CLANG_TIDY is ON but clang-tidy was not found in PATH")
+ endif()
+endif()
+
 set(wildlander_output false)
 set(steam_owrt_output false)
 set(steam_mods_output true)
-set(lorerim_mods_output true)
+set(lorerim_mods_output false)
 set(lorerim3_mods_output true)
-automaticGameFolderOutput(wildlander_output, steam_owrt_output, steam_mods_output lorerim_mods_output lorerim3_mods_output)
+automaticGameFolderOutput(wildlander_output, steam_owrt_output, steam_mods_output, lorerim_mods_output, lorerim3_mods_output)
