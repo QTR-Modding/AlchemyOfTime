@@ -43,7 +43,6 @@ add_custom_command(
 
 # Add a custom target to ensure the resource file is generated
 add_custom_target(Resource ALL DEPENDS ${RESOURCE_OUTPUT})
-include(FetchContent)
 
 set(ENABLE_SKYRIM_SE ON CACHE BOOL " " FORCE)
 set(ENABLE_SKYRIM_AE ON CACHE BOOL " " FORCE)
@@ -56,13 +55,7 @@ get_target_property(COMMONLIB_SRC_DIR CommonLibSSE SOURCE_DIR)
 find_path(CLIB_UTIL_INCLUDE_DIRS "ClibUtil/utils.hpp")
 find_path(CLIB_UTILS_QTR_INCLUDE_DIRS "ClibUtilsQTR/utils.hpp")
 find_path(SKSE_MCP_INCLUDE_DIRS "SKSEMCP/utils.hpp")
-
-# YAML-CPP (archive, no git)
-FetchContent_Declare(
-  yaml-cpp
-  URL https://github.com/jbeder/yaml-cpp/archive/refs/heads/master.zip
-)
-FetchContent_MakeAvailable(yaml-cpp)
+find_package(yaml-cpp CONFIG REQUIRED)
 
 file(
  GLOB_RECURSE
@@ -98,7 +91,7 @@ target_include_directories(
 	${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-target_link_libraries(${PROJECT_NAME} PUBLIC yaml-cpp::yaml-cpp)
+target_link_libraries(${PROJECT_NAME} PRIVATE yaml-cpp::yaml-cpp)
 target_compile_definitions(${PROJECT_NAME} PRIVATE IS_HOST_PLUGIN)
 
 # Ensure MSVC warning level4 is applied last (covers cl.exe and clang-cl)
