@@ -108,7 +108,7 @@ class Manager final : public Ticker, public SaveLoadData {
 
     static bool RefIsUpdatable(const RE::TESObjectREFR* ref);
     // [expects: sourceMutex_] (unique)
-    void DeRegisterRef(RefID refid);
+    bool DeRegisterRef(RefID refid);
 
 public:
     Manager(const std::vector<Source>& data, const std::chrono::milliseconds interval)
@@ -159,7 +159,7 @@ public:
     void Reset();
 
     // [locks: sourceMutex_] (unique)
-    void HandleFormDelete(FormID a_refid);
+    bool HandleFormDelete(FormID a_refid);
 
     // Serialisation helpers. [locks: sourceMutex_] (shared)
     void SendData();

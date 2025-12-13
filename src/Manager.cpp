@@ -219,7 +219,7 @@ namespace {
     #define AOT_CONCAT(a,b) AOT_CONCAT_INNER(a,b)
 }
 
-// Debug macros (per-mutex) – pass source location for better logs
+// Debug macros (per-mutex) - pass source location for better logs
 #define SRC_SHARED_GUARD  DebugSharedLock<SourceMutexTag> AOT_CONCAT(src_slock_, __COUNTER__)(&sourceMutex_, __FILE__, __LINE__, __func__)
 #define SRC_UNIQUE_GUARD  DebugUniqueLock<SourceMutexTag> AOT_CONCAT(src_ulock_, __COUNTER__)(&sourceMutex_, __FILE__, __LINE__, __func__)
 #define QUE_SHARED_GUARD  DebugSharedLock<QueueMutexTag>  AOT_CONCAT(que_slock_, __COUNTER__)(&queueMutex_,  __FILE__, __LINE__, __func__)
@@ -856,12 +856,15 @@ bool Manager::RefIsUpdatable(const RE::TESObjectREFR* ref) {
     return true;
 }
 
-void Manager::DeRegisterRef(const RefID refid) {
+bool Manager::DeRegisterRef(const RefID refid) {
+    bool found = false;
     for (auto& src : sources) {
         if (auto it = src.data.find(refid); it != src.data.end()) {
             src.data.erase(it);
+            found = true;
         }
     }
+    return found;
 }
 
 void Manager::ClearWOUpdateQueue() {
@@ -1003,14 +1006,21 @@ void Manager::HandleCraftingEnter(const unsigned int bench_type) {
                 const auto it = player_inventory.find(src.GetBoundObject());
                 const auto count_src = it != player_inventory.end() ? it->second.first : 0;
                 handle_crafting_instances[temp] = {st_inst.count, count_src};
-            } else handle_crafting_instances.at(temp).first += st_inst.count;
+            } else {
+                handle_crafting_instances.at(temp).first += st_inst.count;
+            }
 
-            if (!faves_list.contains(stage_formid)) faves_list[stage_formid] = IsFavorited(stage_formid, player_refid);
-            else if (!faves_list.at(stage_formid))
+            if (!faves_list.contains(stage_formid)) {
+                faves_list[stage_formid] = IsFavorited(stage_formid, player_refid);
+            } else if (!faves_list.at(stage_formid)) {
                 faves_list.at(stage_formid) = IsFavorited(stage_formid, player_refid);
+            }
 
-            if (!equipped_list.contains(stage_formid)) equipped_list[stage_formid] = IsEquipped(stage_formid);
-            else if (!equipped_list.at(stage_formid)) equipped_list.at(stage_formid) = IsEquipped(stage_formid);
+            if (!equipped_list.contains(stage_formid)) {
+                equipped_list[stage_formid] = IsEquipped(stage_formid);
+            } else if (!equipped_list.at(stage_formid)) {
+                equipped_list.at(stage_formid) = IsEquipped(stage_formid);
+            }
         }
     }
 
@@ -1044,8 +1054,12 @@ void Manager::HandleCraftingExit() {
         if (const auto to_be_taken_back = actual_count_src - counts.second; to_be_taken_back > 0) {
             RemoveItem(player_ref, formids.form_id1, to_be_taken_back);
             AddItem(player_ref, nullptr, formids.form_id2, to_be_taken_back);
-            if (faves_list[formids.form_id2]) FavoriteItem(formids.form_id2, player_refid);
-            if (equipped_list[formids.form_id2]) EquipItem(formids.form_id2, false);
+            if (faves_list[formids.form_id2]) {
+                FavoriteItem(formids.form_id2, player_refid);
+            }
+            if (equipped_list[formids.form_id2]) {
+                EquipItem(formids.form_id2, false);
+            }
         }
     }
 
@@ -1185,10 +1199,9 @@ void Manager::Reset() {
     logger::info("Manager reset.");
 }
 
-void Manager::HandleFormDelete(const FormID a_refid) {
-    logger::info("HandleFormDelete: Formid {:x}", a_refid);
+bool Manager::HandleFormDelete(const FormID a_refid) {
     SRC_UNIQUE_GUARD;
-    DeRegisterRef(a_refid);
+    return DeRegisterRef(a_refid);
 }
 
 void Manager::SendData() {

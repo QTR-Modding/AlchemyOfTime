@@ -1,9 +1,7 @@
 #pragma once
-#include "Hooks.h"
-#include "ClibUtil/singleton.hpp"
+#include "REX/REX/Singleton.h"
 
-// MP <3
-class EventSink final : public clib_util::singleton::ISingleton<EventSink>,
+class EventSink final : public REX::Singleton<EventSink>,
                         public RE::BSTEventSink<RE::TESEquipEvent>,
                         public RE::BSTEventSink<RE::TESActivateEvent>,
                         public RE::BSTEventSink<SKSE::CrosshairRefEvent>,
@@ -22,8 +20,7 @@ class EventSink final : public clib_util::singleton::ISingleton<EventSink>,
 public:
     void HandleWOsInCell() const;
 
-    RE::BSEventNotifyControl
-    ProcessEvent(const RE::TESEquipEvent* event, RE::BSTEventSource<RE::TESEquipEvent>*) override;
+    RE::BSEventNotifyControl ProcessEvent(const RE::TESEquipEvent* event, RE::BSTEventSource<RE::TESEquipEvent>*) override;
 
     RE::BSEventNotifyControl ProcessEvent(const RE::TESActivateEvent* event,
                                           RE::BSTEventSource<RE::TESActivateEvent>*) override;

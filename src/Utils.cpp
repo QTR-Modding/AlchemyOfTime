@@ -4,7 +4,7 @@
 #include "Settings.h"
 #include "DrawDebug.hpp"
 #include "MCP.h"
-#include <directxmath/DirectXCollision.h>
+#include "DirectXCollision.h"
 
 std::string DecodeTypeCode(const std::uint32_t typeCode) {
     char buf[4];
@@ -681,12 +681,11 @@ RE::NiPoint3 Math::LinAlg::intersectLine(const std::array<RE::NiPoint3, 3>& vert
 }
 
 bool WorldObject::AreClose(const RE::TESObjectREFR* a_obj1, const RE::TESObjectREFR* a_obj2, float threshold) {
-
     if (!a_obj1 || !a_obj2) {
         return false;
     }
 
-    // Clamp negative thresholds to “no margin”
+    // Clamp negative thresholds to "no margin"
     threshold = std::max(threshold, 0.0f);
 
     DirectX::BoundingOrientedBox obb1{};

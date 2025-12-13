@@ -450,29 +450,33 @@ std::wstring Lorebox::BuildFrozenLore(const std::wstring& currentStageName) {
 
 const wchar_t* Lorebox::OnDynamicTranslationRequest(std::string_view) {
     const auto item_data = Menu::GetSelectedItemDataInMenu();
+    if (!item_data) {
+        return return_str.c_str();
+    }
     const auto item = item_data->objDesc->GetObject();
     if (!item) {
         return return_str.c_str();
     }
     const auto owner = Menu::GetOwnerOfItem(item_data);
     if (!owner) {
-        if (RE::UI::GetSingleton()->IsMenuOpen(RE::BarterMenu::MENU_NAME)) {
-            // Try to resolve current stage name from the hovered form
-            if (const auto hovered = item->GetFormID()) {
-                for (const auto& s : M->GetSources()) {
-                    if (!s.IsHealthy()) continue;
-                    if (!s.IsStage(hovered)) continue;
-                    if (const auto name = s.GetStageName(s.GetStageNo(hovered)); !name.empty()) {
-                        loreboxStr = BuildFrozenLore(std::wstring{name.begin(), name.end()});
-                        return loreboxStr.c_str();
-                    }
-                    break; // found source, but no name
-                }
-            }
-            loreboxStr = BuildFrozenLore();
-            return loreboxStr.c_str();
-        }
         return return_str.c_str();
+        //if (RE::UI::GetSingleton()->IsMenuOpen(RE::BarterMenu::MENU_NAME)) {
+        //    // Try to resolve current stage name from the hovered form
+        //    if (const auto hovered = item->GetFormID()) {
+        //        for (const auto& s : M->GetSources()) {
+        //            if (!s.IsHealthy()) continue;
+        //            if (!s.IsStage(hovered)) continue;
+        //            if (const auto name = s.GetStageName(s.GetStageNo(hovered)); !name.empty()) {
+        //                loreboxStr = BuildFrozenLore(std::wstring{name.begin(), name.end()});
+        //                return loreboxStr.c_str();
+        //            }
+        //            break; // found source, but no name
+        //        }
+        //    }
+        //    loreboxStr = BuildFrozenLore();
+        //    return loreboxStr.c_str();
+        //}
+        //return loreboxStr.c_str();
     }
     loreboxStr = BuildLoreFor(item->GetFormID(), owner->GetFormID());
     return loreboxStr.c_str();

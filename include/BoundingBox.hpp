@@ -124,7 +124,7 @@ namespace BoundingBox {
             R = node->world.rotate;
             T = node->world.translate;
         } else {
-            // If no 3D, approximate from ref’s angle/pos
+            // If no 3D, approximate from ref's angle/pos
             R.SetEulerAnglesXYZ(obj->GetAngle());
             T = obj->GetPosition();
         }
