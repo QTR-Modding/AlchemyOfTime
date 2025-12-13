@@ -449,13 +449,14 @@ std::wstring Lorebox::BuildFrozenLore(const std::wstring& currentStageName) {
 }
 
 const wchar_t* Lorebox::OnDynamicTranslationRequest(std::string_view) {
+    loreboxStr = BuildFrozenLore();
     const auto item_data = Menu::GetSelectedItemDataInMenu();
     if (!item_data) {
-        return return_str.c_str();
+        return loreboxStr.c_str();
     }
     const auto item = item_data->objDesc->GetObject();
     if (!item) {
-        return return_str.c_str();
+        return loreboxStr.c_str();
     }
     const auto owner = Menu::GetOwnerOfItem(item_data);
     if (!owner) {
@@ -475,7 +476,7 @@ const wchar_t* Lorebox::OnDynamicTranslationRequest(std::string_view) {
             loreboxStr = BuildFrozenLore();
             return loreboxStr.c_str();
         }
-        return return_str.c_str();
+        return loreboxStr.c_str();
     }
     loreboxStr = BuildLoreFor(item->GetFormID(), owner->GetFormID());
     return loreboxStr.c_str();
