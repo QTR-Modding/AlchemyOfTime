@@ -63,14 +63,6 @@ RE::BSEventNotifyControl EventSink::ProcessEvent(const RE::TESActivateEvent* eve
     if (!M->RefIsRegistered(event->objectActivated->GetFormID())) return RE::BSEventNotifyControl::kContinue;
     if (event->objectActivated->HasContainer()) return RE::BSEventNotifyControl::kContinue;
 
-    /*if (M->po3_use_or_take.load()) {
-        if (auto base = event->objectActivated->GetBaseObject()) {
-            RE::BSString str;
-            base->GetActivateText(RE::PlayerCharacter::GetSingleton(), str);
-            if (String::includesWord(str.c_str(), {"Eat","Drink"})) activate_eat = true;
-        }
-    }*/
-
     M->SwapWithStage(event->objectActivated.get());
 
     return RE::BSEventNotifyControl::kContinue;
@@ -81,11 +73,6 @@ RE::BSEventNotifyControl EventSink::ProcessEvent(const SKSE::CrosshairRefEvent* 
     if (M->isLoading.load()) return RE::BSEventNotifyControl::kContinue;
     if (!event) return RE::BSEventNotifyControl::kContinue;
     if (!event->crosshairRef) return RE::BSEventNotifyControl::kContinue;
-
-    //if (!M->RefIsRegistered(event->crosshairRef->GetFormID())) return RE::BSEventNotifyControl::kContinue;
-
-    //if (event->crosshairRef->HasContainer()) M->Update(event->crosshairRef.get());
-    /*else HandleWO(event->crosshairRef.get());*/
 
     if (!event->crosshairRef->HasContainer()) HandleWO(event->crosshairRef.get());
     else if (M->RefIsRegistered(event->crosshairRef->GetFormID())) M->Update(event->crosshairRef.get());
@@ -108,19 +95,16 @@ RE::BSEventNotifyControl EventSink::ProcessEvent(const RE::TESFurnitureEvent* ev
     const auto bench = event->targetFurniture->GetBaseObject()->As<RE::TESFurniture>();
     if (!bench) return RE::BSEventNotifyControl::kContinue;
     auto bench_type = static_cast<std::uint8_t>(bench->workBenchData.benchType.get());
-    logger::trace("Furniture event: {}", bench_type);
 
     //if (bench_type != 2 && bench_type != 3 && bench_type != 7) return RE::BSEventNotifyControl::kContinue;
 
     if (!Settings::qform_bench_map.contains(bench_type)) return RE::BSEventNotifyControl::kContinue;
 
     if (event->type == RE::TESFurnitureEvent::FurnitureEventType::kEnter) {
-        logger::trace("Furniture event: Enter {}", event->targetFurniture->GetName());
         furniture_entered = true;
         furniture = event->targetFurniture;
         M->HandleCraftingEnter(bench_type);
     } else if (event->type == RE::TESFurnitureEvent::FurnitureEventType::kExit) {
-        logger::trace("Furniture event: Exit {}", event->targetFurniture->GetName());
         if (event->targetFurniture == furniture) {
             M->HandleCraftingExit();
             furniture_entered = false;
@@ -134,7 +118,6 @@ RE::BSEventNotifyControl EventSink::ProcessEvent(const RE::TESFurnitureEvent* ev
 RE::BSEventNotifyControl EventSink::ProcessEvent(const RE::TESSleepStopEvent*,
                                                  RE::BSTEventSource<RE::TESSleepStopEvent>*) {
     if (M->isLoading.load()) return RE::BSEventNotifyControl::kContinue;
-    logger::trace("Sleep stop event.");
     HandleWOsInCell();
     return RE::BSEventNotifyControl::kContinue;
 }
@@ -142,7 +125,6 @@ RE::BSEventNotifyControl EventSink::ProcessEvent(const RE::TESSleepStopEvent*,
 RE::BSEventNotifyControl EventSink::ProcessEvent(const RE::TESWaitStopEvent*,
                                                  RE::BSTEventSource<RE::TESWaitStopEvent>*) {
     if (M->isLoading.load()) return RE::BSEventNotifyControl::kContinue;
-    logger::trace("Wait stop event.");
     HandleWOsInCell();
     return RE::BSEventNotifyControl::kContinue;
 }
@@ -165,7 +147,6 @@ RE::BSEventNotifyControl EventSink::ProcessEvent(const RE::BGSActorCellEvent* a_
     if (!cell) return RE::BSEventNotifyControl::kContinue;
 
     if (a_event->flags.any(RE::BGSActorCellEvent::CellFlag::kEnter)) {
-        logger::trace("Player entered cell: {}", cell->GetName());
         listen_cellchange.store(false);
         M->ClearWOUpdateQueue();
         HandleWOsInCell();

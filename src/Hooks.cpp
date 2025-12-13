@@ -41,10 +41,10 @@ RE::UI_MESSAGE_RESULTS Hooks::MenuHook<MenuType>::ProcessMessage_Hook(RE::UIMess
 }
 
 void Hooks::Install() {
-    MenuHook<RE::ContainerMenu>::InstallHook(RE::VTABLE_ContainerMenu[0]);
-    MenuHook<RE::BarterMenu>::InstallHook(RE::VTABLE_BarterMenu[0]);
-    MenuHook<RE::FavoritesMenu>::InstallHook(RE::VTABLE_FavoritesMenu[0]);
-    MenuHook<RE::InventoryMenu>::InstallHook(RE::VTABLE_InventoryMenu[0]);
+    MenuHook<RE::ContainerMenu>::InstallHook(RE::ContainerMenu::VTABLE[0]);
+    MenuHook<RE::BarterMenu>::InstallHook(RE::BarterMenu::VTABLE[0]);
+    MenuHook<RE::FavoritesMenu>::InstallHook(RE::FavoritesMenu::VTABLE[0]);
+    MenuHook<RE::InventoryMenu>::InstallHook(RE::InventoryMenu::VTABLE[0]);
 
     #ifndef NDEBUG
     UpdateHook::Install();

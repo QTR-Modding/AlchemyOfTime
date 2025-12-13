@@ -1,8 +1,9 @@
 #pragma once
+#include <REX/REX/Singleton.h>
+
 #include <shared_mutex>
 #include <unordered_set>
 #include "Utils.h"
-#include "ClibUtil/singleton.hpp"
 
 using Duration = float;
 using DurationMGEFF = std::uint32_t;
@@ -240,7 +241,7 @@ private:
 
 using CustomSettings = std::map<std::vector<std::string>, DefaultSettings>;
 
-class SoundHelper : public clib_util::singleton::ISingleton<SoundHelper> {
+class SoundHelper : public REX::Singleton<SoundHelper> {
     std::unordered_map<RefID, RE::BSSoundHandle> handles;
 
     std::shared_mutex mutex;

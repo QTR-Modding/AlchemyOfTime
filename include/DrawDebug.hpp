@@ -4,11 +4,12 @@
 
 #define NOMINMAX
 #define GLM_ENABLE_EXPERIMENTAL
+#include <REX/REX/Singleton.h>
+
 #include <shared_mutex>
 #include <glm/glm.hpp>
 #include <glm/ext.hpp>
 #include <glm/gtx/euler_angles.hpp>
-#include "ClibUtil/singleton.hpp"
 
 namespace DebugAPI_IMPL {
     constexpr int CIRCLE_NUM_SEGMENTS = 32;
@@ -30,7 +31,7 @@ namespace DebugAPI_IMPL {
         unsigned __int64 DestroyTickCount;
     };
 
-    class DebugAPI : public clib_util::singleton::ISingleton<DebugAPI> {
+    class DebugAPI : public REX::Singleton<DebugAPI> {
     public:
         void Update();
 

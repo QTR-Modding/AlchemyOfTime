@@ -1006,14 +1006,21 @@ void Manager::HandleCraftingEnter(const unsigned int bench_type) {
                 const auto it = player_inventory.find(src.GetBoundObject());
                 const auto count_src = it != player_inventory.end() ? it->second.first : 0;
                 handle_crafting_instances[temp] = {st_inst.count, count_src};
-            } else handle_crafting_instances.at(temp).first += st_inst.count;
+            } else {
+                handle_crafting_instances.at(temp).first += st_inst.count;
+            }
 
-            if (!faves_list.contains(stage_formid)) faves_list[stage_formid] = IsFavorited(stage_formid, player_refid);
-            else if (!faves_list.at(stage_formid))
+            if (!faves_list.contains(stage_formid)) {
+                faves_list[stage_formid] = IsFavorited(stage_formid, player_refid);
+            } else if (!faves_list.at(stage_formid)) {
                 faves_list.at(stage_formid) = IsFavorited(stage_formid, player_refid);
+            }
 
-            if (!equipped_list.contains(stage_formid)) equipped_list[stage_formid] = IsEquipped(stage_formid);
-            else if (!equipped_list.at(stage_formid)) equipped_list.at(stage_formid) = IsEquipped(stage_formid);
+            if (!equipped_list.contains(stage_formid)) {
+                equipped_list[stage_formid] = IsEquipped(stage_formid);
+            } else if (!equipped_list.at(stage_formid)) {
+                equipped_list.at(stage_formid) = IsEquipped(stage_formid);
+            }
         }
     }
 
@@ -1047,8 +1054,12 @@ void Manager::HandleCraftingExit() {
         if (const auto to_be_taken_back = actual_count_src - counts.second; to_be_taken_back > 0) {
             RemoveItem(player_ref, formids.form_id1, to_be_taken_back);
             AddItem(player_ref, nullptr, formids.form_id2, to_be_taken_back);
-            if (faves_list[formids.form_id2]) FavoriteItem(formids.form_id2, player_refid);
-            if (equipped_list[formids.form_id2]) EquipItem(formids.form_id2, false);
+            if (faves_list[formids.form_id2]) {
+                FavoriteItem(formids.form_id2, player_refid);
+            }
+            if (equipped_list[formids.form_id2]) {
+                EquipItem(formids.form_id2, false);
+            }
         }
     }
 
