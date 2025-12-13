@@ -10,4 +10,4 @@ vcpkg_from_github(
 # Install codes
 set(CLibUtilsQTR_SOURCE	${SOURCE_PATH}/include/CLibUtilsQTR)
 file(INSTALL ${CLibUtilsQTR_SOURCE} DESTINATION ${CURRENT_PACKAGES_DIR}/include)
-vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE") 
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE")

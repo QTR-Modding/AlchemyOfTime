@@ -681,7 +681,6 @@ RE::NiPoint3 Math::LinAlg::intersectLine(const std::array<RE::NiPoint3, 3>& vert
 }
 
 bool WorldObject::AreClose(const RE::TESObjectREFR* a_obj1, const RE::TESObjectREFR* a_obj2, float threshold) {
-
     if (!a_obj1 || !a_obj2) {
         return false;
     }
