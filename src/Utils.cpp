@@ -4,7 +4,7 @@
 #include "Settings.h"
 #include "DrawDebug.hpp"
 #include "MCP.h"
-#include <directxmath/DirectXCollision.h>
+#include "DirectXCollision.h"
 
 std::string DecodeTypeCode(const std::uint32_t typeCode) {
     char buf[4];
@@ -686,7 +686,7 @@ bool WorldObject::AreClose(const RE::TESObjectREFR* a_obj1, const RE::TESObjectR
         return false;
     }
 
-    // Clamp negative thresholds to “no margin”
+    // Clamp negative thresholds to "no margin"
     threshold = std::max(threshold, 0.0f);
 
     DirectX::BoundingOrientedBox obb1{};

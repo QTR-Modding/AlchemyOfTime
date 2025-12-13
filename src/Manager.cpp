@@ -219,7 +219,7 @@ namespace {
     #define AOT_CONCAT(a,b) AOT_CONCAT_INNER(a,b)
 }
 
-// Debug macros (per-mutex) – pass source location for better logs
+// Debug macros (per-mutex) - pass source location for better logs
 #define SRC_SHARED_GUARD  DebugSharedLock<SourceMutexTag> AOT_CONCAT(src_slock_, __COUNTER__)(&sourceMutex_, __FILE__, __LINE__, __func__)
 #define SRC_UNIQUE_GUARD  DebugUniqueLock<SourceMutexTag> AOT_CONCAT(src_ulock_, __COUNTER__)(&sourceMutex_, __FILE__, __LINE__, __func__)
 #define QUE_SHARED_GUARD  DebugSharedLock<QueueMutexTag>  AOT_CONCAT(que_slock_, __COUNTER__)(&queueMutex_,  __FILE__, __LINE__, __func__)
@@ -856,12 +856,15 @@ bool Manager::RefIsUpdatable(const RE::TESObjectREFR* ref) {
     return true;
 }
 
-void Manager::DeRegisterRef(const RefID refid) {
+bool Manager::DeRegisterRef(const RefID refid) {
+    bool found = false;
     for (auto& src : sources) {
         if (auto it = src.data.find(refid); it != src.data.end()) {
             src.data.erase(it);
+            found = true;
         }
     }
+    return found;
 }
 
 void Manager::ClearWOUpdateQueue() {
@@ -1185,10 +1188,9 @@ void Manager::Reset() {
     logger::info("Manager reset.");
 }
 
-void Manager::HandleFormDelete(const FormID a_refid) {
-    logger::info("HandleFormDelete: Formid {:x}", a_refid);
+bool Manager::HandleFormDelete(const FormID a_refid) {
     SRC_UNIQUE_GUARD;
-    DeRegisterRef(a_refid);
+    return DeRegisterRef(a_refid);
 }
 
 void Manager::SendData() {
