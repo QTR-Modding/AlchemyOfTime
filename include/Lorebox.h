@@ -5,7 +5,7 @@
 namespace Lorebox {
     static std::string aot_kw_name = "LoreBox_quantAoT";
     static std::string aot_kw_name_lorebox = "$LoreBox_quantAoT";
-    static std::wstring return_str = L" ";
+    static std::wstring return_str = L"";
     inline RE::BGSKeyword* aot_kw = nullptr;
 
     inline std::shared_mutex kw_mutex;
