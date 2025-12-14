@@ -162,8 +162,6 @@ namespace WorldObject {
     RE::bhkRigidBody* GetRigidBody(const RE::TESObjectREFR* refr);
 
     RE::NiPoint3 GetPosition(const RE::TESObjectREFR* obj);
-
-    bool AreClose(const RE::TESObjectREFR* a_obj1, const RE::TESObjectREFR* a_obj2, float threshold);
 };
 
 namespace Inventory {

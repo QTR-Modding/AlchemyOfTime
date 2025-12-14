@@ -5,7 +5,6 @@
 #define NOMINMAX
 #define GLM_ENABLE_EXPERIMENTAL
 #include <REX/REX/Singleton.h>
-
 #include <shared_mutex>
 #include <glm/glm.hpp>
 #include <glm/ext.hpp>
@@ -140,6 +139,31 @@ namespace DebugAPI_IMPL {
                          const int time = 3000) {
             const glm::vec3 center(_center.x, _center.y, _center.z);
             DebugAPI::GetSingleton()->DrawSphere(center, r, time, Color, size);
+        }
+
+        inline void DrawOBB(const DirectX::BoundingOrientedBox& obb) {
+            DirectX::XMFLOAT3 c[8];
+            obb.GetCorners(c);
+
+            auto P = [&](int i) { return RE::NiPoint3{c[i].x, c[i].y, c[i].z}; };
+
+            // bottom face
+            draw_line(P(0), P(1));
+            draw_line(P(1), P(2));
+            draw_line(P(2), P(3));
+            draw_line(P(3), P(0));
+
+            // top face
+            draw_line(P(4), P(5));
+            draw_line(P(5), P(6));
+            draw_line(P(6), P(7));
+            draw_line(P(7), P(4));
+
+            // vertical edges
+            draw_line(P(0), P(4));
+            draw_line(P(1), P(5));
+            draw_line(P(2), P(6));
+            draw_line(P(3), P(7));
         }
     }
 
@@ -489,4 +513,6 @@ namespace DebugAPI_IMPL {
 
         DebugAPI::GetSingleton()->Update();
     }
+
+
 }

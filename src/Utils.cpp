@@ -525,17 +525,6 @@ RE::NiPoint3 WorldObject::GetPosition(const RE::TESObjectREFR* obj) {
     return newPosition;
 }
 
-static bool AreClose_Sub(const DirectX::BoundingOrientedBox& obb1_in, const DirectX::BoundingOrientedBox& obb2_in,
-                         const float threshold) {
-    DirectX::BoundingOrientedBox obb1 = obb1_in;
-
-    obb1.Extents.x += threshold;
-    obb1.Extents.y += threshold;
-    obb1.Extents.z += threshold;
-
-    return obb1.Intersects(obb2_in);
-}
-
 
 float Math::Round(const float value, const int n) {
     const float factor = std::powf(10.0f, static_cast<float>(n));
@@ -678,35 +667,6 @@ RE::NiPoint3 Math::LinAlg::intersectLine(const std::array<RE::NiPoint3, 3>& vert
     }
 
     return orthogonal_vertex;
-}
-
-bool WorldObject::AreClose(const RE::TESObjectREFR* a_obj1, const RE::TESObjectREFR* a_obj2, float threshold) {
-    if (!a_obj1 || !a_obj2) {
-        return false;
-    }
-
-    // Clamp negative thresholds to "no margin"
-    threshold = std::max(threshold, 0.0f);
-
-    DirectX::BoundingOrientedBox obb1{};
-    DirectX::BoundingOrientedBox obb2{};
-
-    // Build tight OBBs in world space from the game refs
-    BoundingBox::GetOBB(a_obj1, obb1, allow_havokAABB);
-    BoundingBox::GetOBB(a_obj2, obb2, allow_havokAABB);
-
-    const bool close = AreClose_Sub(obb1, obb2, threshold);
-
-    #ifndef NDEBUG
-    if (close && UI::draw_debug) {
-        RE::NiPoint3 c1{obb1.Center.x, obb1.Center.y, obb1.Center.z};
-        RE::NiPoint3 c2{obb2.Center.x, obb2.Center.y, obb2.Center.z};
-        // yellow debug line between centers
-        draw_line(c1, c2, 2, glm::vec4(1.f, 1.f, 0.f, 1.f));
-    }
-    #endif
-
-    return close;
 }
 
 bool Inventory::IsQuestItem(const FormID formid, RE::TESObjectREFR* inv_owner) {

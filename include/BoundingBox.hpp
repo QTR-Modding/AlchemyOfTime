@@ -1,30 +1,110 @@
 #pragma once
-#include "DrawDebug.hpp"
 #include <DirectXCollision.h>
-#include <algorithm>  // std::clamp if you need it elsewhere
-#include <cmath>      // std::sqrt
+#include <xmmintrin.h>
 
-using DebugAPI_IMPL::DrawDebug::draw_line;
+class hkpRigidBody;
+class hkpShape;
 
 namespace BoundingBox {
-    using RE::NiPoint3;
+    constexpr float havokToSkyrim = 69.9915f;
 
-    // You already have this:
-    inline RE::bhkRigidBody* GetRigidBody(const RE::TESObjectREFR* refr) {
-        const auto object3D = refr->GetCurrent3D();
-        if (!object3D) {
-            return nullptr;
-        }
-        if (const auto body = object3D->GetCollisionObject()) {
-            return body->GetRigidBody();
-        }
-        return nullptr;
+    // ---- helpers: hkVector4 -> floats ----
+    inline void Store4(const RE::hkVector4& v, float out[4]) { _mm_store_ps(out, v.quad); }
+
+    inline DirectX::XMFLOAT3 ToFloat3(const RE::hkVector4& v) {
+        alignas(16) float f[4];
+        Store4(v, f);
+        return {f[0], f[1], f[2]};
     }
 
-    // ---- helper: NiMatrix3 -> DirectX quaternion (x,y,z,w) ----
+    inline DirectX::XMFLOAT4 ToQuatFloat4(const RE::hkQuaternion& q) {
+        alignas(16) float f[4];
+        Store4(q.vec, f);
+        return {f[0], f[1], f[2], f[3]};
+    }
+
+    // ---- helper: build identity hkTransform without assuming methods ----
+    inline RE::hkTransform IdentityTransform() {
+        RE::hkTransform t;
+        t.rotation.col0 = RE::hkVector4(1.f, 0.f, 0.f, 0.f);
+        t.rotation.col1 = RE::hkVector4(0.f, 1.f, 0.f, 0.f);
+        t.rotation.col2 = RE::hkVector4(0.f, 0.f, 1.f, 0.f);
+        t.translation = RE::hkVector4(0.f, 0.f, 0.f, 0.f);
+        return t;
+    }
+
+    // ---- helper: column-major hkRotation * vector (x,y,z) ----
+    inline DirectX::XMFLOAT3 Mul(const RE::hkRotation& R, const DirectX::XMFLOAT3& v) {
+        alignas(16) float c0[4], c1[4], c2[4];
+        Store4(R.col0, c0);
+        Store4(R.col1, c1);
+        Store4(R.col2, c2);
+
+        // world = col0*v.x + col1*v.y + col2*v.z
+        return {c0[0] * v.x + c1[0] * v.y + c2[0] * v.z, c0[1] * v.x + c1[1] * v.y + c2[1] * v.z,
+                c0[2] * v.x + c1[2] * v.y + c2[2] * v.z};
+    }
+
+    // ---- core: OBB from rigid body transform + SHAPE local AABB ----
+    inline bool GetOBBFromHavokShape(RE::bhkRigidBody* bhkBody, DirectX::BoundingOrientedBox& out,
+                                     bool applyHavokToSkyrimScale = true, float tolerance = 0.0f) {
+        if (!bhkBody) {
+            return false;
+        }
+
+        // hkpRigidBody*
+        auto* rb = bhkBody->GetRigidBody();
+        if (!rb) {
+            return false;
+        }
+
+        // hkpShape*
+        auto* shape = rb->GetShape();
+        if (!shape) {
+            return false;
+        }
+
+        // body world transform (Havok units)
+        RE::hkTransform bodyTr{};
+        bhkBody->GetTransform(bodyTr);
+
+        // shape LOCAL AABB (Havok units), via identity transform
+        const RE::hkTransform I = IdentityTransform();
+
+        RE::hkAabb localAabb{};
+        // NOTE: GetAabbImpl is pure virtual on hkpShape, implemented by concrete shapes.
+        shape->GetAabbImpl(I, tolerance, localAabb);
+
+        const auto localMin = ToFloat3(localAabb.min);
+        const auto localMax = ToFloat3(localAabb.max);
+
+        const DirectX::XMFLOAT3 localCenter{(localMin.x + localMax.x) * 0.5f, (localMin.y + localMax.y) * 0.5f,
+                                            (localMin.z + localMax.z) * 0.5f};
+
+        const DirectX::XMFLOAT3 localHalf{(localMax.x - localMin.x) * 0.5f, (localMax.y - localMin.y) * 0.5f,
+                                          (localMax.z - localMin.z) * 0.5f};
+
+        // worldCenter = translation + rotation * localCenter
+        const auto t = ToFloat3(bodyTr.translation);
+        const auto rc = Mul(bodyTr.rotation, localCenter);
+
+        DirectX::XMFLOAT3 worldCenter{t.x + rc.x, t.y + rc.y, t.z + rc.z};
+
+        const float s = applyHavokToSkyrimScale ? havokToSkyrim : 1.0f;
+
+        out.Center = {worldCenter.x * s, worldCenter.y * s, worldCenter.z * s};
+        out.Extents = {localHalf.x * s, localHalf.y * s, localHalf.z * s};
+
+        // Orientation: use Havok quaternion directly (recommended)
+        RE::hkQuaternion q{};
+        bhkBody->GetRotation(q);
+        out.Orientation = ToQuatFloat4(q);
+
+        return true;
+    }
+
     inline DirectX::XMFLOAT4 MatrixToDXQuaternion(const RE::NiMatrix3& R) {
-        // Assuming NiMatrix3::entry[row][col] and R * v uses the usual row-major form:
-        // x' = m00*x + m01*y + m02*z, etc.
+        // NiMatrix3 is row-major (entry[row][col]) in CommonLib style.
         const float m00 = R.entry[0][0], m01 = R.entry[0][1], m02 = R.entry[0][2];
         const float m10 = R.entry[1][0], m11 = R.entry[1][1], m12 = R.entry[1][2];
         const float m20 = R.entry[2][0], m21 = R.entry[2][1], m22 = R.entry[2][2];
@@ -33,32 +113,32 @@ namespace BoundingBox {
 
         const float trace = m00 + m11 + m22;
         if (trace > 0.0f) {
-            const float s = std::sqrt(trace + 1.0f) * 2.0f; // s = 4*qw
+            const float s = std::sqrt(trace + 1.0f) * 2.0f;
             qw = 0.25f * s;
             qx = (m21 - m12) / s;
             qy = (m02 - m20) / s;
             qz = (m10 - m01) / s;
         } else if (m00 > m11 && m00 > m22) {
-            const float s = std::sqrt(1.0f + m00 - m11 - m22) * 2.0f; // s = 4*qx
+            const float s = std::sqrt(1.0f + m00 - m11 - m22) * 2.0f;
             qw = (m21 - m12) / s;
             qx = 0.25f * s;
             qy = (m01 + m10) / s;
             qz = (m02 + m20) / s;
         } else if (m11 > m22) {
-            const float s = std::sqrt(1.0f + m11 - m00 - m22) * 2.0f; // s = 4*qy
+            const float s = std::sqrt(1.0f + m11 - m00 - m22) * 2.0f;
             qw = (m02 - m20) / s;
             qx = (m01 + m10) / s;
             qy = 0.25f * s;
             qz = (m12 + m21) / s;
         } else {
-            const float s = std::sqrt(1.0f + m22 - m00 - m11) * 2.0f; // s = 4*qz
+            const float s = std::sqrt(1.0f + m22 - m00 - m11) * 2.0f;
             qw = (m10 - m01) / s;
             qx = (m02 + m20) / s;
             qy = (m12 + m21) / s;
             qz = 0.25f * s;
         }
 
-        // Optional: normalize to be safe (should already be very close)
+        // Normalize (safety)
         const float lenSq = qx * qx + qy * qy + qz * qz + qw * qw;
         if (lenSq > 0.0f) {
             const float invLen = 1.0f / std::sqrt(lenSq);
@@ -68,105 +148,62 @@ namespace BoundingBox {
             qw *= invLen;
         }
 
-        // DirectX uses (x,y,z,w)
-        return DirectX::XMFLOAT4(qx, qy, qz, qw);
+        return DirectX::XMFLOAT4(qx, qy, qz, qw);  // DirectX = (x,y,z,w)
     }
 
-    // ---- helper: build OBB from Havok world AABB (fast path) ----
-    inline bool GetOBBFromHavok(const RE::TESObjectREFR* obj, DirectX::BoundingOrientedBox& out) {
-        if (auto body = GetRigidBody(obj)) {
-            RE::hkAabb aabb;
-            body->GetAabbWorldspace(aabb);
+    inline bool GetOBBFromGameplayBounds(const RE::TESObjectREFR* obj, DirectX::BoundingOrientedBox& out) {
+        if (!obj) return false;
 
-            float minComp[4]{};
-            float maxComp[4]{};
-            _mm_store_ps(minComp, aabb.min.quad);
-            _mm_store_ps(maxComp, aabb.max.quad);
+        // Local bounds (gameplay/model bounds)
+        RE::NiPoint3 minLocal = obj->GetBoundMin();
+        RE::NiPoint3 maxLocal = obj->GetBoundMax();
 
-            // Same factor you used before
-            constexpr float havokToSkyrim = 69.9915f;
-
-            NiPoint3 minWorld{minComp[0] * havokToSkyrim, minComp[1] * havokToSkyrim, minComp[2] * havokToSkyrim};
-            NiPoint3 maxWorld{maxComp[0] * havokToSkyrim, maxComp[1] * havokToSkyrim, maxComp[2] * havokToSkyrim};
-
-            const NiPoint3 center = (minWorld + maxWorld) * 0.5f;
-            const NiPoint3 half = (maxWorld - minWorld) * 0.5f;
-
-            out.Center = DirectX::XMFLOAT3(center.x, center.y, center.z);
-            out.Extents = DirectX::XMFLOAT3(half.x, half.y, half.z);
-            // Havok gave us a world AABB, so orientation is identity
-            out.Orientation = DirectX::XMFLOAT4(0.f, 0.f, 0.f, 1.f);
-
+        // If bounds are degenerate, you can optionally fallback to worldBound radius if you want
+        // (some refs report zero bounds depending on type/load state)
+        const RE::NiPoint3 size = maxLocal - minLocal;
+        if (std::abs(size.x) < 1e-5f && std::abs(size.y) < 1e-5f && std::abs(size.z) < 1e-5f) {
+            if (auto node = obj->GetCurrent3D()) {
+                const auto& wb = node->worldBound;  // NiBound
+                const float r = wb.radius;
+                if (r > 0.f) {
+                    out.Center = {wb.center.x, wb.center.y, wb.center.z};
+                    out.Extents = {r, r, r};
+                    out.Orientation = {0.f, 0.f, 0.f, 1.f};
+                    return true;
+                }
+            }
+            // last resort: still return something minimal
+            const auto p = obj->GetPosition();
+            out.Center = {p.x, p.y, p.z};
+            out.Extents = {1.f, 1.f, 1.f};
+            out.Orientation = {0.f, 0.f, 0.f, 1.f};
             return true;
         }
-        return false;
-    }
 
-    // ---- main: build a world-space OBB for a TESObjectREFR ----
-    inline void GetOBB(const RE::TESObjectREFR* obj, DirectX::BoundingOrientedBox& out, const bool allowAABB) {
-        // 1) Prefer Havok: cheap, already in world space.
-        if (allowAABB && GetOBBFromHavok(obj, out)) {
-            return;
-        }
+        // Apply scale (gameplay bounds are local model bounds)
+        const float s = obj->GetScale();
+        minLocal *= s;
+        maxLocal *= s;
 
-        // 2) Fallback: use gameplay bounds + world transform (tight OBB)
-        NiPoint3 minLocal = obj->GetBoundMin();
-        NiPoint3 maxLocal = obj->GetBoundMax();
-
-        const float scale = obj->GetScale();
-        minLocal *= scale;
-        maxLocal *= scale;
-
+        // World transform
         RE::NiMatrix3 R;
-        NiPoint3 T;
+        RE::NiPoint3 T;
 
         if (auto node = obj->GetCurrent3D()) {
             R = node->world.rotate;
             T = node->world.translate;
         } else {
-            // If no 3D, approximate from ref's angle/pos
             R.SetEulerAnglesXYZ(obj->GetAngle());
             T = obj->GetPosition();
         }
 
-        const NiPoint3 localCenter = (minLocal + maxLocal) * 0.5f;
-        const NiPoint3 halfLocal = (maxLocal - minLocal) * 0.5f;
+        const RE::NiPoint3 localCenter = (minLocal + maxLocal) * 0.5f;
+        const RE::NiPoint3 halfLocal = (maxLocal - minLocal) * 0.5f;
+        const RE::NiPoint3 worldCenter = T + R * localCenter;
 
-        const NiPoint3 worldCenter = T + R * localCenter;
-
-        out.Center = DirectX::XMFLOAT3(worldCenter.x, worldCenter.y, worldCenter.z);
-        out.Extents = DirectX::XMFLOAT3(halfLocal.x, halfLocal.y, halfLocal.z);
+        out.Center = {worldCenter.x, worldCenter.y, worldCenter.z};
+        out.Extents = {halfLocal.x, halfLocal.y, halfLocal.z};
         out.Orientation = MatrixToDXQuaternion(R);
-    }
-
-    inline void DrawOBB(const DirectX::BoundingOrientedBox& obb) {
-        DirectX::XMFLOAT3 c[8];
-        obb.GetCorners(c);
-
-        auto P = [&](const int i) { return RE::NiPoint3{c[i].x, c[i].y, c[i].z}; };
-
-        // bottom face: 0-1-2-3
-        draw_line(P(0), P(1));
-        draw_line(P(1), P(2));
-        draw_line(P(2), P(3));
-        draw_line(P(3), P(0));
-
-        // top face: 4-5-6-7
-        draw_line(P(4), P(5));
-        draw_line(P(5), P(6));
-        draw_line(P(6), P(7));
-        draw_line(P(7), P(4));
-
-        // vertical edges
-        draw_line(P(0), P(4));
-        draw_line(P(1), P(5));
-        draw_line(P(2), P(6));
-        draw_line(P(3), P(7));
-    }
-
-    inline void DrawOBB(const RE::TESObjectREFR* obj, const bool allowAABB) {
-        DirectX::BoundingOrientedBox obb{};
-        GetOBB(obj, obb, allowAABB);
-        DrawOBB(obb);
+        return true;
     }
 }
