@@ -2,13 +2,9 @@
 
 // Credits: https://github.com/fenix31415/UselessFenixUtils
 
-#define NOMINMAX
-#define GLM_ENABLE_EXPERIMENTAL
 #include <REX/REX/Singleton.h>
 #include <shared_mutex>
-#include <glm/glm.hpp>
 #include <glm/ext.hpp>
-#include <glm/gtx/euler_angles.hpp>
 
 namespace DebugAPI_IMPL {
     constexpr int CIRCLE_NUM_SEGMENTS = 32;
@@ -187,13 +183,6 @@ namespace DebugAPI_IMPL {
         result.y = (num7 + num12) * vecIn.x + (1.0f - (num4 + num6)) * vecIn.y + (num9 - num10) * vecIn.z;
         result.z = (num8 - num11) * vecIn.x + (num9 + num10) * vecIn.y + (1.0f - (num4 + num5)) * vecIn.z;
         return result;
-    }
-
-    inline glm::vec3 RotateVector(const glm::vec3 eulerIn, const glm::vec3 vecIn) {
-        const glm::vec3 glmVecIn(vecIn.x, vecIn.y, vecIn.z);
-        const glm::mat3 rotationMatrix = glm::eulerAngleXYZ(eulerIn.x, eulerIn.y, eulerIn.z);
-
-        return rotationMatrix * glmVecIn;
     }
 
     inline glm::vec3 GetForwardVector(const glm::quat quatIn) {

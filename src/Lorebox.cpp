@@ -453,6 +453,7 @@ const wchar_t* Lorebox::OnDynamicTranslationRequest(std::string_view) {
     if (!item_data) {
         return return_str.c_str();
     }
+    #undef GetObject
     const auto item = item_data->objDesc->GetObject();
     if (!item) {
         return return_str.c_str();

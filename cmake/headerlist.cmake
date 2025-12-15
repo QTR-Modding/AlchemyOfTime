@@ -16,5 +16,4 @@ set(headers ${headers}
 	include/Lorebox.h
 	include/BoundingBox.hpp
 	include/DrawDebug.hpp
-	include/Geometry.hpp
 )

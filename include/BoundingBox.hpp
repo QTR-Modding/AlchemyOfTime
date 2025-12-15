@@ -1,6 +1,5 @@
 #pragma once
 #include <DirectXCollision.h>
-#include <xmmintrin.h>
 
 class hkpRigidBody;
 class hkpShape;
@@ -162,7 +161,7 @@ namespace BoundingBox {
         // (some refs report zero bounds depending on type/load state)
         const RE::NiPoint3 size = maxLocal - minLocal;
         if (std::abs(size.x) < 1e-5f && std::abs(size.y) < 1e-5f && std::abs(size.z) < 1e-5f) {
-            if (auto node = obj->GetCurrent3D()) {
+            if (const auto node = obj->GetCurrent3D()) {
                 const auto& wb = node->worldBound;  // NiBound
                 const float r = wb.radius;
                 if (r > 0.f) {
@@ -189,7 +188,7 @@ namespace BoundingBox {
         RE::NiMatrix3 R;
         RE::NiPoint3 T;
 
-        if (auto node = obj->GetCurrent3D()) {
+        if (const auto node = obj->GetCurrent3D()) {
             R = node->world.rotate;
             T = node->world.translate;
         } else {
