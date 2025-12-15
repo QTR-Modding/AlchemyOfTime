@@ -1,6 +1,5 @@
 #pragma once
 #include <REX/REX/Singleton.h>
-
 #include <shared_mutex>
 #include <unordered_set>
 #include "Utils.h"

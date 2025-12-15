@@ -4,26 +4,36 @@
 
 #include <REX/REX/Singleton.h>
 #include <shared_mutex>
-#include <glm/ext.hpp>
 
 namespace DebugAPI_IMPL {
     constexpr int CIRCLE_NUM_SEGMENTS = 32;
 
     constexpr float DRAW_LOC_MAX_DIF = 5.0f;
 
+    constexpr float ROOT_TWO = std::numbers::sqrt2_v<float>;
+
+
+    inline std::uint8_t AlphaPct(const float a) // 0..100
+    {
+        if (a <= 0.0f) return 0;
+        if (a >= 1.0f) return 100;
+        return static_cast<std::uint8_t>(std::lround(a * 100.0f));
+    }
+
+
     class DebugAPILine {
     public:
-        DebugAPILine(glm::vec3 from, glm::vec3 to, glm::vec4 color, float lineThickness,
-                     unsigned __int64 destroyTickCount);
+        DebugAPILine(RE::NiPoint3 from, RE::NiPoint3 to, const RE::NiColorA& color, float lineThickness,
+                     std::uint64_t destroyTickCount);
 
-        glm::vec3 From;
-        glm::vec3 To;
-        glm::vec4 Color;
-        float fColor;
-        float Alpha;
+        RE::NiPoint3 From;
+        RE::NiPoint3 To;
+        RE::NiColorA Color;
+        std::uint32_t fColor;
+        std::uint8_t Alpha;
         float LineThickness;
 
-        unsigned __int64 DestroyTickCount;
+        std::uint64_t DestroyTickCount;
     };
 
     class DebugAPI : public REX::Singleton<DebugAPI> {
@@ -32,22 +42,24 @@ namespace DebugAPI_IMPL {
 
         static RE::GPtr<RE::IMenu> GetHUD();
 
-        void DrawLine2D(const RE::GPtr<RE::GFxMovieView>& movie, glm::vec2 from, glm::vec2 to, float color,
+        void DrawLine2D(const RE::GPtr<RE::GFxMovieView>& movie, RE::NiPoint2 from, RE::NiPoint2 to, uint32_t color,
                         float lineThickness, float alpha) const;
-        void DrawLine2D(const RE::GPtr<RE::GFxMovieView>& movie, glm::vec2 from, glm::vec2 to, glm::vec4 color,
+        void DrawLine2D(const RE::GPtr<RE::GFxMovieView>& movie, RE::NiPoint2 from, RE::NiPoint2 to,
+                        const RE::NiColorA& color,
                         float lineThickness) const;
-        void DrawLine3D(const RE::GPtr<RE::GFxMovieView>& movie, glm::vec3 from, glm::vec3 to, float color,
+        void DrawLine3D(const RE::GPtr<RE::GFxMovieView>& movie, RE::NiPoint3 from, RE::NiPoint3 to, uint32_t color,
                         float lineThickness, float alpha) const;
-        void DrawLine3D(const RE::GPtr<RE::GFxMovieView>& movie, glm::vec3 from, glm::vec3 to, glm::vec4 color,
+        void DrawLine3D(const RE::GPtr<RE::GFxMovieView>& movie, RE::NiPoint3 from, RE::NiPoint3 to,
+                        const RE::NiColorA& color,
                         float lineThickness) const;
         static void ClearLines2D(const RE::GPtr<RE::GFxMovieView>& movie);
 
-        void DrawLineForMS(const glm::vec3& from, const glm::vec3& to, int liftetimeMS = 10,
-                           const glm::vec4& color = {1.0f, 0.0f, 0.0f, 1.0f}, float lineThickness = 1);
-        void DrawSphere(glm::vec3, float radius, int liftetimeMS = 10,
-                        const glm::vec4& color = {1.0f, 0.0f, 0.0f, 1.0f}, float lineThickness = 1);
-        void DrawCircle(glm::vec3, float radius, glm::vec3 eulerAngles, int liftetimeMS = 10,
-                        const glm::vec4& color = {1.0f, 0.0f, 0.0f, 1.0f}, float lineThickness = 1);
+        void DrawLineForMS(const RE::NiPoint3& from, const RE::NiPoint3& to, int liftetimeMS = 10,
+                           const RE::NiColorA& color = {1.0f, 0.0f, 0.0f, 1.0f}, float lineThickness = 1);
+        void DrawSphere(RE::NiPoint3, float radius, int liftetimeMS = 10,
+                        const RE::NiColorA& color = {1.0f, 0.0f, 0.0f, 1.0f}, float lineThickness = 1);
+        void DrawCircle(RE::NiPoint3, float radius, RE::NiPoint3 eulerAngles, int liftetimeMS = 10,
+                        const RE::NiColorA& color = {1.0f, 0.0f, 0.0f, 1.0f}, float lineThickness = 1);
 
         std::vector<DebugAPILine*> LinesToDraw;
         mutable std::shared_mutex mutex_;
@@ -55,13 +67,12 @@ namespace DebugAPI_IMPL {
         bool DEBUG_API_REGISTERED;
 
 
-        static glm::vec2 WorldToScreenLoc(const RE::GPtr<RE::GFxMovieView>& movie, glm::vec3 worldLoc);
-        static float RGBToHex(glm::vec3 rgb);
+        static RE::NiPoint2 WorldToScreenLoc(const RE::GPtr<RE::GFxMovieView>& movie, RE::NiPoint3 worldLoc);
 
-        void FastClampToScreen(glm::vec2& point) const;
+        void FastClampToScreen(RE::NiPoint2& point) const;
 
-        bool IsOnScreen(glm::vec2 from, glm::vec2 to) const;
-        bool IsOnScreen(glm::vec2 point) const;
+        bool IsOnScreen(RE::NiPoint2 from, RE::NiPoint2 to) const;
+        bool IsOnScreen(RE::NiPoint2 point) const;
 
         void CacheMenuData();
 
@@ -71,10 +82,7 @@ namespace DebugAPI_IMPL {
         float ScreenResY;
 
     private:
-        static float ConvertComponentR(float value);
-        static float ConvertComponentG(float value);
-        static float ConvertComponentB(float value);
-        DebugAPILine* GetExistingLine(const glm::vec3& from, const glm::vec3& to, const glm::vec4& color,
+        DebugAPILine* GetExistingLine(const RE::NiPoint3& from, const RE::NiPoint3& to, const RE::NiColorA& color,
                                       float lineThickness) const;
     };
 
@@ -116,32 +124,29 @@ namespace DebugAPI_IMPL {
 
     namespace DrawDebug {
         namespace Colors {
-            static constexpr auto RED = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
-            static constexpr auto GRN = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
-            static constexpr auto BLU = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
+            static constexpr auto RED = RE::NiColorA(1.0f, 0.0f, 0.0f, 1.0f);
+            static constexpr auto GRN = RE::NiColorA(0.0f, 1.0f, 0.0f, 1.0f);
+            static constexpr auto BLU = RE::NiColorA(0.0f, 0.0f, 1.0f, 1.0f);
         }
 
         template <int time = 100>
         void draw_line(const RE::NiPoint3& _from, const RE::NiPoint3& _to, const float size = 5.0f,
-                       const glm::vec4 Color = Colors::RED) {
-            const glm::vec3 from(_from.x, _from.y, _from.z);
-            const glm::vec3 to(_to.x, _to.y, _to.z);
-            DebugAPI::GetSingleton()->DrawLineForMS(from, to, time, Color, size);
+                       const RE::NiColorA Color = Colors::RED) {
+            DebugAPI::GetSingleton()->DrawLineForMS(_from, _to, time, Color, size);
         }
 
 
-        template <glm::vec4 Color = Colors::RED>
-        void draw_sphere(const RE::NiPoint3& _center, const float r = 5.0f, const float size = 5.0f,
+        template <RE::NiColorA Color = Colors::RED>
+        void draw_sphere(const RE::NiPoint3& a_center, const float r = 5.0f, const float size = 5.0f,
                          const int time = 3000) {
-            const glm::vec3 center(_center.x, _center.y, _center.z);
-            DebugAPI::GetSingleton()->DrawSphere(center, r, time, Color, size);
+            DebugAPI::GetSingleton()->DrawSphere(a_center, r, time, Color, size);
         }
 
         inline void DrawOBB(const DirectX::BoundingOrientedBox& obb) {
             DirectX::XMFLOAT3 c[8];
             obb.GetCorners(c);
 
-            auto P = [&](int i) { return RE::NiPoint3{c[i].x, c[i].y, c[i].z}; };
+            auto P = [&](const int i) { return RE::NiPoint3{c[i].x, c[i].y, c[i].z}; };
 
             // bottom face
             draw_line(P(0), P(1));
@@ -163,9 +168,12 @@ namespace DebugAPI_IMPL {
         }
     }
 
-    inline glm::vec3 NormalizeVector(const glm::vec3 p) { return glm::normalize(p); }
+    inline RE::NiPoint3 NormalizeVector(RE::NiPoint3 p) {
+        p.Unitize();
+        return p;
+    }
 
-    inline glm::vec3 RotateVector(const glm::quat quatIn, const glm::vec3 vecIn) {
+    inline RE::NiPoint3 RotateVector(const RE::NiQuaternion quatIn, const RE::NiPoint3 vecIn) {
         const float num = quatIn.x * 2.0f;
         const float num2 = quatIn.y * 2.0f;
         const float num3 = quatIn.z * 2.0f;
@@ -178,22 +186,28 @@ namespace DebugAPI_IMPL {
         const float num10 = quatIn.w * num;
         const float num11 = quatIn.w * num2;
         const float num12 = quatIn.w * num3;
-        glm::vec3 result;
+        RE::NiPoint3 result;
         result.x = (1.0f - (num5 + num6)) * vecIn.x + (num7 - num12) * vecIn.y + (num8 + num11) * vecIn.z;
         result.y = (num7 + num12) * vecIn.x + (1.0f - (num4 + num6)) * vecIn.y + (num9 - num10) * vecIn.z;
         result.z = (num8 - num11) * vecIn.x + (num9 + num10) * vecIn.y + (1.0f - (num4 + num5)) * vecIn.z;
         return result;
     }
-
-    inline glm::vec3 GetForwardVector(const glm::quat quatIn) {
-        return RotateVector(quatIn, glm::vec3(0.0f, 1.0f, 0.0f));
+    
+    inline RE::NiPoint3 RotateVector(const RE::NiPoint3& eulerRad, const RE::NiPoint3& vecIn) {
+        RE::NiMatrix3 m;
+        m.SetEulerAnglesXYZ(eulerRad);
+        return m * vecIn;
     }
 
-    inline glm::vec3 GetForwardVector(const glm::vec3 eulerIn) {
+    inline RE::NiPoint3 GetForwardVector(const RE::NiQuaternion quatIn) {
+        return RotateVector(quatIn, RE::NiPoint3(0.0f, 1.0f, 0.0f));
+    }
+
+    inline RE::NiPoint3 GetForwardVector(const RE::NiPoint3 eulerIn) {
         const float pitch = eulerIn.x;
         const float yaw = eulerIn.z;
 
-        return glm::vec3(sin(yaw) * cos(pitch), cos(yaw) * cos(pitch), sin(pitch));
+        return RE::NiPoint3(sin(yaw) * cos(pitch), cos(yaw) * cos(pitch), sin(pitch));
     }
 
     constexpr int FIND_COLLISION_MAX_RECURSION = 2;
@@ -202,55 +216,59 @@ namespace DebugAPI_IMPL {
         return abs(first - second) <= maxDif;
     }
 
-    inline glm::vec3 GetCameraPos() {
+    inline RE::NiPoint3 GetCameraPos() {
         const auto playerCam = RE::PlayerCamera::GetSingleton();
         const auto pos = playerCam->GetRuntimeData2().pos;
-        return glm::vec3(pos.x, pos.y, pos.z);
+        return RE::NiPoint3(pos.x, pos.y, pos.z);
     }
 
-    inline glm::quat GetCameraRot() {
+    inline RE::NiQuaternion GetCameraRot() {
         const auto playerCam = RE::PlayerCamera::GetSingleton();
 
         const auto cameraState = playerCam->currentState.get();
-        if (!cameraState) return glm::quat();
+        if (!cameraState) return RE::NiQuaternion();
 
         RE::NiQuaternion niRotation;
         cameraState->GetRotation(niRotation);
 
-        return glm::quat(niRotation.w, niRotation.x, niRotation.y, niRotation.z);
+        return niRotation;
     }
 
-    inline bool IsPosBehindPlayerCamera(const glm::vec3 pos) {
+    inline bool IsPosBehindPlayerCamera(const RE::NiPoint3 pos) {
         const auto cameraPos = GetCameraPos();
         const auto cameraRot = GetCameraRot();
 
         const auto toTarget = NormalizeVector(pos - cameraPos);
         const auto cameraForward = NormalizeVector(GetForwardVector(cameraRot));
 
-        const auto angleDif = abs(glm::length(toTarget - cameraForward));
+        const auto angleDif = abs((toTarget - cameraForward).Length());
 
-        return angleDif > glm::root_two<float>();
+        return angleDif > ROOT_TWO;
     }
 
-    inline glm::vec3 GetPointOnRotatedCircle(const glm::vec3 origin, const float radius, const float i,
-                                             const float maxI,
-                                             const glm::vec3 eulerAngles) {
-        const float currAngle = i / maxI * glm::two_pi<float>();
+    inline RE::NiPoint3 GetPointOnRotatedCircle(const RE::NiPoint3 origin, const float radius, const float i,
+                                                const float maxI,
+                                                const RE::NiPoint3 eulerAngles) {
+        const float currAngle = i / maxI * RE::NI_TWO_PI;
 
-        const glm::vec3 targetPos(radius * cos(currAngle), radius * sin(currAngle), 0.0f);
+        const RE::NiPoint3 targetPos(radius * cos(currAngle), radius * sin(currAngle), 0.0f);
 
         const auto targetPosRotated = RotateVector(eulerAngles, targetPos);
 
-        return glm::vec3(targetPosRotated.x + origin.x, targetPosRotated.y + origin.y, targetPosRotated.z + origin.z);
+        return RE::NiPoint3(targetPosRotated.x + origin.x, targetPosRotated.y + origin.y,
+                            targetPosRotated.z + origin.z);
     }
 
-    inline DebugAPILine::DebugAPILine(glm::vec3 from, glm::vec3 to, glm::vec4 color, float lineThickness,
-                                      unsigned __int64 destroyTickCount) {
+    inline DebugAPILine::DebugAPILine(const RE::NiPoint3 from, const RE::NiPoint3 to, const RE::NiColorA& color,
+                                      const float lineThickness,
+                                      const std::uint64_t destroyTickCount) {
         From = from;
         To = to;
         Color = color;
-        fColor = DebugAPI::GetSingleton()->RGBToHex(color);
-        Alpha = color.a * 100.0f;
+        RE::NiColor a_rgb;
+        a_rgb = color;
+        fColor = a_rgb.ToInt();
+        Alpha = AlphaPct(color.alpha);
         LineThickness = lineThickness;
         DestroyTickCount = destroyTickCount;
     }
@@ -281,15 +299,16 @@ namespace DebugAPI_IMPL {
         return hud;
     }
 
-    inline void DebugAPI::DrawLine2D(const RE::GPtr<RE::GFxMovieView>& movie, glm::vec2 from, glm::vec2 to,
-                                     const float color,
+    inline void DebugAPI::DrawLine2D(const RE::GPtr<RE::GFxMovieView>& movie, RE::NiPoint2 from, RE::NiPoint2 to,
+                                     const uint32_t color,
                                      const float lineThickness, const float alpha) const {
         if (!IsOnScreen(from, to)) return;
 
         FastClampToScreen(from);
         FastClampToScreen(to);
 
-        const RE::GFxValue argsLineStyle[3]{lineThickness, color, alpha};
+        const RE::GFxValue argsLineStyle[3]{static_cast<double>(lineThickness), static_cast<double>(color),
+                                            static_cast<double>(alpha)};
         movie->Invoke("lineStyle", nullptr, argsLineStyle, 3);
 
         const RE::GFxValue argsStartPos[2]{from.x, from.y};
@@ -301,34 +320,41 @@ namespace DebugAPI_IMPL {
         movie->Invoke("endFill", nullptr, nullptr, 0);
     }
 
-    inline void DebugAPI::DrawLine2D(const RE::GPtr<RE::GFxMovieView>& movie, const glm::vec2 from, const glm::vec2 to,
-                                     const glm::vec4 color,
+    inline void DebugAPI::DrawLine2D(const RE::GPtr<RE::GFxMovieView>& movie, const RE::NiPoint2 from,
+                                     const RE::NiPoint2 to,
+                                     const RE::NiColorA& color,
                                      const float lineThickness) const {
-        DrawLine2D(movie, from, to, RGBToHex(glm::vec3(color.r, color.g, color.b)), lineThickness, color.a * 100.0f);
+        RE::NiColor a_rgb;
+        a_rgb = color;
+        DrawLine2D(movie, from, to, a_rgb.ToInt(), lineThickness, AlphaPct(color.alpha));
     }
 
-    inline void DebugAPI::DrawLine3D(const RE::GPtr<RE::GFxMovieView>& movie, const glm::vec3 from, const glm::vec3 to,
-                                     const float color,
+    inline void DebugAPI::DrawLine3D(const RE::GPtr<RE::GFxMovieView>& movie, const RE::NiPoint3 from,
+                                     const RE::NiPoint3 to,
+                                     const uint32_t color,
                                      const float lineThickness, const float alpha) const {
         if (IsPosBehindPlayerCamera(from) && IsPosBehindPlayerCamera(to)) return;
 
-        const glm::vec2 screenLocFrom = WorldToScreenLoc(movie, from);
-        const glm::vec2 screenLocTo = WorldToScreenLoc(movie, to);
+        const RE::NiPoint2 screenLocFrom = WorldToScreenLoc(movie, from);
+        const RE::NiPoint2 screenLocTo = WorldToScreenLoc(movie, to);
         DrawLine2D(movie, screenLocFrom, screenLocTo, color, lineThickness, alpha);
     }
 
-    inline void DebugAPI::DrawLine3D(const RE::GPtr<RE::GFxMovieView>& movie, const glm::vec3 from, const glm::vec3 to,
-                                     const glm::vec4 color,
+    inline void DebugAPI::DrawLine3D(const RE::GPtr<RE::GFxMovieView>& movie, const RE::NiPoint3 from,
+                                     const RE::NiPoint3 to,
+                                     const RE::NiColorA& color,
                                      const float lineThickness) const {
-        DrawLine3D(movie, from, to, RGBToHex(glm::vec3(color.r, color.g, color.b)), lineThickness, color.a * 100.0f);
+        RE::NiColor a_rgb;
+        a_rgb = color;
+        DrawLine3D(movie, from, to, a_rgb.ToInt(), lineThickness, AlphaPct(color.alpha));
     }
 
     inline void DebugAPI::ClearLines2D(const RE::GPtr<RE::GFxMovieView>& movie) {
         movie->Invoke("clear", nullptr, nullptr, 0);
     }
 
-    inline void DebugAPI::DrawLineForMS(const glm::vec3& from, const glm::vec3& to, const int liftetimeMS,
-                                        const glm::vec4& color,
+    inline void DebugAPI::DrawLineForMS(const RE::NiPoint3& from, const RE::NiPoint3& to, const int liftetimeMS,
+                                        const RE::NiColorA& color,
                                         const float lineThickness) {
         if (DebugAPILine* oldLine = GetExistingLine(from, to, color, lineThickness)) {
             oldLine->From = from;
@@ -343,22 +369,22 @@ namespace DebugAPI_IMPL {
         LinesToDraw.push_back(newLine);
     }
 
-    inline void DebugAPI::DrawSphere(const glm::vec3 origin, const float radius, const int liftetimeMS,
-                                     const glm::vec4& color,
+    inline void DebugAPI::DrawSphere(const RE::NiPoint3 origin, const float radius, const int liftetimeMS,
+                                     const RE::NiColorA& color,
                                      const float lineThickness) {
-        DrawCircle(origin, radius, glm::vec3(0.0f, 0.0f, 0.0f), liftetimeMS, color, lineThickness);
-        DrawCircle(origin, radius, glm::vec3(glm::half_pi<float>(), 0.0f, 0.0f), liftetimeMS, color, lineThickness);
+        DrawCircle(origin, radius, RE::NiPoint3(0.0f, 0.0f, 0.0f), liftetimeMS, color, lineThickness);
+        DrawCircle(origin, radius, RE::NiPoint3(RE::NI_HALF_PI, 0.0f, 0.0f), liftetimeMS, color, lineThickness);
     }
 
-    inline void DebugAPI::DrawCircle(const glm::vec3 origin, const float radius, const glm::vec3 eulerAngles,
+    inline void DebugAPI::DrawCircle(const RE::NiPoint3 origin, const float radius, const RE::NiPoint3 eulerAngles,
                                      const int liftetimeMS,
-                                     const glm::vec4& color, const float lineThickness) {
-        glm::vec3 lastEndPos =
+                                     const RE::NiColorA& color, const float lineThickness) {
+        RE::NiPoint3 lastEndPos =
             GetPointOnRotatedCircle(origin, radius, CIRCLE_NUM_SEGMENTS, static_cast<float>(CIRCLE_NUM_SEGMENTS - 1),
                                     eulerAngles);
 
         for (int i = 0; i <= CIRCLE_NUM_SEGMENTS; i++) {
-            glm::vec3 currEndPos =
+            RE::NiPoint3 currEndPos =
                 GetPointOnRotatedCircle(origin, radius, static_cast<float>(i),
                                         static_cast<float>(CIRCLE_NUM_SEGMENTS - 1), eulerAngles);
 
@@ -368,11 +394,8 @@ namespace DebugAPI_IMPL {
         }
     }
 
-    inline float DebugAPI::RGBToHex(const glm::vec3 rgb) {
-        return ConvertComponentR(rgb.r * 255) + ConvertComponentG(rgb.g * 255) + ConvertComponentB(rgb.b * 255);
-    }
-
-    inline DebugAPILine* DebugAPI::GetExistingLine(const glm::vec3& from, const glm::vec3& to, const glm::vec4& color,
+    inline DebugAPILine* DebugAPI::GetExistingLine(const RE::NiPoint3& from, const RE::NiPoint3& to,
+                                                   const RE::NiColorA& color,
                                                    const float lineThickness) const {
         std::shared_lock lock(mutex_);
         for (int i = 0; i < LinesToDraw.size(); i++) {
@@ -394,7 +417,7 @@ namespace DebugAPI_IMPL {
 
     constexpr float CLAMP_MAX_OVERSHOOT = 10000.0f;
 
-    inline void DebugAPI::FastClampToScreen(glm::vec2& point) const {
+    inline void DebugAPI::FastClampToScreen(RE::NiPoint2& point) const {
         if (point.x < 0.0) {
             const float overshootX = abs(point.x);
             if (overshootX > CLAMP_MAX_OVERSHOOT) point.x += overshootX - CLAMP_MAX_OVERSHOOT;
@@ -412,23 +435,17 @@ namespace DebugAPI_IMPL {
         }
     }
 
-    inline float DebugAPI::ConvertComponentR(const float value) { return value * 0xffff + value; }
-
-    inline float DebugAPI::ConvertComponentG(const float value) { return value * 0xff + value; }
-
-    inline float DebugAPI::ConvertComponentB(const float value) { return value; }
-
-    inline glm::vec2 DebugAPI::WorldToScreenLoc(const RE::GPtr<RE::GFxMovieView>& movie, const glm::vec3 worldLoc) {
+    inline RE::NiPoint2
+    DebugAPI::WorldToScreenLoc(const RE::GPtr<RE::GFxMovieView>& movie, const RE::NiPoint3 worldLoc) {
         static uintptr_t g_worldToCamMatrix = RELOCATION_ID(519579, 406126).address();
         static auto g_viewPort =
             reinterpret_cast<RE::NiRect<float>*>(RELOCATION_ID(519618, 406160).address());
 
-        glm::vec2 screenLocOut;
-        const RE::NiPoint3 niWorldLoc(worldLoc.x, worldLoc.y, worldLoc.z);
+        RE::NiPoint2 screenLocOut;
 
         float zVal;
 
-        RE::NiCamera::WorldPtToScreenPt3(reinterpret_cast<float(*)[4]>(g_worldToCamMatrix), *g_viewPort, niWorldLoc,
+        RE::NiCamera::WorldPtToScreenPt3(reinterpret_cast<float (*)[4]>(g_worldToCamMatrix), *g_viewPort, worldLoc,
                                          screenLocOut.x,
                                          screenLocOut.y, zVal, 1e-5f);
         const RE::GRectF rect = movie->GetVisibleFrameRect();
@@ -489,11 +506,11 @@ namespace DebugAPI_IMPL {
         cachedMenuData = true;
     }
 
-    inline bool DebugAPI::IsOnScreen(const glm::vec2 from, const glm::vec2 to) const {
+    inline bool DebugAPI::IsOnScreen(const RE::NiPoint2 from, const RE::NiPoint2 to) const {
         return IsOnScreen(from) || IsOnScreen(to);
     }
 
-    inline bool DebugAPI::IsOnScreen(const glm::vec2 point) const {
+    inline bool DebugAPI::IsOnScreen(const RE::NiPoint2 point) const {
         return point.x <= ScreenResX && point.x >= 0.0 && point.y <= ScreenResY && point.y >= 0.0;
     }
 
