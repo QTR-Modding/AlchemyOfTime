@@ -16,7 +16,6 @@
     "clib-util",
     "clib-utils-qtr",
     "skse-mcp",
-    "glm",
     "yaml-cpp"
   ],
   "overrides": [

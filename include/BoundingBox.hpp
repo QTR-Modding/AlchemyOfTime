@@ -1,9 +1,6 @@
 #pragma once
 #include <DirectXCollision.h>
 
-class hkpRigidBody;
-class hkpShape;
-
 namespace BoundingBox {
     constexpr float havokToSkyrim = 69.9915f;
 

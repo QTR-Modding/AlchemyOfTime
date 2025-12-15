@@ -1183,12 +1183,12 @@ namespace {
 
             DebugAPI_IMPL::DrawDebug::draw_line(WorldObject::GetPosition(ref),
                                                 WorldObject::GetPosition(RE::PlayerCharacter::GetSingleton()), 3.f,
-                                                glm::vec4(0.f, 0.f, 1.f, 1.f));
+                                                RE::NiColorA(0.f, 0.f, 1.f, 1.f));
 
             const RE::NiPoint3 c1{obb1.Center.x, obb1.Center.y, obb1.Center.z};
             const RE::NiPoint3 c2{obb2.Center.x, obb2.Center.y, obb2.Center.z};
             // yellow debug line between centers
-            DebugAPI_IMPL::DrawDebug::draw_line(c1, c2, 2, glm::vec4(1.f, 1.f, 0.f, 1.f));
+            DebugAPI_IMPL::DrawDebug::draw_line(c1, c2, 2, RE::NiColorA(1.f, 1.f, 0.f, 1.f));
         }
         #endif
 
