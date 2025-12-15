@@ -502,6 +502,4 @@ namespace DebugAPI_IMPL {
 
         DebugAPI::GetSingleton()->Update();
     }
-
-
 }

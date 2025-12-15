@@ -1131,7 +1131,6 @@ FormID Source::SearchNearbyModulators(const RE::TESObjectREFR* a_obj, const std:
 }
 
 namespace {
-
     RE::bhkRigidBody* GetRigidBody(const RE::TESObjectREFR* a_refr) {
         if (const auto a_3d = a_refr->GetCurrent3D()) {
             if (const auto a_collobj = a_3d->GetCollisionObject()) {
@@ -1142,7 +1141,7 @@ namespace {
     }
 
     bool AreClose(const DirectX::BoundingOrientedBox& obb1_in, const DirectX::BoundingOrientedBox& obb2_in,
-                             const float threshold) {
+                  const float threshold) {
         DirectX::BoundingOrientedBox obb1 = obb1_in;
 
         obb1.Extents.x += threshold;
@@ -1154,7 +1153,6 @@ namespace {
 
     bool SearchModulatorInCell_Sub(const RE::TESObjectREFR* a_origin, const RE::TESObjectREFR* ref,
                                    const float proximity = Settings::proximity_range) {
-
         DirectX::BoundingOrientedBox obb1{};
         DirectX::BoundingOrientedBox obb2{};
 
@@ -1183,7 +1181,8 @@ namespace {
             DebugAPI_IMPL::DrawDebug::DrawOBB(obb2);
             DebugAPI_IMPL::DrawDebug::DrawOBB(obb1);
 
-            DebugAPI_IMPL::DrawDebug::draw_line(WorldObject::GetPosition(ref), WorldObject::GetPosition(RE::PlayerCharacter::GetSingleton()), 3.f,
+            DebugAPI_IMPL::DrawDebug::draw_line(WorldObject::GetPosition(ref),
+                                                WorldObject::GetPosition(RE::PlayerCharacter::GetSingleton()), 3.f,
                                                 glm::vec4(0.f, 0.f, 1.f, 1.f));
 
             const RE::NiPoint3 c1{obb1.Center.x, obb1.Center.y, obb1.Center.z};

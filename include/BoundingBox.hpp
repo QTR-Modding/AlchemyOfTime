@@ -147,7 +147,7 @@ namespace BoundingBox {
             qw *= invLen;
         }
 
-        return DirectX::XMFLOAT4(qx, qy, qz, qw);  // DirectX = (x,y,z,w)
+        return DirectX::XMFLOAT4(qx, qy, qz, qw); // DirectX = (x,y,z,w)
     }
 
     inline bool GetOBBFromGameplayBounds(const RE::TESObjectREFR* obj, DirectX::BoundingOrientedBox& out) {
@@ -162,7 +162,7 @@ namespace BoundingBox {
         const RE::NiPoint3 size = maxLocal - minLocal;
         if (std::abs(size.x) < 1e-5f && std::abs(size.y) < 1e-5f && std::abs(size.z) < 1e-5f) {
             if (const auto node = obj->GetCurrent3D()) {
-                const auto& wb = node->worldBound;  // NiBound
+                const auto& wb = node->worldBound; // NiBound
                 const float r = wb.radius;
                 if (r > 0.f) {
                     out.Center = {wb.center.x, wb.center.y, wb.center.z};

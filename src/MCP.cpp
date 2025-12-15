@@ -59,9 +59,9 @@ void __stdcall UI::RenderSettings() {
         }
     }
 
-#ifndef NDEBUG
+    #ifndef NDEBUG
     ImGuiMCP::Checkbox("DrawDebug", &draw_debug);
-#endif
+    #endif
 }
 
 void __stdcall UI::RenderStatus() {
