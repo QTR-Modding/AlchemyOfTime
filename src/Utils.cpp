@@ -1,10 +1,8 @@
 #include "Utils.h"
-#include "BoundingBox.hpp"
 #include "CLibUtilsQTR/FormReader.hpp"
 #include "Settings.h"
-#include "DrawDebug.hpp"
+#include "CLibUtilsQTR/DrawDebug.hpp"
 #include "MCP.h"
-#include "DirectXCollision.h"
 
 std::string DecodeTypeCode(const std::uint32_t typeCode) {
     char buf[4];

@@ -1,5 +1,5 @@
 #include "Hooks.h"
-#include "DrawDebug.hpp"
+#include "CLibUtilsQTR/DrawDebug.hpp"
 #include "Lorebox.h"
 #include "Manager.h"
 #include "Utils.h"
