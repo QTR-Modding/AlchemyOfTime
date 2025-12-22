@@ -2,9 +2,7 @@
 
 #include "DrawDebug.hpp"
 #include "MCP.h"
-#ifndef NDEBUG
 #include "BoundingBox.hpp"
-#endif
 
 void Source::Init(const DefaultSettings* defaultsettings) {
     if (!defaultsettings) {
