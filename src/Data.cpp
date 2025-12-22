@@ -1155,14 +1155,14 @@ namespace {
         DirectX::BoundingOrientedBox obb2{};
 
         if (const auto a_rigidbody1 = GetRigidBody(a_origin)) {
-            BoundingBox::GetOBBFromHavokShape(a_rigidbody1, obb1);
+            BoundingBox::GetOBB(a_rigidbody1, obb1);
         } else {
-            BoundingBox::GetOBBFromGameplayBounds(a_origin, obb1);
+            BoundingBox::GetOBB(a_origin, obb1);
         }
         if (const auto a_rigidbody2 = GetRigidBody(ref)) {
-            BoundingBox::GetOBBFromHavokShape(a_rigidbody2, obb2);
+            BoundingBox::GetOBB(a_rigidbody2, obb2);
         } else {
-            BoundingBox::GetOBBFromGameplayBounds(ref, obb2);
+            BoundingBox::GetOBB(ref, obb2);
         }
 
         #ifndef NDEBUG

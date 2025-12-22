@@ -42,7 +42,7 @@ namespace BoundingBox {
     }
 
     // ---- core: OBB from rigid body transform + SHAPE local AABB ----
-    inline bool GetOBBFromHavokShape(RE::bhkRigidBody* bhkBody, DirectX::BoundingOrientedBox& out,
+    inline bool GetOBB(RE::bhkRigidBody* bhkBody, DirectX::BoundingOrientedBox& out,
                                      bool applyHavokToSkyrimScale = true, float tolerance = 0.0f) {
         if (!bhkBody) {
             return false;
@@ -147,7 +147,7 @@ namespace BoundingBox {
         return DirectX::XMFLOAT4(qx, qy, qz, qw); // DirectX = (x,y,z,w)
     }
 
-    inline bool GetOBBFromGameplayBounds(const RE::TESObjectREFR* obj, DirectX::BoundingOrientedBox& out) {
+    inline bool GetOBB(const RE::TESObjectREFR* obj, DirectX::BoundingOrientedBox& out) {
         if (!obj) return false;
 
         // Local bounds (gameplay/model bounds)
