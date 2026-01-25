@@ -308,6 +308,14 @@ void Manager::UpdateLoop() {
             }
         }
     }
+
+    SKSE::GetTaskInterface()->AddTask([ref_stops_copy = std::move(ref_stops_copy)]() {
+        for (const auto key : ref_stops_copy) {
+            if (auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(key)) {
+                M->Update(ref);
+            }
+        }
+    });
 }
 
 void Manager::QueueWOUpdate(const RefStop& a_refstop) {
