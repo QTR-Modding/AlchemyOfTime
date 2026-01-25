@@ -1,9 +1,7 @@
 #pragma once
-#include "Settings.h"
 
 namespace Hooks {
     inline bool is_menu_open = false;
-    inline float update_threshold = Settings::GetCurrentTickInterval()/1000.f;
 
     void Install();
 

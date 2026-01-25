@@ -9,8 +9,6 @@
 #include <rapidjson/istreamwrapper.h>
 #include <rapidjson/writer.h>
 
-#include "Hooks.h"
-
 using QFormChecker = bool(*)(const RE::TESForm*);
 
 static const std::unordered_map<std::string, QFormChecker> qformCheckers = {
@@ -30,7 +28,6 @@ static const std::unordered_map<std::string, QFormChecker> qformCheckers = {
 
 void Settings::SetCurrentTickInterval(const Ticker::Intervals interval) {
     ticker_speed = interval;
-    Hooks::update_threshold = GetCurrentTickInterval() / 1000.f;
 }
 
 bool Settings::IsQFormType(const FormID formid, const std::string& qformtype) {
