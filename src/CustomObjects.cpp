@@ -257,9 +257,6 @@ bool DefaultSettings::IsEmpty() {
 
 // check it
 void DefaultSettings::Add(AddOnSettings& addon) {
-    if (addon.transformers.empty()) {
-        logger::error("Transformers is empty.");
-    }
     // containers
     AddHelper(containers, addon.containers);
 
