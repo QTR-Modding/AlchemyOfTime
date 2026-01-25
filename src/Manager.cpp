@@ -274,24 +274,7 @@ void Manager::UpdateLoop() {
 
     if (const auto ui = RE::UI::GetSingleton(); ui && ui->GameIsPaused()) return;
 
-    std::vector<RefID> ref_stops_copy;
-    {
-        QUE_SHARED_GUARD;
-        ref_stops_copy.reserve(_ref_stops_.size());
-    }
-    for (
-        QUE_SHARED_GUARD;
-        const auto& key : _ref_stops_ | std::views::keys) {
-        ref_stops_copy.push_back(key);
-    }
-
-    // new mechanic: WO can also be affected by time modulators
-    // Update _ref_stops_ with the new times
-    for (const auto& key : ref_stops_copy) {
-        if (const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(key)) {
-            Update(ref);
-        }
-    }
+    const auto ref_stops_copy = GetRefStops();
 
     if (const auto cal = RE::Calendar::GetSingleton()) {
         // make copy with only stops
@@ -1492,4 +1475,16 @@ bool Manager::IsStageItem(const FormID a_formid) {
     }
 
     return false;
+}
+
+std::vector<RefID> Manager::GetRefStops() {
+    std::vector<RefID> ref_stops_copy;
+    {
+        QUE_SHARED_GUARD;
+        ref_stops_copy.reserve(_ref_stops_.size());
+    }
+    for (QUE_SHARED_GUARD; const auto& key : _ref_stops_ | std::views::keys) {
+        ref_stops_copy.push_back(key);
+    }
+    return ref_stops_copy;
 }

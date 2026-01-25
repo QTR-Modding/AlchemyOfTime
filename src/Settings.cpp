@@ -9,6 +9,8 @@
 #include <rapidjson/istreamwrapper.h>
 #include <rapidjson/writer.h>
 
+#include "Hooks.h"
+
 using QFormChecker = bool(*)(const RE::TESForm*);
 
 static const std::unordered_map<std::string, QFormChecker> qformCheckers = {
@@ -25,6 +27,11 @@ static const std::unordered_map<std::string, QFormChecker> qformCheckers = {
     {"MISC", [](const auto form) { return form->Is(RE::TESObjectMISC::FORMTYPE); }},
     //{"NPC", [](const auto form) {return FormIsOfType(form, RE::TESNPC::FORMTYPE); } }
 };
+
+void Settings::SetCurrentTickInterval(const Ticker::Intervals interval) {
+    ticker_speed = interval;
+    Hooks::update_threshold = GetCurrentTickInterval() / 1000.f;
+}
 
 bool Settings::IsQFormType(const FormID formid, const std::string& qformtype) {
     const auto* form = FormReader::GetFormByID(formid);
@@ -874,7 +881,7 @@ void PresetParse::LoadJSONSettings() {
         logger::error("Speed not found in ticker.");
         return;
     }
-    Settings::ticker_speed = Settings::Ticker::from_string(ticker["speed"].GetString());
+    Settings::SetCurrentTickInterval(Settings::Ticker::from_string(ticker["speed"].GetString()));
 }
 
 void PresetParse::LoadFormGroups() {

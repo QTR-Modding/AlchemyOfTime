@@ -105,7 +105,8 @@ namespace Settings {
     };
 
     inline Ticker::Intervals ticker_speed = Ticker::kNormal;
-
+    inline int GetCurrentTickInterval() { return GetInterval(ticker_speed); }
+    void SetCurrentTickInterval(const Ticker::Intervals interval);
 
     const std::vector<std::string> fakes_allowedQFORMS = {"FOOD", "MISC"};
     //const std::vector<std::string> xQFORMS = {"ARMO", "WEAP", "SLGM", "MEDC", "POSN"};

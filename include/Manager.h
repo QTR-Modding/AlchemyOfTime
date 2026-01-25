@@ -192,6 +192,8 @@ public:
     }
 
     bool IsStageItem(FormID a_formid);
+
+    std::vector<RefID> GetRefStops();
 };
 
 inline Manager* M = nullptr;
