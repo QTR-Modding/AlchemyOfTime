@@ -11,7 +11,7 @@ void EventSink::HandleWO(RE::TESObjectREFR* ref) {
     M->Update(ref);
 }
 
-void EventSink::HandleWOsInCell(const RE::TESObjectCELL* a_cell) const {
+void EventSink::HandleWOsInCell(const RE::TESObjectCELL* a_cell) {
     const auto cell = a_cell ? a_cell : RE::PlayerCharacter::GetSingleton()->GetParentCell();
     if (!cell) return;
 
