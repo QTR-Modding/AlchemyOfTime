@@ -14,12 +14,18 @@ void EventSink::HandleWO(RE::TESObjectREFR* ref) {
 void EventSink::HandleWOsInCell(const RE::TESObjectCELL* a_cell) const {
     const auto cell = a_cell ? a_cell : RE::PlayerCharacter::GetSingleton()->GetParentCell();
     if (!cell) return;
-    cell->ForEachReference([this](RE::TESObjectREFR* a_obj) {
+
+    std::vector<RE::ObjectRefHandle> refs;
+    cell->ForEachReference([&refs](RE::TESObjectREFR* a_obj) {
         if (!a_obj) return RE::BSContainer::ForEachResult::kContinue;
         if (a_obj->HasContainer()) return RE::BSContainer::ForEachResult::kContinue;
-        HandleWO(a_obj);
+        refs.push_back(a_obj->GetHandle());
         return RE::BSContainer::ForEachResult::kContinue;
     });
+
+    for (auto& a_handle : refs) {
+        HandleWO(a_handle.get().get());
+    }
 }
 
 RE::BSEventNotifyControl EventSink::ProcessEvent(const RE::TESActivateEvent* event,

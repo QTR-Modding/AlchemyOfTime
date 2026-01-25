@@ -15,7 +15,7 @@ class EventSink final : public REX::Singleton<EventSink>,
     static void HandleWO(RE::TESObjectREFR* ref);
 
 public:
-    void HandleWOsInCell(const RE::TESObjectCELL* a_cell = nullptr) const;
+    static void HandleWOsInCell(const RE::TESObjectCELL* a_cell = nullptr);
 
     RE::BSEventNotifyControl ProcessEvent(const RE::TESActivateEvent* event,
                                           RE::BSTEventSource<RE::TESActivateEvent>*) override;
