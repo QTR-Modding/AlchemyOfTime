@@ -117,10 +117,11 @@ RE::ObjectRefHandle* Hooks::MoveItemHooks<RefType>::RemoveItem(RefType* a_this,
                             a_drop_loc, a_rotate);
     }
 
-    auto res = remove_item_(a_this, a_hidden_return_argument, a_item, a_count, a_reason, a_extra_list, a_move_to_ref,
+    RE::ObjectRefHandle* res = remove_item_(a_this, a_hidden_return_argument, a_item, a_count, a_reason, a_extra_list,
+                                            a_move_to_ref,
                             a_drop_loc, a_rotate);
 
-    M->Update(a_this, a_move_to_ref ? a_move_to_ref : res->get().get(), a_item, a_count);
+    M->Update(a_this, a_move_to_ref ? a_move_to_ref : res ? res->get().get() : nullptr, a_item, a_count);
 
     return res;
 }
