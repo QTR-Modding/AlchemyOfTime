@@ -1,6 +1,6 @@
 #pragma once
 #include "Data.h"
-#include "Ticker.h"
+#include "ClibUtilsQTR/Ticker.hpp"
 
 class Manager final : public Ticker, public SaveLoadData {
     RE::TESObjectREFR* player_ref = RE::PlayerCharacter::GetSingleton()->As<RE::TESObjectREFR>();
