@@ -644,8 +644,7 @@ bool Manager::UpdateInventory(RE::TESObjectREFR* ref, const float t) {
 }
 
 void Manager::UpdateInventory(RE::TESObjectREFR* ref) {
-    listen_container_change.store(false);
-
+    ListenGuard lg(listen_container_change);
     SyncWithInventory(ref);
 
     // if there are time modulators which can also evolve, they need to be updated first
@@ -661,8 +660,6 @@ void Manager::UpdateInventory(RE::TESObjectREFR* ref) {
     }
 
     UpdateInventory(ref, curr_time);
-
-    listen_container_change.store(true);
 }
 
 void Manager::SyncWithInventory(RE::TESObjectREFR* ref) {
@@ -954,7 +951,7 @@ void Manager::HandleCraftingEnter(const unsigned int bench_type) {
     }
 
     Update(player_ref);
-    listen_container_change.store(false);
+    ListenGuard lg(listen_container_change);
 
     const auto& q_form_types = Settings::qform_bench_map.at(bench_type);
 
@@ -1010,7 +1007,6 @@ void Manager::HandleCraftingEnter(const unsigned int bench_type) {
         AddItem(player_ref, nullptr, formids.form_id1, counts.first);
     }
 
-    listen_container_change.store(true);
 }
 
 void Manager::HandleCraftingExit() {
@@ -1021,24 +1017,26 @@ void Manager::HandleCraftingExit() {
         return;
     }
 
-    listen_container_change.store(false);
+    {
+        ListenGuard lg(listen_container_change);
 
-    // need to figure out how many items were used up in crafting and how many were left
-    const auto player_inventory = player_ref->GetInventory();
-    for (auto& [formids, counts] : handle_crafting_instances) {
-        if (formids.form_id1 == formids.form_id2) continue;
+        // need to figure out how many items were used up in crafting and how many were left
+        const auto player_inventory = player_ref->GetInventory();
+        for (auto& [formids, counts] : handle_crafting_instances) {
+            if (formids.form_id1 == formids.form_id2) continue;
 
-        const auto it_src = player_inventory.find(FormReader::GetFormByID<RE::TESBoundObject>(formids.form_id1));
-        const auto actual_count_src = it_src != player_inventory.end() ? it_src->second.first : 0;
+            const auto it_src = player_inventory.find(FormReader::GetFormByID<RE::TESBoundObject>(formids.form_id1));
+            const auto actual_count_src = it_src != player_inventory.end() ? it_src->second.first : 0;
 
-        if (const auto to_be_taken_back = actual_count_src - counts.second; to_be_taken_back > 0) {
-            RemoveItem(player_ref, formids.form_id1, to_be_taken_back);
-            AddItem(player_ref, nullptr, formids.form_id2, to_be_taken_back);
-            if (faves_list[formids.form_id2]) {
-                FavoriteItem(formids.form_id2, player_refid);
-            }
-            if (equipped_list[formids.form_id2]) {
-                EquipItem(formids.form_id2, false);
+            if (const auto to_be_taken_back = actual_count_src - counts.second; to_be_taken_back > 0) {
+                RemoveItem(player_ref, formids.form_id1, to_be_taken_back);
+                AddItem(player_ref, nullptr, formids.form_id2, to_be_taken_back);
+                if (faves_list[formids.form_id2]) {
+                    FavoriteItem(formids.form_id2, player_refid);
+                }
+                if (equipped_list[formids.form_id2]) {
+                    EquipItem(formids.form_id2, false);
+                }
             }
         }
     }
@@ -1046,8 +1044,6 @@ void Manager::HandleCraftingExit() {
     handle_crafting_instances.clear();
     faves_list.clear();
     equipped_list.clear();
-
-    listen_container_change.store(true);
 
     Update(player_ref);
 }
@@ -1222,7 +1218,7 @@ void Manager::SendData() {
 
 void Manager::HandleLoc(RE::TESObjectREFR* loc_ref) {
     SRC_UNIQUE_GUARD;
-    listen_container_change.store(false);
+    ListenGuard lg(listen_container_change);
 
     if (!loc_ref) {
         logger::error("Loc ref is null.");
@@ -1249,7 +1245,6 @@ void Manager::HandleLoc(RE::TESObjectREFR* loc_ref) {
     SyncWithInventory(loc_ref);
     locs_to_be_handled.erase(loc_refid);
     
-    listen_container_change.store(true);
 }
 
 StageInstance* Manager::RegisterAtReceiveData(const FormID source_formid, const RefID loc,
@@ -1386,9 +1381,10 @@ void Manager::ReceiveData() {
         }
     }
 
-    listen_container_change.store(false);
-    DFT->DeleteInactives();
-    listen_container_change.store(true);
+    {
+        ListenGuard lg(listen_container_change);
+        DFT->DeleteInactives();
+    }
     if (DFT->GetNDeleted() > 0) {
         logger::warn("ReceiveData: Deleted forms exist. User is required to restart.");
         MsgBoxesNotifs::InGame::CustomMsg(

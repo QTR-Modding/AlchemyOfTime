@@ -315,3 +315,10 @@ struct FormTraits<RE::TESAmmo> {
         return effects;
     }
 };
+
+struct ListenGuard {
+    std::atomic_bool& flag;
+    bool prev;
+    explicit ListenGuard(std::atomic_bool& f) : flag(f), prev(f.exchange(false)) {}
+    ~ListenGuard() { flag.store(prev); }
+};
