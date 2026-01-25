@@ -244,12 +244,7 @@ void Manager::PreDeleteRefStop(RefStop& a_ref_stop, RE::NiAVObject* a_obj) {
 
 void Manager::UpdateLoop() {
     if (!Settings::world_objects_evolve.load()) {
-        QUE_UNIQUE_GUARD;
-        for (auto& [key,val] : _ref_stops_) {
-            const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(key);
-            PreDeleteRefStop(val, ref ? ref->Get3D() : nullptr);
-        }
-        _ref_stops_.clear();
+        ClearWOUpdateQueue();
     } else if (QUE_UNIQUE_GUARD;
         !queue_delete_.empty() || !Settings::placed_objects_evolve.load()) {
         for (auto it = _ref_stops_.begin(); it != _ref_stops_.end();) {
@@ -312,9 +307,7 @@ void Manager::UpdateLoop() {
             if (auto& val = it->second; val.IsDue(curr_time)) {
                 ref_stops_due.push_back(key);
             } else if (const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(key)) {
-                if (const auto obj3d = ref->Get3D()) {
-                    val.ApplyTint(obj3d);
-                }
+                val.ApplyTint(ref);
                 val.ApplyArtObject(ref);
                 val.ApplyShader(ref);
                 val.ApplySound();
@@ -869,12 +862,16 @@ bool Manager::DeRegisterRef(const RefID refid) {
 
 void Manager::ClearWOUpdateQueue() {
     QUE_UNIQUE_GUARD;
+    for (auto& [key, val] : _ref_stops_) {
+        const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(key);
+        PreDeleteRefStop(val, ref ? ref->Get3D() : nullptr);
+    }
     _ref_stops_.clear();
 }
 
 bool Manager::RefIsRegistered(const RefID refid) {
     if (!refid) {
-        logger::warn("Refid is null.");
+        logger::warn("RefID is null.");
         return false;
     }
     SRC_SHARED_GUARD;

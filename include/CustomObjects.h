@@ -307,7 +307,7 @@ struct RefStop {
 
     [[nodiscard]] bool IsDue(float curr_time) const;
 
-    void ApplyTint(RE::NiAVObject* a_obj3d);
+    void ApplyTint(const RE::TESObjectREFR* a_obj);
     void ApplyArtObject(RE::TESObjectREFR* a_ref, float duration = -1.f);
     void ApplyShader(RE::TESObjectREFR* a_ref, float duration = -1.f);
     void ApplySound(float volume = 200.f);

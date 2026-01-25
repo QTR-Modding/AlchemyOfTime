@@ -444,15 +444,17 @@ bool AddOnSettings::CheckIntegrity() {
     return true;
 }
 
-void RefStop::ApplyTint(RE::NiAVObject* a_obj3d) {
-    if (!tint_color.id) {
-        return RemoveTint(a_obj3d);
+void RefStop::ApplyTint(const RE::TESObjectREFR* a_obj) {
+    if (const auto a_3D = a_obj->Get3D()) {
+        if (!tint_color.id) {
+            return RemoveTint(a_3D);
+        }
+        if (tint_color.enabled) return;
+        RE::NiColorA color;
+        hexToRGBA(tint_color.id, color);
+        a_3D->TintScenegraph(color);
+        tint_color.enabled = true;
     }
-    if (tint_color.enabled) return;
-    RE::NiColorA color;
-    hexToRGBA(tint_color.id, color);
-    a_obj3d->TintScenegraph(color);
-    tint_color.enabled = true;
 }
 
 void RefStop::ApplyArtObject(RE::TESObjectREFR* a_ref, const float duration) {
@@ -642,7 +644,7 @@ void SoundHelper::Play(const RefID refid, const FormID sound_id, const float vol
     }
     const auto ref_node = ref->Get3D();
     if (!ref_node) {
-        logger::error("Ref has no 3D.");
+        logger::warn("Ref has no 3D.");
         return;
     }
 
