@@ -1239,6 +1239,7 @@ void Manager::SendData() {
 
 void Manager::HandleLoc(RE::TESObjectREFR* loc_ref) {
     SRC_UNIQUE_GUARD;
+    listen_container_change.store(false);
 
     if (!loc_ref) {
         logger::error("Loc ref is null.");
@@ -1264,6 +1265,8 @@ void Manager::HandleLoc(RE::TESObjectREFR* loc_ref) {
 
     SyncWithInventory(loc_ref);
     locs_to_be_handled.erase(loc_refid);
+    
+    listen_container_change.store(true);
 }
 
 StageInstance* Manager::RegisterAtReceiveData(const FormID source_formid, const RefID loc,
