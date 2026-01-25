@@ -235,8 +235,8 @@ namespace {
 #define QUE_UNIQUE_GUARD  std::unique_lock  AOT_CONCAT(que_ulock_, __COUNTER__){queueMutex_}
 #endif
 
-void Manager::PreDeleteRefStop(RefStop& a_ref_stop, RE::NiAVObject* a_obj) {
-    if (a_obj) a_ref_stop.RemoveTint(a_obj);
+void Manager::PreDeleteRefStop(RefStop& a_ref_stop) {
+    a_ref_stop.RemoveTint();
     a_ref_stop.RemoveArtObject();
     a_ref_stop.RemoveShader();
     a_ref_stop.RemoveSound();
@@ -251,7 +251,7 @@ void Manager::UpdateLoop() {
             if (const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(it->first);
                 queue_delete_.contains(it->first) ||
                 ref && !Settings::placed_objects_evolve.load() && WorldObject::IsPlacedObject(ref)) {
-                PreDeleteRefStop(it->second, ref ? ref->Get3D() : nullptr);
+                PreDeleteRefStop(it->second);
                 it = _ref_stops_.erase(it);
             } else ++it;
         }
@@ -319,7 +319,7 @@ void Manager::UpdateLoop() {
                 QUE_UNIQUE_GUARD;
                 if (auto it = _ref_stops_.find(refid); it != _ref_stops_.end()) {
                     auto& val = it->second;
-                    PreDeleteRefStop(val, ref->Get3D());
+                    PreDeleteRefStop(val);
                     _ref_stops_.erase(it);
                 }
             }
@@ -864,7 +864,7 @@ void Manager::ClearWOUpdateQueue() {
     QUE_UNIQUE_GUARD;
     for (auto& [key, val] : _ref_stops_) {
         const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(key);
-        PreDeleteRefStop(val, ref ? ref->Get3D() : nullptr);
+        PreDeleteRefStop(val);
     }
     _ref_stops_.clear();
 }

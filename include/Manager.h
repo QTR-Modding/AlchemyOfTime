@@ -40,7 +40,7 @@ class Manager final : public Ticker, public SaveLoadData {
 
     std::unordered_set<FormID> stages_fast_lookup;
 
-    static void PreDeleteRefStop(RefStop& a_ref_stop, RE::NiAVObject* a_obj);
+    static void PreDeleteRefStop(RefStop& a_ref_stop);
 
     // Ticker thread entry. [locks: queueMutex_]
     void UpdateLoop();

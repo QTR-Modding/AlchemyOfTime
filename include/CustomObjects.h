@@ -313,7 +313,7 @@ struct RefStop {
     void ApplySound(float volume = 200.f);
     [[nodiscard]] RE::BSSoundHandle& GetSoundHandle() const;
 
-    void RemoveTint(RE::NiAVObject* a_obj3d);
+    void RemoveTint();
     void RemoveArtObject();
     void RemoveShader();
     void RemoveSound();

@@ -442,11 +442,11 @@ bool AddOnSettings::CheckIntegrity() {
 }
 
 void RefStop::ApplyTint(const RE::TESObjectREFR* a_obj) {
+    if (!tint_color.id) {
+        return RemoveTint();
+    }
+    if (tint_color.enabled) return;
     if (const auto a_3D = a_obj->Get3D()) {
-        if (!tint_color.id) {
-            return RemoveTint(a_3D);
-        }
-        if (tint_color.enabled) return;
         RE::NiColorA color;
         hexToRGBA(tint_color.id, color);
         a_3D->TintScenegraph(color);
@@ -505,10 +505,14 @@ RE::BSSoundHandle& RefStop::GetSoundHandle() const {
 }
 
 
-void RefStop::RemoveTint(RE::NiAVObject* a_obj3d) {
-    const auto color = RE::NiColorA(0.0f, 0.0f, 0.0f, 0.0f);
-    a_obj3d->TintScenegraph(color);
-    tint_color.enabled = false;
+void RefStop::RemoveTint() {
+    if (const auto a_refr = RE::TESForm::LookupByID<RE::TESObjectREFR>(ref_id)) {
+        if (const auto a_obj3d = a_refr->Get3D()) {
+            const auto color = RE::NiColorA(0.0f, 0.0f, 0.0f, 0.0f);
+            a_obj3d->TintScenegraph(color);
+            tint_color.enabled = false;
+        }
+    }
 }
 
 void RefStop::RemoveArtObject() {
