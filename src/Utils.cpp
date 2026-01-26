@@ -96,7 +96,7 @@ void OverrideMGEFFs(RE::BSTArray<RE::Effect*>& effect_array, const std::vector<F
     }
 }
 
-void FavoriteItem(RE::TESBoundObject* item, RE::TESObjectREFR* inventory_owner) {
+void FavoriteItem(const RE::TESBoundObject* item, RE::TESObjectREFR* inventory_owner) {
     if (!item) return;
     if (!inventory_owner) return;
     const auto inventory_changes = inventory_owner->GetInventoryChanges();
@@ -114,18 +114,14 @@ void FavoriteItem(RE::TESBoundObject* item, RE::TESObjectREFR* inventory_owner) 
         const auto formid = object->GetFormID();
         if (!formid) logger::critical("Formid is null");
         if (formid == item->GetFormID()) {
-            logger::trace("Favoriting item: {}", item->GetName());
             const auto xLists = (*it)->extraLists;
             bool no_extra_ = false;
             if (!xLists || xLists->empty()) {
-                logger::trace("No extraLists");
                 no_extra_ = true;
             }
             if (no_extra_) {
-                logger::trace("No extraLists");
                 //inventory_changes->SetFavorite((*it), nullptr);
             } else if (xLists->front()) {
-                logger::trace("ExtraLists found");
                 inventory_changes->SetFavorite(*it, xLists->front());
             }
             return;
@@ -208,6 +204,7 @@ void EquipItem(const FormID formid, const bool unequip) {
     EquipItem(FormReader::GetFormByID<RE::TESBoundObject>(formid), unequip);
 }
 
+// ReSharper disable once CppParameterMayBeConstPtrOrRef
 bool IsEquipped(RE::TESBoundObject* item) {
     if (!item) {
         logger::trace("Item is null");

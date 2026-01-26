@@ -36,7 +36,7 @@ void OverrideMGEFFs(RE::BSTArray<RE::Effect*>& effect_array, const std::vector<F
 
 inline bool IsDynamicFormID(const FormID a_formID) { return a_formID >= 0xFF000000; }
 
-void FavoriteItem(RE::TESBoundObject* item, RE::TESObjectREFR* inventory_owner);
+void FavoriteItem(const RE::TESBoundObject* item, RE::TESObjectREFR* inventory_owner);
 
 [[nodiscard]] bool IsFavorited(RE::TESBoundObject* item, RE::TESObjectREFR* inventory_owner);
 
