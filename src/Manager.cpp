@@ -1031,18 +1031,18 @@ void Manager::HandleCraftingExit() {
                 }
             }
 
-            if (const auto to_be_taken_back = actual_count_src - st_count; to_be_taken_back > 0) {
+            if (actual_count_src - st_count > 0) {
                 const auto src_bound = RE::TESForm::LookupByID<RE::TESBoundObject>(src_formid);
-                player_ref->RemoveItem(src_bound, to_be_taken_back, RE::ITEM_REMOVE_REASON::kRemove, nullptr, nullptr);
+                player_ref->RemoveItem(src_bound, st_count, RE::ITEM_REMOVE_REASON::kRemove, nullptr, nullptr);
                 const auto st_bound = RE::TESForm::LookupByID<RE::TESBoundObject>(st_formid);
-                player_ref->AddObjectToContainer(st_bound, nullptr, to_be_taken_back, nullptr);
+                player_ref->AddObjectToContainer(st_bound, nullptr, st_count, nullptr);
                 if (faves_list[st_formid]) {
                     FavoriteItem(st_formid, player_refid);
                 }
                 if (equipped_list[st_formid]) {
                     EquipItem(st_formid, false);
                 }
-                actual_counts.at(src_formid) -= to_be_taken_back;
+                actual_counts.at(src_formid) -= st_count;
             }
         }
     }
