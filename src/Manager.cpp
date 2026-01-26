@@ -307,7 +307,7 @@ void Manager::UpdateLoop() {
 
     SKSE::GetTaskInterface()->AddTask([ref_stops_copy = std::move(ref_stops_copy)]() {
         for (const auto key : ref_stops_copy) {
-            if (auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(key)) {
+            if (const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(key)) {
                 M->Update(ref);
             }
         }
@@ -1010,7 +1010,6 @@ void Manager::HandleCraftingEnter(const unsigned int bench_type) {
         RemoveItem(player_ref, formids.form_id2, counts.first);
         AddItem(player_ref, nullptr, formids.form_id1, counts.first);
     }
-
 }
 
 void Manager::HandleCraftingExit() {
@@ -1248,7 +1247,6 @@ void Manager::HandleLoc(RE::TESObjectREFR* loc_ref) {
 
     SyncWithInventory(loc_ref);
     locs_to_be_handled.erase(loc_refid);
-    
 }
 
 StageInstance* Manager::RegisterAtReceiveData(const FormID source_formid, const RefID loc,
