@@ -5,8 +5,8 @@
 class Manager final : public Ticker, public SaveLoadData {
     RE::TESObjectREFR* player_ref = RE::PlayerCharacter::GetSingleton()->As<RE::TESObjectREFR>();
 
-    std::map<Types::FormFormID, std::pair<int, Count>> handle_crafting_instances;
-    // formid1: source formid, formid2: stage formid
+    // form_id1: source formid, formid2: stage formid, pair: <number of stage form, initial source count>
+    std::map<Types::FormFormID, std::pair<Count, Count>> handle_crafting_instances;
     std::unordered_map<FormID, bool> faves_list;
     std::unordered_map<FormID, bool> equipped_list;
 

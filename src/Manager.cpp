@@ -948,7 +948,6 @@ void Manager::HandleCraftingEnter(const unsigned int bench_type) {
 
     // trusting that the player will leave the crafting menu at some point and everything will be reverted
 
-    std::map<FormID, int> to_remove;
     const auto player_inventory = player_ref->GetInventory();
 
     for (SRC_SHARED_GUARD; auto& src : sources) {
@@ -993,15 +992,18 @@ void Manager::HandleCraftingEnter(const unsigned int bench_type) {
     }
 
     for (const auto& [formids, counts] : handle_crafting_instances) {
-        if (formids.form_id1 == formids.form_id2) continue;
-        RemoveItem(player_ref, formids.form_id2, counts.first);
-        AddItem(player_ref, nullptr, formids.form_id1, counts.first);
+        const auto& [src_formid, st_formid] = formids;
+        const auto& [count_st, count_src] = counts;
+        if (src_formid == st_formid) continue;
+        const auto st_bound = RE::TESForm::LookupByID<RE::TESBoundObject>(st_formid);
+        player_ref->RemoveItem(st_bound, count_st, RE::ITEM_REMOVE_REASON::kRemove, nullptr, nullptr);
+        const auto source_bound = RE::TESForm::LookupByID<RE::TESBoundObject>(src_formid);
+        player_ref->AddObjectToContainer(source_bound, nullptr, count_st, nullptr);
     }
 }
 
 void Manager::HandleCraftingExit() {
     if (handle_crafting_instances.empty()) {
-        logger::info("HandleCraftingExit: No instances found.");
         faves_list.clear();
         equipped_list.clear();
         return;
@@ -1012,21 +1014,35 @@ void Manager::HandleCraftingExit() {
 
         // need to figure out how many items were used up in crafting and how many were left
         const auto player_inventory = player_ref->GetInventory();
+        std::unordered_map<FormID, Count> actual_counts;
         for (auto& [formids, counts] : handle_crafting_instances) {
-            if (formids.form_id1 == formids.form_id2) continue;
+            const auto& [src_formid, st_formid] = formids;
+            const auto& [st_count, src_count] = counts;
+            if (src_formid == st_formid) continue;
 
-            const auto it_src = player_inventory.find(FormReader::GetFormByID<RE::TESBoundObject>(formids.form_id1));
-            const auto actual_count_src = it_src != player_inventory.end() ? it_src->second.first : 0;
+            Count actual_count_src;
+            {
+                if (const auto it = actual_counts.find(src_formid); it != actual_counts.end()) {
+                    actual_count_src = it->second;
+                } else {
+                    const auto it_inv = player_inventory.find(FormReader::GetFormByID<RE::TESBoundObject>(src_formid));
+                    actual_count_src = it_inv != player_inventory.end() ? it_inv->second.first : 0;
+                    actual_counts[src_formid] = actual_count_src;
+                }
+            }
 
-            if (const auto to_be_taken_back = actual_count_src - counts.second; to_be_taken_back > 0) {
-                RemoveItem(player_ref, formids.form_id1, to_be_taken_back);
-                AddItem(player_ref, nullptr, formids.form_id2, to_be_taken_back);
-                if (faves_list[formids.form_id2]) {
-                    FavoriteItem(formids.form_id2, player_refid);
+            if (const auto to_be_taken_back = actual_count_src - st_count; to_be_taken_back > 0) {
+                const auto src_bound = RE::TESForm::LookupByID<RE::TESBoundObject>(src_formid);
+                player_ref->RemoveItem(src_bound, to_be_taken_back, RE::ITEM_REMOVE_REASON::kRemove, nullptr, nullptr);
+                const auto st_bound = RE::TESForm::LookupByID<RE::TESBoundObject>(st_formid);
+                player_ref->AddObjectToContainer(st_bound, nullptr, to_be_taken_back, nullptr);
+                if (faves_list[st_formid]) {
+                    FavoriteItem(st_formid, player_refid);
                 }
-                if (equipped_list[formids.form_id2]) {
-                    EquipItem(formids.form_id2, false);
+                if (equipped_list[st_formid]) {
+                    EquipItem(st_formid, false);
                 }
+                actual_counts.at(src_formid) -= to_be_taken_back;
             }
         }
     }
