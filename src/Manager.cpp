@@ -296,14 +296,11 @@ void Manager::UpdateLoop() {
             }
         }
 
-        for (const auto refid : ref_stops_due) {
-            if (const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(refid)) {
-                QUE_UNIQUE_GUARD;
-                if (auto it = _ref_stops_.find(refid); it != _ref_stops_.end()) {
-                    auto& val = it->second;
-                    PreDeleteRefStop(val);
-                    _ref_stops_.erase(it);
-                }
+        for (QUE_UNIQUE_GUARD; const auto refid : ref_stops_due) {
+            if (auto it = _ref_stops_.find(refid); it != _ref_stops_.end()) {
+                auto& val = it->second;
+                PreDeleteRefStop(val);
+                _ref_stops_.erase(it);
             }
         }
     }
