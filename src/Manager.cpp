@@ -977,16 +977,16 @@ void Manager::HandleCraftingEnter(const unsigned int bench_type) {
                 handle_crafting_instances.at(temp).first += st_inst.count;
             }
 
-            if (!faves_list.contains(stage_formid)) {
+            if (auto it = faves_list.find(stage_formid); it == faves_list.end()) {
                 faves_list[stage_formid] = IsFavorited(stage_formid, player_refid);
-            } else if (!faves_list.at(stage_formid)) {
-                faves_list.at(stage_formid) = IsFavorited(stage_formid, player_refid);
+            } else if (!it->second) {
+                it->second = IsFavorited(stage_formid, player_refid);
             }
 
-            if (!equipped_list.contains(stage_formid)) {
+            if (auto it = equipped_list.find(stage_formid); it == equipped_list.end()) {
                 equipped_list[stage_formid] = IsEquipped(stage_formid);
-            } else if (!equipped_list.at(stage_formid)) {
-                equipped_list.at(stage_formid) = IsEquipped(stage_formid);
+            } else if (!it->second) {
+                it->second = IsEquipped(stage_formid);
             }
         }
     }
@@ -1031,18 +1031,18 @@ void Manager::HandleCraftingExit() {
                 }
             }
 
-            if (actual_count_src - st_count > 0) {
+            if (const auto revert = std::min(st_count, actual_count_src); revert > 0) {
                 const auto src_bound = RE::TESForm::LookupByID<RE::TESBoundObject>(src_formid);
-                player_ref->RemoveItem(src_bound, st_count, RE::ITEM_REMOVE_REASON::kRemove, nullptr, nullptr);
+                player_ref->RemoveItem(src_bound, revert, RE::ITEM_REMOVE_REASON::kRemove, nullptr, nullptr);
                 const auto st_bound = RE::TESForm::LookupByID<RE::TESBoundObject>(st_formid);
-                player_ref->AddObjectToContainer(st_bound, nullptr, st_count, nullptr);
-                if (faves_list[st_formid]) {
+                player_ref->AddObjectToContainer(st_bound, nullptr, revert, nullptr);
+                if (auto it = faves_list.find(st_formid); it != faves_list.end() && it->second) {
                     FavoriteItem(st_formid, player_refid);
                 }
-                if (equipped_list[st_formid]) {
+                if (auto it = equipped_list.find(st_formid); it != equipped_list.end() && it->second) {
                     EquipItem(st_formid, false);
                 }
-                actual_counts.at(src_formid) -= st_count;
+                actual_counts.at(src_formid) -= revert;
             }
         }
     }
