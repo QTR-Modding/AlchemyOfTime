@@ -324,41 +324,29 @@ void Manager::QueueWOUpdate(const RefStop& a_refstop) {
     Start();
 }
 
-void Manager::UpdateRefStop(Source& src, const StageInstance& wo_inst, RefStop& a_ref_stop, const float stop_t) {
-    const auto wo_inst_delayer = wo_inst.GetDelayerFormID();
-    const bool trnsfrm = src.settings.transformers.contains(wo_inst_delayer);
-    const bool mdlt = !trnsfrm ? src.settings.delayers.contains(wo_inst_delayer) : false;
+void Manager::UpdateRefStop(const Source& src, const StageInstance& wo_inst, RefStop& a_ref_stop, const float stop_t) {
+    const auto delayer = wo_inst.GetDelayerFormID();
+    const bool is_transformer = src.settings.transformers.contains(delayer);
+    const bool is_delayer = !is_transformer && src.settings.delayers.contains(delayer);
 
-    // color
-    const auto color = trnsfrm
-                           ? src.settings.transformer_colors[wo_inst_delayer]
-                           : mdlt
-                           ? src.settings.delayer_colors[wo_inst_delayer]
-                           : src.settings.colors[wo_inst.no];
-    a_ref_stop.tint_color.id = color;
-    // art object
-    const auto art_object = trnsfrm
-                                ? src.settings.transformer_artobjects[wo_inst_delayer]
-                                : mdlt
-                                ? src.settings.delayer_artobjects[wo_inst_delayer]
-                                : src.settings.artobjects[wo_inst.no];
-    a_ref_stop.art_object.id = art_object;
+    const auto pick = [&](const auto& transformer_map, const auto& delayer_map, const auto& stage_map) {
+        if (is_transformer) {
+            return transformer_map.at(delayer);
+        }
+        if (is_delayer) {
+            return delayer_map.at(delayer);
+        }
+        return stage_map.at(wo_inst.no);
+    };
 
-    // effect shader
-    const auto effect_shader = trnsfrm
-                                   ? src.settings.transformer_effect_shaders[wo_inst_delayer]
-                                   : mdlt
-                                   ? src.settings.delayer_effect_shaders[wo_inst_delayer]
-                                   : src.settings.effect_shaders[wo_inst.no];
-    a_ref_stop.effect_shader.id = effect_shader;
-
-    // sound
-    const auto sound = trnsfrm
-                           ? src.settings.transformer_sounds[wo_inst_delayer]
-                           : mdlt
-                           ? src.settings.delayer_sounds[wo_inst_delayer]
-                           : src.settings.sounds[wo_inst.no];
-    a_ref_stop.sound.id = sound;
+    a_ref_stop.features.tint_color.id =
+        pick(src.settings.transformer_colors, src.settings.delayer_colors, src.settings.colors);
+    a_ref_stop.features.art_object.id =
+        pick(src.settings.transformer_artobjects, src.settings.delayer_artobjects, src.settings.artobjects);
+    a_ref_stop.features.effect_shader.id =
+        pick(src.settings.transformer_effect_shaders, src.settings.delayer_effect_shaders, src.settings.effect_shaders);
+    a_ref_stop.features.sound.id =
+        pick(src.settings.transformer_sounds, src.settings.delayer_sounds, src.settings.sounds);
 
     a_ref_stop.stop_time = stop_t;
 }
@@ -846,8 +834,7 @@ bool Manager::DeRegisterRef(const RefID refid) {
 
 void Manager::ClearWOUpdateQueue() {
     QUE_UNIQUE_GUARD;
-    for (auto& [key, val] : _ref_stops_) {
-        const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(key);
+    for (auto& val : _ref_stops_ | std::views::values) {
         PreDeleteRefStop(val);
     }
     _ref_stops_.clear();

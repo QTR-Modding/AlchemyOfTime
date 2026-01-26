@@ -48,7 +48,7 @@ class Manager final : public Ticker, public SaveLoadData {
     // Enqueue/merge a RefStop. [locks: queueMutex_]
     void QueueWOUpdate(const RefStop& a_refstop);
 
-    static void UpdateRefStop(Source& src, const StageInstance& wo_inst, RefStop& a_ref_stop, float stop_t);
+    static void UpdateRefStop(const Source& src, const StageInstance& wo_inst, RefStop& a_ref_stop, float stop_t);
 
     // [expects: sourceMutex_] (read-only traversal)
     [[nodiscard]] unsigned int GetNInstances();

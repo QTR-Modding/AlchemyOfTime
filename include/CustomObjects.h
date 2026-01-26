@@ -274,6 +274,19 @@ struct RefStopFeature {
     RefStopFeature& operator=(const RefStopFeature& other);
 };
 
+struct RefStopFeatures {
+    RefStopFeature tint_color;
+    RefStopFeature art_object;
+    RefStopFeature effect_shader;
+    RefStopFeature sound;
+    RefStopFeatures() = default;
+    RefStopFeatures(const uint32_t a_tint_id, const uint32_t a_art_id,
+                    const uint32_t a_effshd_id,
+                    const uint32_t a_sound_id)
+        : tint_color(a_tint_id), art_object(a_art_id), effect_shader(a_effshd_id), sound(a_sound_id) {}
+
+};
+
 struct RefStop {
     ~RefStop() = default;
 
@@ -285,10 +298,7 @@ struct RefStop {
 
     RefID ref_id = 0;
     float stop_time = 0;
-    RefStopFeature tint_color;
-    RefStopFeature art_object;
-    RefStopFeature effect_shader;
-    RefStopFeature sound;
+    RefStopFeatures features;
 
     //RE::ShaderReferenceEffect* shader_ref_eff;
     //RE::ModelReferenceEffect* model_ref_eff;
@@ -299,10 +309,8 @@ struct RefStop {
     RefStop() = default;
     explicit RefStop(RefID ref_id_);
 
-    RefStop(const RefID ref_id_, const float stop_t, const uint32_t color, const FormID art_id, const FormID shader_id,
-            const FormID sound_id)
-        : ref_id(ref_id_), stop_time(stop_t), tint_color(color), art_object(art_id), effect_shader(shader_id),
-          sound(sound_id) {
+    RefStop(const RefID ref_id_, const float stop_t, const RefStopFeatures& a_features)
+        : ref_id(ref_id_), stop_time(stop_t), features(a_features) {
     }
 
     [[nodiscard]] bool IsDue(float curr_time) const;

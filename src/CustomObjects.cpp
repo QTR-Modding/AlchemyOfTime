@@ -374,10 +374,7 @@ RefStop& RefStop::operator=(const RefStop& other) {
     if (this != &other) {
         ref_id = other.ref_id;
         stop_time = other.stop_time;
-        tint_color = other.tint_color;
-        art_object = other.art_object;
-        effect_shader = other.effect_shader;
-        sound = other.sound;
+        features = other.features;
 
         // Manually handle any special cases for members
     }
@@ -442,6 +439,7 @@ bool AddOnSettings::CheckIntegrity() {
 }
 
 void RefStop::ApplyTint(const RE::TESObjectREFR* a_obj) {
+    auto& tint_color = features.tint_color;
     if (!tint_color.id) {
         return RemoveTint();
     }
@@ -455,6 +453,7 @@ void RefStop::ApplyTint(const RE::TESObjectREFR* a_obj) {
 }
 
 void RefStop::ApplyArtObject(RE::TESObjectREFR* a_ref, const float duration) {
+    auto& art_object = features.art_object;
     if (!art_object.id) return RemoveArtObject();
     if (art_object.enabled) return;
     const auto a_art_obj = RE::TESForm::LookupByID<RE::BGSArtObject>(art_object.id);
@@ -474,6 +473,7 @@ void RefStop::ApplyArtObject(RE::TESObjectREFR* a_ref, const float duration) {
 }
 
 void RefStop::ApplyShader(RE::TESObjectREFR* a_ref, const float duration) {
+    auto& effect_shader = features.effect_shader;
     if (!effect_shader.id) return RemoveShader();
     if (effect_shader.enabled) return;
     const auto eff_shader = RE::TESForm::LookupByID<RE::TESEffectShader>(effect_shader.id);
@@ -487,10 +487,13 @@ void RefStop::ApplyShader(RE::TESObjectREFR* a_ref, const float duration) {
     });
     //shader_ref_eff = a_shader_ref_eff_ptr;
 
+    applied_effect_shaders.insert(effect_shader.id);
+
     effect_shader.enabled = true;
 }
 
 void RefStop::ApplySound(const float volume) {
+    auto& sound = features.sound;
     if (!sound.id) {
         return RemoveSound();
     }
@@ -510,7 +513,7 @@ void RefStop::RemoveTint() {
         if (const auto a_obj3d = a_refr->Get3D()) {
             const auto color = RE::NiColorA(0.0f, 0.0f, 0.0f, 0.0f);
             a_obj3d->TintScenegraph(color);
-            tint_color.enabled = false;
+            features.tint_color.enabled = false;
         }
     }
 }
@@ -536,7 +539,7 @@ void RefStop::RemoveArtObject() {
     }
     applied_art_objects.clear();
 
-    art_object.enabled = false;
+    features.art_object.enabled = false;
 }
 
 void RefStop::RemoveShader() {
@@ -564,13 +567,13 @@ void RefStop::RemoveShader() {
         }
     }
     applied_effect_shaders.clear();
-    effect_shader.enabled = false;
+    features.effect_shader.enabled = false;
 }
 
 void RefStop::RemoveSound() {
     const auto soundhelper = SoundHelper::GetSingleton();
     soundhelper->Stop(ref_id);
-    sound.enabled = false;
+    features.sound.enabled = false;
 }
 
 bool RefStop::HasArtObject(RE::TESObjectREFR* a_ref, const RE::BGSArtObject* a_art) {
@@ -594,17 +597,22 @@ void RefStop::Update(const RefStop& other) {
         logger::critical("RefID not the same.");
         return;
     }
-    if (tint_color.id != other.tint_color.id) {
-        tint_color.id = other.tint_color.id;
+
+    if (features.tint_color.id != other.features.tint_color.id) {
+        RemoveTint();
+        features.tint_color.id = other.features.tint_color.id;
     }
-    if (art_object.id != other.art_object.id) {
-        art_object.id = other.art_object.id;
+    if (features.art_object.id != other.features.art_object.id) {
+        RemoveArtObject();
+        features.art_object.id = other.features.art_object.id;
     }
-    if (effect_shader.id != other.effect_shader.id) {
-        effect_shader.id = other.effect_shader.id;
+    if (features.effect_shader.id != other.features.effect_shader.id) {
+        RemoveShader();
+        features.effect_shader.id = other.features.effect_shader.id;
     }
-    if (sound.id != other.sound.id) {
-        sound.id = other.sound.id;
+    if (features.sound.id != other.features.sound.id) {
+        RemoveSound();
+        features.sound.id = other.features.sound.id;
     }
     if (fabs(stop_time - other.stop_time) > EPSILON) {
         stop_time = other.stop_time;
