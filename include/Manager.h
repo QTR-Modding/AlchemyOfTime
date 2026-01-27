@@ -26,7 +26,8 @@ class Manager final : public Ticker, public SaveLoadData {
     std::shared_mutex sourceMutex_;
     std::shared_mutex queueMutex_;
 
-    std::vector<Source> sources;
+    std::unordered_map<FormID, std::unique_ptr<Source>> sources;
+    std::unordered_map<FormID, Source*> stage_to_source;
 
     std::unordered_map<std::string, bool> _other_settings;
 
@@ -37,8 +38,6 @@ class Manager final : public Ticker, public SaveLoadData {
     std::unordered_set<RefID> queue_delete_;
 
     std::unordered_set<FormID> do_not_register;
-
-    std::unordered_set<FormID> stages_fast_lookup;
 
     static void PreDeleteRefStop(RefStop& a_ref_stop);
 
@@ -55,6 +54,8 @@ class Manager final : public Ticker, public SaveLoadData {
 
     // Creates and appends a new Source. [expects: sourceMutex_] (unique)
     [[nodiscard]] Source* MakeSource(FormID source_formid, const DefaultSettings* settings);
+
+    void IndexSourceStages(Source& source);
 
     // Cleans up a Source instance. [expects: sourceMutex_] (unique)
     static void CleanUpSourceData(Source* src);
@@ -112,7 +113,14 @@ class Manager final : public Ticker, public SaveLoadData {
 
 public:
     Manager(const std::vector<Source>& data, const std::chrono::milliseconds interval)
-        : Ticker([this]() { UpdateLoop(); }, interval), sources(data) {
+        : Ticker([this]() { UpdateLoop(); }, interval) {
+        sources.reserve(data.size());
+        for (const auto& source : data) {
+            auto [it, inserted] = sources.try_emplace(source.formid, std::make_unique<Source>(source));
+            if (inserted) {
+                IndexSourceStages(*it->second);
+            }
+        }
         Init();
     }
 

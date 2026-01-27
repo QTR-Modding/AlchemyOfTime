@@ -354,9 +354,10 @@ void Manager::UpdateRefStop(const Source& src, const StageInstance& wo_inst, Ref
 
 unsigned int Manager::GetNInstances() {
     unsigned int n = 0;
-    for (auto& src : sources) {
-        for (const auto& loc : src.data | std::views::keys) {
-            n += static_cast<unsigned int>(src.data[loc].size());
+    for (const auto& [formid, src] : sources) {
+        const auto& source = *src;
+        for (const auto& loc : source.data | std::views::keys) {
+            n += static_cast<unsigned int>(source.data.at(loc).size());
         }
     }
     return n;
@@ -366,10 +367,26 @@ Source* Manager::MakeSource(const FormID source_formid, const DefaultSettings* s
     if (!source_formid) return nullptr;
     if (IsDynamicFormID(source_formid)) return nullptr;
     // Source new_source(source_formid, "", empty_mgeff, settings);
-    const Source new_source(source_formid, "", settings);
-    if (!new_source.IsHealthy()) return nullptr;
-    sources.push_back(new_source);
-    return &sources.back();
+    auto new_source = std::make_unique<Source>(source_formid, "", settings);
+    if (!new_source->IsHealthy()) return nullptr;
+    const auto source_id = new_source->formid;
+    auto [it, inserted] = sources.try_emplace(source_id, std::move(new_source));
+    if (inserted) {
+        IndexSourceStages(*it->second);
+    }
+    return it->second.get();
+}
+
+void Manager::IndexSourceStages(Source& source) {
+    stage_to_source[source.formid] = &source;
+    StageNo stage_no = 0;
+    while (source.IsStageNo(stage_no)) {
+        const auto& stage = source.GetStage(stage_no);
+        if (stage.formid) {
+            stage_to_source[stage.formid] = &source;
+        }
+        ++stage_no;
+    }
 }
 
 void Manager::CleanUpSourceData(Source* src) {
@@ -378,10 +395,21 @@ void Manager::CleanUpSourceData(Source* src) {
 }
 
 Source* Manager::GetSource(const FormID some_formid) {
-    // maybe it already exists
-    for (auto& src : sources) {
-        if (!src.IsHealthy()) continue;
-        if (src.IsStage(some_formid)) return &src;
+    if (const auto it = sources.find(some_formid); it != sources.end()) {
+        return it->second.get();
+    }
+
+    if (const auto it = stage_to_source.find(some_formid); it != stage_to_source.end()) {
+        return it->second;
+    }
+
+    // fallback for fake stages created later on
+    for (const auto& src : sources | std::views::values) {
+        if (!src->IsHealthy()) continue;
+        if (src->IsStage(some_formid)) {
+            stage_to_source[some_formid] = src.get();
+            return src.get();
+        }
     }
 
     return nullptr;
@@ -426,9 +454,10 @@ bool Manager::IsSource(const FormID some_formid) {
 StageInstance* Manager::GetWOStageInstance(const RE::TESObjectREFR* wo_ref) {
     if (sources.empty()) return nullptr;
     const auto wo_refid = wo_ref->GetFormID();
-    for (auto& src : sources) {
-        if (!src.data.contains(wo_refid)) continue;
-        auto& instances = src.data.at(wo_refid);
+    for (auto& [formid, src] : sources) {
+        auto& source = *src;
+        if (!source.data.contains(wo_refid)) continue;
+        auto& instances = source.data.at(wo_refid);
         if (instances.size() == 1)
             return instances.data();
         if (instances.empty()) {
@@ -590,16 +619,17 @@ std::set<float> Manager::GetUpdateTimes(const RE::TESObjectREFR* inventory_owner
 
     const auto inventory_owner_refid = inventory_owner->GetFormID();
 
-    for (auto& src : sources) {
-        if (!src.IsHealthy()) {
+    for (auto& [formid, src] : sources) {
+        auto& source = *src;
+        if (!source.IsHealthy()) {
             logger::error("_UpdateTimeModulators: Source is not healthy.");
             continue;
         }
-        if (!src.data.contains(inventory_owner_refid)) continue;
+        if (!source.data.contains(inventory_owner_refid)) continue;
 
-        for (auto& st_inst : src.data.at(inventory_owner_refid)) {
-            if (st_inst.xtra.is_decayed || !src.IsStageNo(st_inst.no)) continue;
-            if (const auto hitting_time = src.GetNextUpdateTime(&st_inst); hitting_time > 0)
+        for (auto& st_inst : source.data.at(inventory_owner_refid)) {
+            if (st_inst.xtra.is_decayed || !source.IsStageNo(st_inst.no)) continue;
+            if (const auto hitting_time = source.GetNextUpdateTime(&st_inst); hitting_time > 0)
                 queued_updates.insert(
                     hitting_time);
         }
@@ -612,25 +642,28 @@ bool Manager::UpdateInventory(RE::TESObjectREFR* ref, const float t) {
     bool update_took_place = false;
     const auto refid = ref->GetFormID();
 
-    for (size_t i = 0; i < sources.size(); ++i) {
-        auto& src = sources[i];
-        if (!src.IsHealthy()) continue;
-        if (src.data.empty()) continue;
-        if (!src.data.contains(refid)) continue;
-        if (src.data.at(refid).empty()) continue;
-        const auto updated_stages = src.UpdateAllStages({refid}, t);
+    for (auto& [formid, src] : sources) {
+        auto& source = *src;
+        if (!source.IsHealthy()) continue;
+        if (source.data.empty()) continue;
+        if (!source.data.contains(refid)) continue;
+        if (source.data.at(refid).empty()) continue;
+        const auto updated_stages = source.UpdateAllStages({refid}, t);
         const auto& updates = updated_stages.contains(refid) ? updated_stages.at(refid) : std::vector<StageUpdate>();
         if (!update_took_place && !updates.empty()) update_took_place = true;
-        CleanUpSourceData(&src);
+        CleanUpSourceData(&source);
         for (const auto& update : updates) {
-            if (ApplyEvolutionInInventory(ref, update.count, update.oldstage->formid, update.newstage->formid) && src.
+            if (ApplyEvolutionInInventory(ref, update.count, update.oldstage->formid, update.newstage->formid) && source
+                .
                 IsDecayedItem(update.newstage->formid)) {
                 Register(update.newstage->formid, update.count, refid, t);
             }
         }
     }
 
-    for (auto& src : sources) src.UpdateTimeModulationInInventory(ref, t);
+    for (auto& [formid, src] : sources) {
+        src->UpdateTimeModulationInInventory(ref, t);
+    }
 
     return update_took_place;
 }
@@ -667,9 +700,10 @@ void Manager::SyncWithInventory(RE::TESObjectREFR* ref) {
     formid_instances_map.reserve(loc_inventory.size());
     total_registry_counts.reserve(loc_inventory.size());
 
-    for (auto& src : sources) {
-        if (!src.data.contains(loc_refid)) continue;
-        for (auto& st_inst : src.data.at(loc_refid)) {
+    for (auto& [formid, src] : sources) {
+        auto& source = *src;
+        if (!source.data.contains(loc_refid)) continue;
+        for (auto& st_inst : source.data.at(loc_refid)) {
             // bu liste onceski savele ayni deil cunku source.datayi
             // _registeratreceivedata deistirdi
             if (!st_inst.xtra.is_decayed && st_inst.count > 0) {
@@ -754,15 +788,14 @@ void Manager::UpdateWO(RE::TESObjectREFR* ref) {
     const auto curr_time = RE::Calendar::GetSingleton()->GetHoursPassed();
     bool not_found = true;
 
-    sources.reserve(sources.size() + 1);
-    for (size_t i = 0; i < sources.size(); ++i) { // NOLINT(modernize-loop-convert)
-        auto& src = sources[i];
-        if (!src.IsHealthy()) continue;
-        if (src.data.empty()) continue;
-        if (!src.data.contains(refid)) continue;
-        if (src.data.at(refid).empty()) continue;
+    for (auto& [formid, src] : sources) {
+        auto& source = *src;
+        if (!source.IsHealthy()) continue;
+        if (source.data.empty()) continue;
+        if (!source.data.contains(refid)) continue;
+        if (source.data.at(refid).empty()) continue;
         HandleWOBaseChange(ref);
-        if (src.data.at(refid).data()->count <= 0) {
+        if (source.data.at(refid).data()->count <= 0) {
             QUE_UNIQUE_GUARD;
             queue_delete_.insert(refid);
             continue;
@@ -770,33 +803,32 @@ void Manager::UpdateWO(RE::TESObjectREFR* ref) {
 
         not_found = false;
 
-        if (const auto updated_stages = src.UpdateAllStages({refid}, curr_time); updated_stages.contains(refid)) {
+        if (const auto updated_stages = source.UpdateAllStages({refid}, curr_time); updated_stages.contains(refid)) {
             if (updated_stages.size() > 1) {
                 logger::error("UpdateWO: Multiple updates for the same ref.");
             }
             const auto& update = updated_stages.at(refid).front();
-            const auto bound = src.IsFakeStage(update.newstage->no) ? src.GetBoundObject() : nullptr;
+            const auto bound = source.IsFakeStage(update.newstage->no) ? source.GetBoundObject() : nullptr;
             ApplyStageInWorld(ref, *update.newstage, bound);
-            if (src.IsDecayedItem(update.newstage->formid)) {
+            if (source.IsDecayedItem(update.newstage->formid)) {
                 Register(update.newstage->formid, update.count, refid, update.update_time);
             }
         }
 
         //src = sources[i];
-        if (!src.data.contains(refid)) logger::error("UpdateWO: Refid {:x} not found in source data.", refid);
-        auto& wo_inst = src.data.at(refid).front();
-        if (wo_inst.xtra.is_fake) ApplyStageInWorld(ref, src.GetStage(wo_inst.no), src.GetBoundObject());
-        src.UpdateTimeModulationInWorld(ref, wo_inst, curr_time);
-        if (const auto next_update = src.GetNextUpdateTime(&wo_inst); next_update > curr_time) {
+        if (!source.data.contains(refid)) logger::error("UpdateWO: Refid {:x} not found in source data.", refid);
+        auto& wo_inst = source.data.at(refid).front();
+        if (wo_inst.xtra.is_fake) ApplyStageInWorld(ref, source.GetStage(wo_inst.no), source.GetBoundObject());
+        source.UpdateTimeModulationInWorld(ref, wo_inst, curr_time);
+        if (const auto next_update = source.GetNextUpdateTime(&wo_inst); next_update > curr_time) {
             RefStop a_ref_stop(refid);
-            UpdateRefStop(src, wo_inst, a_ref_stop, next_update);
+            UpdateRefStop(source, wo_inst, a_ref_stop, next_update);
             QueueWOUpdate(a_ref_stop);
         }
-        CleanUpSourceData(&src);
+        CleanUpSourceData(&source);
         break;
     }
 
-    sources.shrink_to_fit();
     if (not_found) Register(ref->GetBaseObject()->GetFormID(), ref->extraList.GetCount(), refid);
 }
 
@@ -823,9 +855,10 @@ bool Manager::RefIsUpdatable(const RE::TESObjectREFR* ref) {
 
 bool Manager::DeRegisterRef(const RefID refid) {
     bool found = false;
-    for (auto& src : sources) {
-        if (auto it = src.data.find(refid); it != src.data.end()) {
-            src.data.erase(it);
+    for (auto& [formid, src] : sources) {
+        auto& source = *src;
+        if (auto it = source.data.find(refid); it != source.data.end()) {
+            source.data.erase(it);
             found = true;
         }
     }
@@ -850,8 +883,8 @@ bool Manager::RefIsRegistered(const RefID refid) {
         logger::warn("Sources is empty.");
         return false;
     }
-    for (auto& src : sources) {
-        if (src.data.contains(refid) && !src.data.at(refid).empty()) return true;
+    for (auto& [formid, src] : sources) {
+        if (src->data.contains(refid) && !src->data.at(refid).empty()) return true;
     }
     return false;
 }
@@ -950,7 +983,8 @@ void Manager::HandleCraftingEnter(const unsigned int bench_type) {
 
     const auto player_inventory = player_ref->GetInventory();
 
-    for (SRC_SHARED_GUARD; auto& src : sources) {
+    for (SRC_SHARED_GUARD; auto& [_, a_source] : sources) {
+        auto& src = *a_source;
         if (!src.IsHealthy()) continue;
         if (!src.data.contains(player_refid)) continue;
 
@@ -1164,10 +1198,10 @@ void Manager::Reset() {
     ClearWOUpdateQueue();
     {
         SRC_UNIQUE_GUARD;
-        for (auto& src : sources) src.Reset();
+        for (auto& src : sources | std::views::values) src->Reset();
         sources.clear();
+        stage_to_source.clear();
     }
-    stages_fast_lookup.clear();
 
     // external_favs.clear();         // we will update this in ReceiveData
     handle_crafting_instances.clear();
@@ -1191,21 +1225,22 @@ void Manager::SendData() {
     Print();
     Clear();
 
-    for (SRC_UNIQUE_GUARD; auto& src : sources) {
-        CleanUpSourceData(&src);
+    for (SRC_UNIQUE_GUARD; auto& [_, src] : sources) {
+        CleanUpSourceData(src.get());
     }
 
     int n_instances = 0;
     SRC_SHARED_GUARD;
-    for (const auto& src : sources) {
-        if (src.GetStageDuration(0) >= 10000.f) {
-            if (src.settings.transformers_order.size() == 0 && src.settings.delayers_order.size() == 0) {
+    for (const auto& [formid, src] : sources) {
+        const auto& source = *src;
+        if (source.GetStageDuration(0) >= 10000.f) {
+            if (source.settings.transformers_order.size() == 0 && source.settings.delayers_order.size() == 0) {
                 continue;
             }
         }
-        for (const auto& [loc, instances] : src.data) {
+        for (const auto& [loc, instances] : source.data) {
             if (instances.empty()) continue;
-            const SaveDataLHS lhs{{src.formid, src.editorid}, loc};
+            const SaveDataLHS lhs{{source.formid, source.editorid}, loc};
             SaveDataRHS rhs;
             for (const auto& st_inst : instances) {
                 auto plain = st_inst.GetPlain();
@@ -1423,7 +1458,12 @@ void Manager::Print() {
 
 std::vector<Source> Manager::GetSources() {
     SRC_SHARED_GUARD;
-    return sources;
+    std::vector<Source> sources_copy;
+    sources_copy.reserve(sources.size());
+    for (const auto& [formid, src] : sources) {
+        sources_copy.push_back(*src);
+    }
+    return sources_copy;
 }
 
 std::unordered_map<RefID, float> Manager::GetUpdateQueue() {
@@ -1463,19 +1503,8 @@ void Manager::HandleWOBaseChange(RE::TESObjectREFR* ref) {
 }
 
 bool Manager::IsStageItem(const FormID a_formid) {
-    if (const auto it = stages_fast_lookup.find(a_formid); it != stages_fast_lookup.end()) {
-        return true;
-    }
-
     SRC_SHARED_GUARD;
-    for (const auto& src : sources) {
-        if (src.IsStage(a_formid)) {
-            stages_fast_lookup.insert(a_formid);
-            return true;
-        }
-    }
-
-    return false;
+    return GetSource(a_formid) != nullptr;
 }
 
 std::vector<RefID> Manager::GetRefStops() {
