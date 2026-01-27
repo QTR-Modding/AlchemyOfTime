@@ -138,12 +138,12 @@ std::unordered_map<RefID, std::vector<StageUpdate>> Source::UpdateAllStages(
         return updated_instances;
     }
 
-    for (auto& reffid : filter) {
-        if (!data.contains(reffid)) {
-            logger::warn("Refid {} not found in data.", reffid);
+    for (auto& a_refID : filter) {
+        if (!data.contains(a_refID)) {
+            logger::warn("RefID {} not found in data.", a_refID);
             continue;
         }
-        for (auto& instances = data.at(reffid); auto& instance : instances) {
+        for (auto& instances = data.at(a_refID); auto& instance : instances) {
             const Stage* old_stage = IsStageNo(instance.no) ? &GetStage(instance.no) : nullptr;
             if (UpdateStageInstance(instance, time)) {
                 const Stage* new_stage = nullptr;
@@ -161,7 +161,7 @@ std::unordered_map<RefID, std::vector<StageUpdate>> Source::UpdateAllStages(
                     new_stage = &decayed_stage;
                 }
                 auto is_fake_ = IsFakeStage(instance.no);
-                updated_instances[reffid].emplace_back(old_stage, new_stage ? new_stage : &GetStage(instance.no),
+                updated_instances[a_refID].emplace_back(old_stage, new_stage ? new_stage : &GetStage(instance.no),
                                                        instance.count, instance.start_time, is_fake_);
             }
         }
