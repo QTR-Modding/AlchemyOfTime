@@ -329,14 +329,23 @@ void Manager::UpdateRefStop(const Source& src, const StageInstance& wo_inst, Ref
     const bool is_transformer = src.settings.transformers.contains(delayer);
     const bool is_delayer = !is_transformer && src.settings.delayers.contains(delayer);
 
-    const auto pick = [&](const auto& transformer_map, const auto& delayer_map, const auto& stage_map) {
+    const auto pick = [&](const std::unordered_map<FormID, uint32_t>& transformer_map,
+                          const std::unordered_map<FormID, uint32_t>& delayer_map,
+                          const std::map<StageNo, uint32_t>& stage_map) {
         if (is_transformer) {
-            return transformer_map.at(delayer);
+            if (const auto it = transformer_map.find(delayer); it != transformer_map.end()) {
+                return it->second;
+            }
         }
         if (is_delayer) {
-            return delayer_map.at(delayer);
+            if (const auto it = delayer_map.find(delayer); it != delayer_map.end()) {
+                return it->second;
+            }
         }
-        return stage_map.at(wo_inst.no);
+        if (const auto it = stage_map.find(wo_inst.no); it != stage_map.end()) {
+            return it->second;
+        }
+        return static_cast<uint32_t>(0);
     };
 
     a_ref_stop.features.tint_color.id =
@@ -786,50 +795,57 @@ void Manager::UpdateWO(RE::TESObjectREFR* ref) {
     }
 
     const auto curr_time = RE::Calendar::GetSingleton()->GetHoursPassed();
-    bool not_found = true;
+
+    Source* source = nullptr;
 
     for (auto& src : sources | std::views::values) {
-        auto& source = *src;
-        if (!source.IsHealthy()) continue;
-        if (source.data.empty()) continue;
-        if (!source.data.contains(refid)) continue;
-        if (source.data.at(refid).empty()) continue;
+        auto& a_source = *src;
+        if (!a_source.IsHealthy()) continue;
+        auto it = a_source.data.find(refid);
+        if (it == a_source.data.end() || it->second.empty()) continue;
         HandleWOBaseChange(ref);
-        if (source.data.at(refid).data()->count <= 0) {
+        if (it->second.front().count <= 0) {
             QUE_UNIQUE_GUARD;
             queue_delete_.insert(refid);
             continue;
         }
-
-        not_found = false;
-
-        if (const auto updated_stages = source.UpdateAllStages({refid}, curr_time); updated_stages.contains(refid)) {
-            if (updated_stages.size() > 1) {
-                logger::error("UpdateWO: Multiple updates for the same ref.");
-            }
-            const auto& update = updated_stages.at(refid).front();
-            const auto bound = source.IsFakeStage(update.newstage->no) ? source.GetBoundObject() : nullptr;
-            ApplyStageInWorld(ref, *update.newstage, bound);
-            if (source.IsDecayedItem(update.newstage->formid)) {
-                Register(update.newstage->formid, update.count, refid, update.update_time);
-            }
-        }
-
-        //src = sources[i];
-        if (!source.data.contains(refid)) logger::error("UpdateWO: Refid {:x} not found in source data.", refid);
-        auto& wo_inst = source.data.at(refid).front();
-        if (wo_inst.xtra.is_fake) ApplyStageInWorld(ref, source.GetStage(wo_inst.no), source.GetBoundObject());
-        source.UpdateTimeModulationInWorld(ref, wo_inst, curr_time);
-        if (const auto next_update = source.GetNextUpdateTime(&wo_inst); next_update > curr_time) {
-            RefStop a_ref_stop(refid);
-            UpdateRefStop(source, wo_inst, a_ref_stop, next_update);
-            QueueWOUpdate(a_ref_stop);
-        }
-        CleanUpSourceData(&source);
+        source = &a_source;
         break;
     }
 
-    if (not_found) Register(ref->GetBaseObject()->GetFormID(), ref->extraList.GetCount(), refid);
+    if (!source) {
+        Register(ref->GetBaseObject()->GetFormID(), ref->extraList.GetCount(), refid);
+        return;
+    }
+
+    if (const auto updated_stages = source->UpdateAllStages({refid}, curr_time);
+        updated_stages.contains(refid)) {
+        if (updated_stages.size() > 1) {
+            logger::error("UpdateWO: Multiple updates for the same ref.");
+        }
+        const auto& update = updated_stages.at(refid).front();
+        const auto bound = source->IsFakeStage(update.newstage->no) ? source->GetBoundObject() : nullptr;
+        ApplyStageInWorld(ref, *update.newstage, bound);
+        if (source->IsDecayedItem(update.newstage->formid)) {
+            Register(update.newstage->formid, update.count, refid, update.update_time);
+        }
+    }
+
+    const auto it = source->data.find(refid);
+    if (it == source->data.end() || it->second.empty()) {
+        logger::error("UpdateWO: RefID {:x} not found in source data.", refid);
+        Register(ref->GetBaseObject()->GetFormID(), ref->extraList.GetCount(), refid);
+        return;
+    }
+    auto& wo_inst = it->second.front();
+    if (wo_inst.xtra.is_fake) ApplyStageInWorld(ref, source->GetStage(wo_inst.no), source->GetBoundObject());
+    source->UpdateTimeModulationInWorld(ref, wo_inst, curr_time);
+    if (const auto next_update = source->GetNextUpdateTime(&wo_inst); next_update > curr_time) {
+        RefStop a_ref_stop(refid);
+        UpdateRefStop(*source, wo_inst, a_ref_stop, next_update);
+        QueueWOUpdate(a_ref_stop);
+    }
+    CleanUpSourceData(source);
 }
 
 void Manager::UpdateRef(RE::TESObjectREFR* loc) {
