@@ -354,7 +354,7 @@ void Manager::UpdateRefStop(const Source& src, const StageInstance& wo_inst, Ref
 
 unsigned int Manager::GetNInstances() {
     unsigned int n = 0;
-    for (const auto& [formid, src] : sources) {
+    for (const auto& src : sources | std::views::values) {
         const auto& source = *src;
         for (const auto& loc : source.data | std::views::keys) {
             n += static_cast<unsigned int>(source.data.at(loc).size());
@@ -454,7 +454,7 @@ bool Manager::IsSource(const FormID some_formid) {
 StageInstance* Manager::GetWOStageInstance(const RE::TESObjectREFR* wo_ref) {
     if (sources.empty()) return nullptr;
     const auto wo_refid = wo_ref->GetFormID();
-    for (auto& [formid, src] : sources) {
+    for (auto& src : sources | std::views::values) {
         auto& source = *src;
         if (!source.data.contains(wo_refid)) continue;
         auto& instances = source.data.at(wo_refid);
@@ -619,7 +619,7 @@ std::set<float> Manager::GetUpdateTimes(const RE::TESObjectREFR* inventory_owner
 
     const auto inventory_owner_refid = inventory_owner->GetFormID();
 
-    for (auto& [formid, src] : sources) {
+    for (auto& src : sources | std::views::values) {
         auto& source = *src;
         if (!source.IsHealthy()) {
             logger::error("_UpdateTimeModulators: Source is not healthy.");
@@ -642,7 +642,7 @@ bool Manager::UpdateInventory(RE::TESObjectREFR* ref, const float t) {
     bool update_took_place = false;
     const auto refid = ref->GetFormID();
 
-    for (auto& [formid, src] : sources) {
+    for (auto& src : sources | std::views::values) {
         auto& source = *src;
         if (!source.IsHealthy()) continue;
         if (source.data.empty()) continue;
@@ -661,7 +661,7 @@ bool Manager::UpdateInventory(RE::TESObjectREFR* ref, const float t) {
         }
     }
 
-    for (auto& [formid, src] : sources) {
+    for (const auto& src : sources | std::views::values) {
         src->UpdateTimeModulationInInventory(ref, t);
     }
 
@@ -700,7 +700,7 @@ void Manager::SyncWithInventory(RE::TESObjectREFR* ref) {
     formid_instances_map.reserve(loc_inventory.size());
     total_registry_counts.reserve(loc_inventory.size());
 
-    for (auto& [formid, src] : sources) {
+    for (auto& src : sources | std::views::values) {
         auto& source = *src;
         if (!source.data.contains(loc_refid)) continue;
         for (auto& st_inst : source.data.at(loc_refid)) {
@@ -788,7 +788,7 @@ void Manager::UpdateWO(RE::TESObjectREFR* ref) {
     const auto curr_time = RE::Calendar::GetSingleton()->GetHoursPassed();
     bool not_found = true;
 
-    for (auto& [formid, src] : sources) {
+    for (auto& src : sources | std::views::values) {
         auto& source = *src;
         if (!source.IsHealthy()) continue;
         if (source.data.empty()) continue;
@@ -855,7 +855,7 @@ bool Manager::RefIsUpdatable(const RE::TESObjectREFR* ref) {
 
 bool Manager::DeRegisterRef(const RefID refid) {
     bool found = false;
-    for (auto& [formid, src] : sources) {
+    for (auto& src : sources | std::views::values) {
         auto& source = *src;
         if (auto it = source.data.find(refid); it != source.data.end()) {
             source.data.erase(it);
@@ -883,7 +883,7 @@ bool Manager::RefIsRegistered(const RefID refid) {
         logger::warn("Sources is empty.");
         return false;
     }
-    for (auto& [formid, src] : sources) {
+    for (const auto& src : sources | std::views::values) {
         if (src->data.contains(refid) && !src->data.at(refid).empty()) return true;
     }
     return false;
@@ -983,7 +983,7 @@ void Manager::HandleCraftingEnter(const unsigned int bench_type) {
 
     const auto player_inventory = player_ref->GetInventory();
 
-    for (SRC_SHARED_GUARD; auto& [_, a_source] : sources) {
+    for (SRC_SHARED_GUARD; auto& a_source : sources | std::views::values) {
         auto& src = *a_source;
         if (!src.IsHealthy()) continue;
         if (!src.data.contains(player_refid)) continue;
@@ -1198,7 +1198,7 @@ void Manager::Reset() {
     ClearWOUpdateQueue();
     {
         SRC_UNIQUE_GUARD;
-        for (auto& src : sources | std::views::values) src->Reset();
+        for (const auto& src : sources | std::views::values) src->Reset();
         sources.clear();
         stage_to_source.clear();
     }
@@ -1225,13 +1225,13 @@ void Manager::SendData() {
     Print();
     Clear();
 
-    for (SRC_UNIQUE_GUARD; auto& [_, src] : sources) {
+    for (SRC_UNIQUE_GUARD; auto& src : sources | std::views::values) {
         CleanUpSourceData(src.get());
     }
 
     int n_instances = 0;
     SRC_SHARED_GUARD;
-    for (const auto& [formid, src] : sources) {
+    for (const auto& src : sources | std::views::values) {
         const auto& source = *src;
         if (source.GetStageDuration(0) >= 10000.f) {
             if (source.settings.transformers_order.size() == 0 && source.settings.delayers_order.size() == 0) {
@@ -1460,7 +1460,7 @@ std::vector<Source> Manager::GetSources() {
     SRC_SHARED_GUARD;
     std::vector<Source> sources_copy;
     sources_copy.reserve(sources.size());
-    for (const auto& [formid, src] : sources) {
+    for (const auto& src : sources | std::views::values) {
         sources_copy.push_back(*src);
     }
     return sources_copy;
