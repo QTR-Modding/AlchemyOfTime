@@ -1,5 +1,5 @@
 #include "Hooks.h"
-#include "DrawDebug.hpp"
+#include "CLibUtilsQTR/DrawDebug.hpp"
 #include "Lorebox.h"
 #include "Manager.h"
 #include "Utils.h"
@@ -46,9 +46,9 @@ void Hooks::Install() {
     MenuHook<RE::FavoritesMenu>::InstallHook(RE::FavoritesMenu::VTABLE[0]);
     MenuHook<RE::InventoryMenu>::InstallHook(RE::InventoryMenu::VTABLE[0]);
 
-    #ifndef NDEBUG
+#ifndef NDEBUG
     UpdateHook::Install();
-    #endif
+#endif
 
     MoveItemHooks<RE::PlayerCharacter>::install();
     MoveItemHooks<RE::TESObjectREFR>::install(false);
@@ -65,14 +65,15 @@ void Hooks::Install() {
 
 void Hooks::UpdateHook::Update(RE::Actor* a_this, float a_delta) {
     Update_(a_this, a_delta);
+
+#ifndef NDEBUG
     DebugAPI_IMPL::DebugAPI::GetSingleton()->Update();
+#endif
 }
 
 void Hooks::UpdateHook::Install() {
-    #ifndef NDEBUG
     REL::Relocation<std::uintptr_t> PlayerCharacterVtbl{RE::VTABLE_PlayerCharacter[0]};
     Update_ = PlayerCharacterVtbl.write_vfunc(0xAD, Update);
-    #endif
 }
 
 void Hooks::add_item_functor(RE::TESObjectREFR* a_this, RE::TESObjectREFR* a_object, int32_t a_count, bool a4,
@@ -116,10 +117,11 @@ RE::ObjectRefHandle* Hooks::MoveItemHooks<RefType>::RemoveItem(RefType* a_this,
                             a_drop_loc, a_rotate);
     }
 
-    auto res = remove_item_(a_this, a_hidden_return_argument, a_item, a_count, a_reason, a_extra_list, a_move_to_ref,
+    RE::ObjectRefHandle* res = remove_item_(a_this, a_hidden_return_argument, a_item, a_count, a_reason, a_extra_list,
+                                            a_move_to_ref,
                             a_drop_loc, a_rotate);
 
-    M->Update(a_this, a_move_to_ref ? a_move_to_ref : res->get().get(), a_item, a_count);
+    M->Update(a_this, a_move_to_ref ? a_move_to_ref : res ? res->get().get() : nullptr, a_item, a_count);
 
     return res;
 }

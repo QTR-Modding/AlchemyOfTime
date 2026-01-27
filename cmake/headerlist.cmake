@@ -7,14 +7,10 @@ set(headers ${headers}
 	include/Hooks.h
 	include/MCP.h
 	include/Serialization.h
-	include/Ticker.h
 	include/CustomObjects.h
 	include/DynamicFormTracker.h
 	include/Data.h
 	include/Threading.h
 	include/Logger.h
 	include/Lorebox.h
-	include/BoundingBox.hpp
-	include/DrawDebug.hpp
-	include/Geometry.hpp
 )

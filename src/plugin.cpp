@@ -35,14 +35,13 @@ namespace {
             }
 
             // 3) Initialize Manager
-            const auto sources = std::vector<Source>{};
+            constexpr auto sources = std::vector<Source>{};
             M = Manager::GetSingleton(sources);
             if (!M) return;
 
             // 4) Register event sinks
             const auto eventSink = EventSink::GetSingleton();
             auto* eventSourceHolder = RE::ScriptEventSourceHolder::GetSingleton();
-            eventSourceHolder->AddEventSink<RE::TESEquipEvent>(eventSink);
             eventSourceHolder->AddEventSink<RE::TESActivateEvent>(eventSink);
             eventSourceHolder->AddEventSink<RE::TESFurnitureEvent>(eventSink);
             eventSourceHolder->AddEventSink<RE::TESSleepStopEvent>(eventSink);

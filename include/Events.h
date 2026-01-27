@@ -2,7 +2,6 @@
 #include "REX/REX/Singleton.h"
 
 class EventSink final : public REX::Singleton<EventSink>,
-                        public RE::BSTEventSink<RE::TESEquipEvent>,
                         public RE::BSTEventSink<RE::TESActivateEvent>,
                         public RE::BSTEventSink<SKSE::CrosshairRefEvent>,
                         public RE::BSTEventSink<RE::TESFurnitureEvent>,
@@ -10,17 +9,13 @@ class EventSink final : public REX::Singleton<EventSink>,
                         public RE::BSTEventSink<RE::TESWaitStopEvent>,
                         public RE::BSTEventSink<RE::BGSActorCellEvent>,
                         public RE::BSTEventSink<RE::TESFormDeleteEvent> {
-    std::atomic<bool> listen_cellchange = true;
-
     bool furniture_entered = false;
     RE::NiPointer<RE::TESObjectREFR> furniture = nullptr;
 
     static void HandleWO(RE::TESObjectREFR* ref);
 
 public:
-    void HandleWOsInCell() const;
-
-    RE::BSEventNotifyControl ProcessEvent(const RE::TESEquipEvent* event, RE::BSTEventSource<RE::TESEquipEvent>*) override;
+    static void HandleWOsInCell(const RE::TESObjectCELL* a_cell = nullptr);
 
     RE::BSEventNotifyControl ProcessEvent(const RE::TESActivateEvent* event,
                                           RE::BSTEventSource<RE::TESActivateEvent>*) override;
@@ -31,7 +26,6 @@ public:
 
     RE::BSEventNotifyControl ProcessEvent(const RE::TESFurnitureEvent* event,
                                           RE::BSTEventSource<RE::TESFurnitureEvent>*) override;
-
 
     RE::BSEventNotifyControl ProcessEvent(const RE::TESSleepStopEvent*,
                                           RE::BSTEventSource<RE::TESSleepStopEvent>*) override;

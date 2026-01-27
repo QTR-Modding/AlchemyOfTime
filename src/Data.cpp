@@ -1,8 +1,7 @@
 #include "Data.h"
+#include "CLibUtilsQTR/DrawDebug.hpp"
+#include "CLibUtilsQTR/BoundingBox.hpp"
 #include "MCP.h"
-#ifndef NDEBUG
-#include "BoundingBox.hpp"
-#endif
 
 void Source::Init(const DefaultSettings* defaultsettings) {
     if (!defaultsettings) {
@@ -1129,22 +1128,65 @@ FormID Source::SearchNearbyModulators(const RE::TESObjectREFR* a_obj, const std:
 }
 
 namespace {
+    RE::bhkRigidBody* GetRigidBody(const RE::TESObjectREFR* a_refr) {
+        if (const auto a_3d = a_refr->GetCurrent3D()) {
+            if (const auto a_collobj = a_3d->GetCollisionObject()) {
+                return a_collobj->GetRigidBody();
+            }
+        }
+        return nullptr;
+    }
+
+    bool AreClose(const DirectX::BoundingOrientedBox& obb1_in, const DirectX::BoundingOrientedBox& obb2_in,
+                  const float threshold) {
+        DirectX::BoundingOrientedBox obb1 = obb1_in;
+
+        obb1.Extents.x += threshold;
+        obb1.Extents.y += threshold;
+        obb1.Extents.z += threshold;
+
+        return obb1.Intersects(obb2_in);
+    }
+
     bool SearchModulatorInCell_Sub(const RE::TESObjectREFR* a_origin, const RE::TESObjectREFR* ref,
                                    const float proximity = Settings::proximity_range) {
+        DirectX::BoundingOrientedBox obb1{};
+        DirectX::BoundingOrientedBox obb2{};
+
+        if (const auto a_rigidbody1 = GetRigidBody(a_origin)) {
+            BoundingBox::GetOBB(a_rigidbody1, obb1);
+        } else {
+            BoundingBox::GetOBB(a_origin, obb1);
+        }
+        if (const auto a_rigidbody2 = GetRigidBody(ref)) {
+            BoundingBox::GetOBB(a_rigidbody2, obb2);
+        } else {
+            BoundingBox::GetOBB(ref, obb2);
+        }
+
         #ifndef NDEBUG
         if (UI::draw_debug) {
-            draw_line(WorldObject::GetPosition(ref), WorldObject::GetPosition(RE::PlayerCharacter::GetSingleton()), 3.f,
-                      glm::vec4(0.f, 0.f, 1.f, 1.f));
-            BoundingBox::DrawOBB(ref, allow_havokAABB);
         }
         #endif
 
-        if (!WorldObject::AreClose(a_origin, ref, proximity)) {
+        if (!AreClose(obb1, obb2, proximity)) {
             return false;
         }
 
         #ifndef NDEBUG
-        BoundingBox::DrawOBB(a_origin, allow_havokAABB);
+        if (UI::draw_debug) {
+            DebugAPI_IMPL::DrawDebug::DrawOBB(obb2);
+            DebugAPI_IMPL::DrawDebug::DrawOBB(obb1);
+
+            DebugAPI_IMPL::DrawDebug::draw_line(WorldObject::GetPosition(ref),
+                                                WorldObject::GetPosition(RE::PlayerCharacter::GetSingleton()), 3.f,
+                                                RE::NiColorA(0.f, 0.f, 1.f, 1.f));
+
+            const RE::NiPoint3 c1{obb1.Center.x, obb1.Center.y, obb1.Center.z};
+            const RE::NiPoint3 c2{obb2.Center.x, obb2.Center.y, obb2.Center.z};
+            // yellow debug line between centers
+            DebugAPI_IMPL::DrawDebug::draw_line(c1, c2, 2, RE::NiColorA(1.f, 1.f, 0.f, 1.f));
+        }
         #endif
 
         return true;

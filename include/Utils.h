@@ -36,7 +36,7 @@ void OverrideMGEFFs(RE::BSTArray<RE::Effect*>& effect_array, const std::vector<F
 
 inline bool IsDynamicFormID(const FormID a_formID) { return a_formID >= 0xFF000000; }
 
-void FavoriteItem(RE::TESBoundObject* item, RE::TESObjectREFR* inventory_owner);
+void FavoriteItem(const RE::TESBoundObject* item, RE::TESObjectREFR* inventory_owner);
 
 [[nodiscard]] bool IsFavorited(RE::TESBoundObject* item, RE::TESObjectREFR* inventory_owner);
 
@@ -162,8 +162,6 @@ namespace WorldObject {
     RE::bhkRigidBody* GetRigidBody(const RE::TESObjectREFR* refr);
 
     RE::NiPoint3 GetPosition(const RE::TESObjectREFR* obj);
-
-    bool AreClose(const RE::TESObjectREFR* a_obj1, const RE::TESObjectREFR* a_obj2, float threshold);
 };
 
 namespace Inventory {
@@ -316,4 +314,11 @@ struct FormTraits<RE::TESAmmo> {
         RE::BSTArray<RE::Effect*> effects;
         return effects;
     }
+};
+
+struct ListenGuard {
+    std::atomic_bool& flag;
+    bool prev;
+    explicit ListenGuard(std::atomic_bool& f) : flag(f), prev(f.exchange(false)) {}
+    ~ListenGuard() { flag.store(prev); }
 };

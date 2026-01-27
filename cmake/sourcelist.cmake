@@ -7,7 +7,6 @@ set(sources ${sources}
 	src/Hooks.cpp
 	src/MCP.cpp
 	src/Serialization.cpp
-	src/Ticker.cpp
 	src/CustomObjects.cpp
 	src/Data.cpp
 	src/Lorebox.cpp

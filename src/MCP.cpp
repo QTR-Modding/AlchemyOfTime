@@ -59,9 +59,9 @@ void __stdcall UI::RenderSettings() {
         }
     }
 
-#ifndef NDEBUG
+    #ifndef NDEBUG
     ImGuiMCP::Checkbox("DrawDebug", &draw_debug);
-#endif
+    #endif
 }
 
 void __stdcall UI::RenderStatus() {
@@ -417,7 +417,7 @@ void __stdcall UI::RenderUpdateQ() {
             const auto speed = static_cast<Settings::Ticker::Intervals>(i);
             const auto speed_str = Settings::Ticker::to_string(speed);
             if (ImGuiMCP::Selectable(speed_str.c_str(), Settings::ticker_speed == speed)) {
-                Settings::ticker_speed = speed;
+                Settings::SetCurrentTickInterval(speed);
                 M->UpdateInterval(std::chrono::milliseconds(Settings::Ticker::GetInterval(Settings::ticker_speed)));
                 PresetParse::SaveSettings();
             }

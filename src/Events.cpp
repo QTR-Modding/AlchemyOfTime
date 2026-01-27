@@ -5,49 +5,27 @@
 
 void EventSink::HandleWO(RE::TESObjectREFR* ref) {
     if (!ref) return;
-    //if (ref->extraList.GetOwner() && !ref->extraList.GetOwner()->IsPlayer()) return;
     if (!Settings::IsItem(ref)) return;
-
     if (!Settings::placed_objects_evolve.load() && WorldObject::IsPlacedObject(ref)) return;
 
     M->Update(ref);
 }
 
-void EventSink::HandleWOsInCell() const {
-    logger::trace("HandleWOsInCell: Calling Update.");
-    const auto* player = RE::PlayerCharacter::GetSingleton();
-    //M->Update(player);
-    const auto player_cell = player->GetParentCell();
-    if (!player_cell) return;
-    player_cell->ForEachReference([this](RE::TESObjectREFR* arg) {
-        if (!arg) return RE::BSContainer::ForEachResult::kContinue;
-        if (arg->HasContainer()) return RE::BSContainer::ForEachResult::kContinue;
-        HandleWO(arg);
+void EventSink::HandleWOsInCell(const RE::TESObjectCELL* a_cell) {
+    const auto cell = a_cell ? a_cell : RE::PlayerCharacter::GetSingleton()->GetParentCell();
+    if (!cell) return;
+
+    std::vector<RE::ObjectRefHandle> refs;
+    cell->ForEachReference([&refs](RE::TESObjectREFR* a_obj) {
+        if (!a_obj) return RE::BSContainer::ForEachResult::kContinue;
+        if (a_obj->HasContainer()) return RE::BSContainer::ForEachResult::kContinue;
+        refs.push_back(a_obj->GetHandle());
         return RE::BSContainer::ForEachResult::kContinue;
     });
-}
 
-RE::BSEventNotifyControl EventSink::ProcessEvent(const RE::TESEquipEvent* event,
-                                                 RE::BSTEventSource<RE::TESEquipEvent>*) {
-    if (M->isLoading.load()) return RE::BSEventNotifyControl::kContinue;
-    if (!M->listen_equip.load()) return RE::BSEventNotifyControl::kContinue;
-    if (!event) return RE::BSEventNotifyControl::kContinue;
-    if (!event->actor->IsPlayerRef()) return RE::BSEventNotifyControl::kContinue;
-    if (!Settings::IsItem(event->baseObject)) return RE::BSEventNotifyControl::kContinue;
-    if (!event->equipped) {
-        logger::trace("Item unequipped: {}", event->baseObject);
-        return RE::BSEventNotifyControl::kContinue;
+    for (auto& a_handle : refs) {
+        HandleWO(a_handle.get().get());
     }
-    if (const auto temp_form = RE::TESForm::LookupByID(event->baseObject);
-        temp_form && temp_form->Is(RE::FormType::AlchemyItem)) {
-        logger::trace("Item equipped: Alchemy item.");
-        return RE::BSEventNotifyControl::kContinue;
-    }
-
-    logger::trace("Item equipped: Calling Update.");
-    M->Update(RE::PlayerCharacter::GetSingleton());
-
-    return RE::BSEventNotifyControl::kContinue;
 }
 
 RE::BSEventNotifyControl EventSink::ProcessEvent(const RE::TESActivateEvent* event,
@@ -94,7 +72,7 @@ RE::BSEventNotifyControl EventSink::ProcessEvent(const RE::TESFurnitureEvent* ev
 
     const auto bench = event->targetFurniture->GetBaseObject()->As<RE::TESFurniture>();
     if (!bench) return RE::BSEventNotifyControl::kContinue;
-    auto bench_type = static_cast<std::uint8_t>(bench->workBenchData.benchType.get());
+    const auto bench_type = static_cast<std::uint8_t>(bench->workBenchData.benchType.get());
 
     //if (bench_type != 2 && bench_type != 3 && bench_type != 7) return RE::BSEventNotifyControl::kContinue;
 
@@ -132,27 +110,12 @@ RE::BSEventNotifyControl EventSink::ProcessEvent(const RE::TESWaitStopEvent*,
 RE::BSEventNotifyControl EventSink::ProcessEvent(const RE::BGSActorCellEvent* a_event,
                                                  RE::BSTEventSource<RE::BGSActorCellEvent>*) {
     if (M->isLoading.load()) return RE::BSEventNotifyControl::kContinue;
-    if (!listen_cellchange.load()) return RE::BSEventNotifyControl::kContinue;
-    if (!a_event) return RE::BSEventNotifyControl::kContinue;
-    const auto eventActorHandle = a_event->actor;
-    const auto eventActorPtr = eventActorHandle ? eventActorHandle.get() : nullptr;
-    const auto eventActor = eventActorPtr ? eventActorPtr.get() : nullptr;
-    if (!eventActor) return RE::BSEventNotifyControl::kContinue;
 
-    if (eventActor != RE::PlayerCharacter::GetSingleton()) return RE::BSEventNotifyControl::kContinue;
-
-    const auto cellID = a_event->cellID;
-    auto* cellForm = cellID ? RE::TESForm::LookupByID(cellID) : nullptr;
-    const auto* cell = cellForm ? cellForm->As<RE::TESObjectCELL>() : nullptr;
-    if (!cell) return RE::BSEventNotifyControl::kContinue;
-
-    if (a_event->flags.any(RE::BGSActorCellEvent::CellFlag::kEnter)) {
-        listen_cellchange.store(false);
-        M->ClearWOUpdateQueue();
-        HandleWOsInCell();
-        listen_cellchange.store(true);
+    if (const auto a_cell = RE::TESForm::LookupByID<RE::TESObjectCELL>(a_event->cellID)) {
+        if (a_event->flags.get() == RE::BGSActorCellEvent::CellFlag::kEnter) {
+            HandleWOsInCell(a_cell);
+        }
     }
-
     return RE::BSEventNotifyControl::kContinue;
 }
 

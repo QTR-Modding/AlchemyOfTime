@@ -257,9 +257,6 @@ bool DefaultSettings::IsEmpty() {
 
 // check it
 void DefaultSettings::Add(AddOnSettings& addon) {
-    if (addon.transformers.empty()) {
-        logger::error("Transformers is empty.");
-    }
     // containers
     AddHelper(containers, addon.containers);
 
@@ -377,10 +374,7 @@ RefStop& RefStop::operator=(const RefStop& other) {
     if (this != &other) {
         ref_id = other.ref_id;
         stop_time = other.stop_time;
-        tint_color = other.tint_color;
-        art_object = other.art_object;
-        effect_shader = other.effect_shader;
-        sound = other.sound;
+        features = other.features;
 
         // Manually handle any special cases for members
     }
@@ -444,18 +438,22 @@ bool AddOnSettings::CheckIntegrity() {
     return true;
 }
 
-void RefStop::ApplyTint(RE::NiAVObject* a_obj3d) {
+void RefStop::ApplyTint(const RE::TESObjectREFR* a_obj) {
+    auto& tint_color = features.tint_color;
     if (!tint_color.id) {
-        return RemoveTint(a_obj3d);
+        return RemoveTint();
     }
     if (tint_color.enabled) return;
-    RE::NiColorA color;
-    hexToRGBA(tint_color.id, color);
-    a_obj3d->TintScenegraph(color);
-    tint_color.enabled = true;
+    if (const auto a_3D = a_obj->Get3D()) {
+        RE::NiColorA color;
+        hexToRGBA(tint_color.id, color);
+        a_3D->TintScenegraph(color);
+        tint_color.enabled = true;
+    }
 }
 
 void RefStop::ApplyArtObject(RE::TESObjectREFR* a_ref, const float duration) {
+    auto& art_object = features.art_object;
     if (!art_object.id) return RemoveArtObject();
     if (art_object.enabled) return;
     const auto a_art_obj = RE::TESForm::LookupByID<RE::BGSArtObject>(art_object.id);
@@ -475,6 +473,7 @@ void RefStop::ApplyArtObject(RE::TESObjectREFR* a_ref, const float duration) {
 }
 
 void RefStop::ApplyShader(RE::TESObjectREFR* a_ref, const float duration) {
+    auto& effect_shader = features.effect_shader;
     if (!effect_shader.id) return RemoveShader();
     if (effect_shader.enabled) return;
     const auto eff_shader = RE::TESForm::LookupByID<RE::TESEffectShader>(effect_shader.id);
@@ -488,10 +487,13 @@ void RefStop::ApplyShader(RE::TESObjectREFR* a_ref, const float duration) {
     });
     //shader_ref_eff = a_shader_ref_eff_ptr;
 
+    applied_effect_shaders.insert(effect_shader.id);
+
     effect_shader.enabled = true;
 }
 
 void RefStop::ApplySound(const float volume) {
+    auto& sound = features.sound;
     if (!sound.id) {
         return RemoveSound();
     }
@@ -506,10 +508,14 @@ RE::BSSoundHandle& RefStop::GetSoundHandle() const {
 }
 
 
-void RefStop::RemoveTint(RE::NiAVObject* a_obj3d) {
-    const auto color = RE::NiColorA(0.0f, 0.0f, 0.0f, 0.0f);
-    a_obj3d->TintScenegraph(color);
-    tint_color.enabled = false;
+void RefStop::RemoveTint() {
+    if (const auto a_refr = RE::TESForm::LookupByID<RE::TESObjectREFR>(ref_id)) {
+        if (const auto a_obj3d = a_refr->Get3D()) {
+            const auto color = RE::NiColorA(0.0f, 0.0f, 0.0f, 0.0f);
+            a_obj3d->TintScenegraph(color);
+            features.tint_color.enabled = false;
+        }
+    }
 }
 
 void RefStop::RemoveArtObject() {
@@ -533,7 +539,7 @@ void RefStop::RemoveArtObject() {
     }
     applied_art_objects.clear();
 
-    art_object.enabled = false;
+    features.art_object.enabled = false;
 }
 
 void RefStop::RemoveShader() {
@@ -561,13 +567,13 @@ void RefStop::RemoveShader() {
         }
     }
     applied_effect_shaders.clear();
-    effect_shader.enabled = false;
+    features.effect_shader.enabled = false;
 }
 
 void RefStop::RemoveSound() {
     const auto soundhelper = SoundHelper::GetSingleton();
     soundhelper->Stop(ref_id);
-    sound.enabled = false;
+    features.sound.enabled = false;
 }
 
 bool RefStop::HasArtObject(RE::TESObjectREFR* a_ref, const RE::BGSArtObject* a_art) {
@@ -591,17 +597,22 @@ void RefStop::Update(const RefStop& other) {
         logger::critical("RefID not the same.");
         return;
     }
-    if (tint_color.id != other.tint_color.id) {
-        tint_color.id = other.tint_color.id;
+
+    if (features.tint_color.id != other.features.tint_color.id) {
+        RemoveTint();
+        features.tint_color.id = other.features.tint_color.id;
     }
-    if (art_object.id != other.art_object.id) {
-        art_object.id = other.art_object.id;
+    if (features.art_object.id != other.features.art_object.id) {
+        RemoveArtObject();
+        features.art_object.id = other.features.art_object.id;
     }
-    if (effect_shader.id != other.effect_shader.id) {
-        effect_shader.id = other.effect_shader.id;
+    if (features.effect_shader.id != other.features.effect_shader.id) {
+        RemoveShader();
+        features.effect_shader.id = other.features.effect_shader.id;
     }
-    if (sound.id != other.sound.id) {
-        sound.id = other.sound.id;
+    if (features.sound.id != other.features.sound.id) {
+        RemoveSound();
+        features.sound.id = other.features.sound.id;
     }
     if (fabs(stop_time - other.stop_time) > EPSILON) {
         stop_time = other.stop_time;
@@ -642,7 +653,7 @@ void SoundHelper::Play(const RefID refid, const FormID sound_id, const float vol
     }
     const auto ref_node = ref->Get3D();
     if (!ref_node) {
-        logger::error("Ref has no 3D.");
+        logger::warn("Ref has no 3D.");
         return;
     }
 

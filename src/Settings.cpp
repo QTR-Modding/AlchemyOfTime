@@ -26,6 +26,10 @@ static const std::unordered_map<std::string, QFormChecker> qformCheckers = {
     //{"NPC", [](const auto form) {return FormIsOfType(form, RE::TESNPC::FORMTYPE); } }
 };
 
+void Settings::SetCurrentTickInterval(const Ticker::Intervals interval) {
+    ticker_speed = interval;
+}
+
 bool Settings::IsQFormType(const FormID formid, const std::string& qformtype) {
     const auto* form = FormReader::GetFormByID(formid);
     if (!form) {
@@ -874,7 +878,7 @@ void PresetParse::LoadJSONSettings() {
         logger::error("Speed not found in ticker.");
         return;
     }
-    Settings::ticker_speed = Settings::Ticker::from_string(ticker["speed"].GetString());
+    Settings::SetCurrentTickInterval(Settings::Ticker::from_string(ticker["speed"].GetString()));
 }
 
 void PresetParse::LoadFormGroups() {

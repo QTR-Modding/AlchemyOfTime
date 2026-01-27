@@ -1,12 +1,12 @@
 #pragma once
 #include "Data.h"
-#include "Ticker.h"
+#include "ClibUtilsQTR/Ticker.hpp"
 
 class Manager final : public Ticker, public SaveLoadData {
     RE::TESObjectREFR* player_ref = RE::PlayerCharacter::GetSingleton()->As<RE::TESObjectREFR>();
 
-    std::map<Types::FormFormID, std::pair<int, Count>> handle_crafting_instances;
-    // formid1: source formid, formid2: stage formid
+    // form_id1: source formid, formid2: stage formid, pair: <number of stage form, initial source count>
+    std::map<Types::FormFormID, std::pair<Count, Count>> handle_crafting_instances;
     std::unordered_map<FormID, bool> faves_list;
     std::unordered_map<FormID, bool> equipped_list;
 
@@ -40,7 +40,7 @@ class Manager final : public Ticker, public SaveLoadData {
 
     std::unordered_set<FormID> stages_fast_lookup;
 
-    static void PreDeleteRefStop(RefStop& a_ref_stop, RE::NiAVObject* a_obj);
+    static void PreDeleteRefStop(RefStop& a_ref_stop);
 
     // Ticker thread entry. [locks: queueMutex_]
     void UpdateLoop();
@@ -48,7 +48,7 @@ class Manager final : public Ticker, public SaveLoadData {
     // Enqueue/merge a RefStop. [locks: queueMutex_]
     void QueueWOUpdate(const RefStop& a_refstop);
 
-    static void UpdateRefStop(Source& src, const StageInstance& wo_inst, RefStop& a_ref_stop, float stop_t);
+    static void UpdateRefStop(const Source& src, const StageInstance& wo_inst, RefStop& a_ref_stop, float stop_t);
 
     // [expects: sourceMutex_] (read-only traversal)
     [[nodiscard]] unsigned int GetNInstances();
@@ -192,6 +192,8 @@ public:
     }
 
     bool IsStageItem(FormID a_formid);
+
+    std::vector<RefID> GetRefStops();
 };
 
 inline Manager* M = nullptr;

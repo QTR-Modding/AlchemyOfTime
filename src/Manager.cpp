@@ -2,7 +2,6 @@
 #include "Manager.h"
 #include <unordered_set>
 #include "Data.h"
-#include "Ticker.h"
 #include <shared_mutex>
 #include <cassert>
 #include <thread>
@@ -235,8 +234,8 @@ namespace {
 #define QUE_UNIQUE_GUARD  std::unique_lock  AOT_CONCAT(que_ulock_, __COUNTER__){queueMutex_}
 #endif
 
-void Manager::PreDeleteRefStop(RefStop& a_ref_stop, RE::NiAVObject* a_obj) {
-    if (a_obj) a_ref_stop.RemoveTint(a_obj);
+void Manager::PreDeleteRefStop(RefStop& a_ref_stop) {
+    a_ref_stop.RemoveTint();
     a_ref_stop.RemoveArtObject();
     a_ref_stop.RemoveShader();
     a_ref_stop.RemoveSound();
@@ -244,19 +243,14 @@ void Manager::PreDeleteRefStop(RefStop& a_ref_stop, RE::NiAVObject* a_obj) {
 
 void Manager::UpdateLoop() {
     if (!Settings::world_objects_evolve.load()) {
-        QUE_UNIQUE_GUARD;
-        for (auto& [key,val] : _ref_stops_) {
-            const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(key);
-            PreDeleteRefStop(val, ref ? ref->Get3D() : nullptr);
-        }
-        _ref_stops_.clear();
+        ClearWOUpdateQueue();
     } else if (QUE_UNIQUE_GUARD;
         !queue_delete_.empty() || !Settings::placed_objects_evolve.load()) {
         for (auto it = _ref_stops_.begin(); it != _ref_stops_.end();) {
             if (const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(it->first);
                 queue_delete_.contains(it->first) ||
                 ref && !Settings::placed_objects_evolve.load() && WorldObject::IsPlacedObject(ref)) {
-                PreDeleteRefStop(it->second, ref ? ref->Get3D() : nullptr);
+                PreDeleteRefStop(it->second);
                 it = _ref_stops_.erase(it);
             } else ++it;
         }
@@ -279,24 +273,7 @@ void Manager::UpdateLoop() {
 
     if (const auto ui = RE::UI::GetSingleton(); ui && ui->GameIsPaused()) return;
 
-    std::vector<RefID> ref_stops_copy;
-    {
-        QUE_SHARED_GUARD;
-        ref_stops_copy.reserve(_ref_stops_.size());
-    }
-    for (
-        QUE_SHARED_GUARD;
-        const auto& key : _ref_stops_ | std::views::keys) {
-        ref_stops_copy.push_back(key);
-    }
-
-    // new mechanic: WO can also be affected by time modulators
-    // Update _ref_stops_ with the new times
-    for (const auto& key : ref_stops_copy) {
-        if (const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(key)) {
-            Update(ref);
-        }
-    }
+    const auto ref_stops_copy = GetRefStops();
 
     if (const auto cal = RE::Calendar::GetSingleton()) {
         // make copy with only stops
@@ -312,26 +289,29 @@ void Manager::UpdateLoop() {
             if (auto& val = it->second; val.IsDue(curr_time)) {
                 ref_stops_due.push_back(key);
             } else if (const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(key)) {
-                if (const auto obj3d = ref->Get3D()) {
-                    val.ApplyTint(obj3d);
-                }
+                val.ApplyTint(ref);
                 val.ApplyArtObject(ref);
                 val.ApplyShader(ref);
                 val.ApplySound();
             }
         }
 
-        for (const auto refid : ref_stops_due) {
-            if (const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(refid)) {
-                QUE_UNIQUE_GUARD;
-                if (auto it = _ref_stops_.find(refid); it != _ref_stops_.end()) {
-                    auto& val = it->second;
-                    PreDeleteRefStop(val, ref->Get3D());
-                    _ref_stops_.erase(it);
-                }
+        for (QUE_UNIQUE_GUARD; const auto refid : ref_stops_due) {
+            if (auto it = _ref_stops_.find(refid); it != _ref_stops_.end()) {
+                auto& val = it->second;
+                PreDeleteRefStop(val);
+                _ref_stops_.erase(it);
             }
         }
     }
+
+    SKSE::GetTaskInterface()->AddTask([ref_stops_copy = std::move(ref_stops_copy)]() {
+        for (const auto key : ref_stops_copy) {
+            if (const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(key)) {
+                M->Update(ref);
+            }
+        }
+    });
 }
 
 void Manager::QueueWOUpdate(const RefStop& a_refstop) {
@@ -344,41 +324,29 @@ void Manager::QueueWOUpdate(const RefStop& a_refstop) {
     Start();
 }
 
-void Manager::UpdateRefStop(Source& src, const StageInstance& wo_inst, RefStop& a_ref_stop, const float stop_t) {
-    const auto wo_inst_delayer = wo_inst.GetDelayerFormID();
-    const bool trnsfrm = src.settings.transformers.contains(wo_inst_delayer);
-    const bool mdlt = !trnsfrm ? src.settings.delayers.contains(wo_inst_delayer) : false;
+void Manager::UpdateRefStop(const Source& src, const StageInstance& wo_inst, RefStop& a_ref_stop, const float stop_t) {
+    const auto delayer = wo_inst.GetDelayerFormID();
+    const bool is_transformer = src.settings.transformers.contains(delayer);
+    const bool is_delayer = !is_transformer && src.settings.delayers.contains(delayer);
 
-    // color
-    const auto color = trnsfrm
-                           ? src.settings.transformer_colors[wo_inst_delayer]
-                           : mdlt
-                           ? src.settings.delayer_colors[wo_inst_delayer]
-                           : src.settings.colors[wo_inst.no];
-    a_ref_stop.tint_color.id = color;
-    // art object
-    const auto art_object = trnsfrm
-                                ? src.settings.transformer_artobjects[wo_inst_delayer]
-                                : mdlt
-                                ? src.settings.delayer_artobjects[wo_inst_delayer]
-                                : src.settings.artobjects[wo_inst.no];
-    a_ref_stop.art_object.id = art_object;
+    const auto pick = [&](const auto& transformer_map, const auto& delayer_map, const auto& stage_map) {
+        if (is_transformer) {
+            return transformer_map.at(delayer);
+        }
+        if (is_delayer) {
+            return delayer_map.at(delayer);
+        }
+        return stage_map.at(wo_inst.no);
+    };
 
-    // effect shader
-    const auto effect_shader = trnsfrm
-                                   ? src.settings.transformer_effect_shaders[wo_inst_delayer]
-                                   : mdlt
-                                   ? src.settings.delayer_effect_shaders[wo_inst_delayer]
-                                   : src.settings.effect_shaders[wo_inst.no];
-    a_ref_stop.effect_shader.id = effect_shader;
-
-    // sound
-    const auto sound = trnsfrm
-                           ? src.settings.transformer_sounds[wo_inst_delayer]
-                           : mdlt
-                           ? src.settings.delayer_sounds[wo_inst_delayer]
-                           : src.settings.sounds[wo_inst.no];
-    a_ref_stop.sound.id = sound;
+    a_ref_stop.features.tint_color.id =
+        pick(src.settings.transformer_colors, src.settings.delayer_colors, src.settings.colors);
+    a_ref_stop.features.art_object.id =
+        pick(src.settings.transformer_artobjects, src.settings.delayer_artobjects, src.settings.artobjects);
+    a_ref_stop.features.effect_shader.id =
+        pick(src.settings.transformer_effect_shaders, src.settings.delayer_effect_shaders, src.settings.effect_shaders);
+    a_ref_stop.features.sound.id =
+        pick(src.settings.transformer_sounds, src.settings.delayer_sounds, src.settings.sounds);
 
     a_ref_stop.stop_time = stop_t;
 }
@@ -668,8 +636,7 @@ bool Manager::UpdateInventory(RE::TESObjectREFR* ref, const float t) {
 }
 
 void Manager::UpdateInventory(RE::TESObjectREFR* ref) {
-    listen_container_change.store(false);
-
+    ListenGuard lg(listen_container_change);
     SyncWithInventory(ref);
 
     // if there are time modulators which can also evolve, they need to be updated first
@@ -685,8 +652,6 @@ void Manager::UpdateInventory(RE::TESObjectREFR* ref) {
     }
 
     UpdateInventory(ref, curr_time);
-
-    listen_container_change.store(true);
 }
 
 void Manager::SyncWithInventory(RE::TESObjectREFR* ref) {
@@ -869,12 +834,15 @@ bool Manager::DeRegisterRef(const RefID refid) {
 
 void Manager::ClearWOUpdateQueue() {
     QUE_UNIQUE_GUARD;
+    for (auto& val : _ref_stops_ | std::views::values) {
+        PreDeleteRefStop(val);
+    }
     _ref_stops_.clear();
 }
 
 bool Manager::RefIsRegistered(const RefID refid) {
     if (!refid) {
-        logger::warn("Refid is null.");
+        logger::warn("RefID is null.");
         return false;
     }
     SRC_SHARED_GUARD;
@@ -974,13 +942,12 @@ void Manager::HandleCraftingEnter(const unsigned int bench_type) {
     }
 
     Update(player_ref);
-    listen_container_change.store(false);
+    ListenGuard lg(listen_container_change);
 
     const auto& q_form_types = Settings::qform_bench_map.at(bench_type);
 
     // trusting that the player will leave the crafting menu at some point and everything will be reverted
 
-    std::map<FormID, int> to_remove;
     const auto player_inventory = player_ref->GetInventory();
 
     for (SRC_SHARED_GUARD; auto& src : sources) {
@@ -1010,55 +977,72 @@ void Manager::HandleCraftingEnter(const unsigned int bench_type) {
                 handle_crafting_instances.at(temp).first += st_inst.count;
             }
 
-            if (!faves_list.contains(stage_formid)) {
+            if (auto it = faves_list.find(stage_formid); it == faves_list.end()) {
                 faves_list[stage_formid] = IsFavorited(stage_formid, player_refid);
-            } else if (!faves_list.at(stage_formid)) {
-                faves_list.at(stage_formid) = IsFavorited(stage_formid, player_refid);
+            } else if (!it->second) {
+                it->second = IsFavorited(stage_formid, player_refid);
             }
 
-            if (!equipped_list.contains(stage_formid)) {
+            if (auto it = equipped_list.find(stage_formid); it == equipped_list.end()) {
                 equipped_list[stage_formid] = IsEquipped(stage_formid);
-            } else if (!equipped_list.at(stage_formid)) {
-                equipped_list.at(stage_formid) = IsEquipped(stage_formid);
+            } else if (!it->second) {
+                it->second = IsEquipped(stage_formid);
             }
         }
     }
 
     for (const auto& [formids, counts] : handle_crafting_instances) {
-        if (formids.form_id1 == formids.form_id2) continue;
-        RemoveItem(player_ref, formids.form_id2, counts.first);
-        AddItem(player_ref, nullptr, formids.form_id1, counts.first);
+        const auto& [src_formid, st_formid] = formids;
+        const auto& [count_st, count_src] = counts;
+        if (src_formid == st_formid) continue;
+        const auto st_bound = RE::TESForm::LookupByID<RE::TESBoundObject>(st_formid);
+        player_ref->RemoveItem(st_bound, count_st, RE::ITEM_REMOVE_REASON::kRemove, nullptr, nullptr);
+        const auto source_bound = RE::TESForm::LookupByID<RE::TESBoundObject>(src_formid);
+        player_ref->AddObjectToContainer(source_bound, nullptr, count_st, nullptr);
     }
-
-    listen_container_change.store(true);
 }
 
 void Manager::HandleCraftingExit() {
     if (handle_crafting_instances.empty()) {
-        logger::info("HandleCraftingExit: No instances found.");
         faves_list.clear();
         equipped_list.clear();
         return;
     }
 
-    listen_container_change.store(false);
+    {
+        ListenGuard lg(listen_container_change);
 
-    // need to figure out how many items were used up in crafting and how many were left
-    const auto player_inventory = player_ref->GetInventory();
-    for (auto& [formids, counts] : handle_crafting_instances) {
-        if (formids.form_id1 == formids.form_id2) continue;
+        // need to figure out how many items were used up in crafting and how many were left
+        const auto player_inventory = player_ref->GetInventory();
+        std::unordered_map<FormID, Count> actual_counts;
+        for (auto& [formids, counts] : handle_crafting_instances) {
+            const auto& [src_formid, st_formid] = formids;
+            const auto& [st_count, src_count] = counts;
+            if (src_formid == st_formid) continue;
 
-        const auto it_src = player_inventory.find(FormReader::GetFormByID<RE::TESBoundObject>(formids.form_id1));
-        const auto actual_count_src = it_src != player_inventory.end() ? it_src->second.first : 0;
-
-        if (const auto to_be_taken_back = actual_count_src - counts.second; to_be_taken_back > 0) {
-            RemoveItem(player_ref, formids.form_id1, to_be_taken_back);
-            AddItem(player_ref, nullptr, formids.form_id2, to_be_taken_back);
-            if (faves_list[formids.form_id2]) {
-                FavoriteItem(formids.form_id2, player_refid);
+            Count actual_count_src;
+            {
+                if (const auto it = actual_counts.find(src_formid); it != actual_counts.end()) {
+                    actual_count_src = it->second;
+                } else {
+                    const auto it_inv = player_inventory.find(FormReader::GetFormByID<RE::TESBoundObject>(src_formid));
+                    actual_count_src = it_inv != player_inventory.end() ? it_inv->second.first : 0;
+                    actual_counts[src_formid] = actual_count_src;
+                }
             }
-            if (equipped_list[formids.form_id2]) {
-                EquipItem(formids.form_id2, false);
+
+            if (const auto revert = std::min(st_count, actual_count_src); revert > 0) {
+                const auto src_bound = RE::TESForm::LookupByID<RE::TESBoundObject>(src_formid);
+                player_ref->RemoveItem(src_bound, revert, RE::ITEM_REMOVE_REASON::kRemove, nullptr, nullptr);
+                const auto st_bound = RE::TESForm::LookupByID<RE::TESBoundObject>(st_formid);
+                player_ref->AddObjectToContainer(st_bound, nullptr, revert, nullptr);
+                if (auto it = faves_list.find(st_formid); it != faves_list.end() && it->second) {
+                    FavoriteItem(st_formid, player_refid);
+                }
+                if (auto it = equipped_list.find(st_formid); it != equipped_list.end() && it->second) {
+                    EquipItem(st_formid, false);
+                }
+                actual_counts.at(src_formid) -= revert;
             }
         }
     }
@@ -1066,8 +1050,6 @@ void Manager::HandleCraftingExit() {
     handle_crafting_instances.clear();
     faves_list.clear();
     equipped_list.clear();
-
-    listen_container_change.store(true);
 
     Update(player_ref);
 }
@@ -1242,6 +1224,7 @@ void Manager::SendData() {
 
 void Manager::HandleLoc(RE::TESObjectREFR* loc_ref) {
     SRC_UNIQUE_GUARD;
+    ListenGuard lg(listen_container_change);
 
     if (!loc_ref) {
         logger::error("Loc ref is null.");
@@ -1403,9 +1386,10 @@ void Manager::ReceiveData() {
         }
     }
 
-    listen_container_change.store(false);
-    DFT->DeleteInactives();
-    listen_container_change.store(true);
+    {
+        ListenGuard lg(listen_container_change);
+        DFT->DeleteInactives();
+    }
     if (DFT->GetNDeleted() > 0) {
         logger::warn("ReceiveData: Deleted forms exist. User is required to restart.");
         MsgBoxesNotifs::InGame::CustomMsg(
@@ -1492,4 +1476,16 @@ bool Manager::IsStageItem(const FormID a_formid) {
     }
 
     return false;
+}
+
+std::vector<RefID> Manager::GetRefStops() {
+    std::vector<RefID> ref_stops_copy;
+    {
+        QUE_SHARED_GUARD;
+        ref_stops_copy.reserve(_ref_stops_.size());
+    }
+    for (QUE_SHARED_GUARD; const auto& key : _ref_stops_ | std::views::keys) {
+        ref_stops_copy.push_back(key);
+    }
+    return ref_stops_copy;
 }
