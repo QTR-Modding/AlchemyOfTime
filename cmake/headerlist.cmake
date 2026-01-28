@@ -13,4 +13,5 @@ set(headers ${headers}
 	include/Threading.h
 	include/Logger.h
 	include/Lorebox.h
+	include/CellScan.h
 )

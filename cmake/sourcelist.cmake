@@ -10,4 +10,5 @@ set(sources ${sources}
 	src/CustomObjects.cpp
 	src/Data.cpp
 	src/Lorebox.cpp
+	src/CellScan.cpp
 )
