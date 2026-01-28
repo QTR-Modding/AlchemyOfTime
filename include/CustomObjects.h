@@ -280,11 +280,12 @@ struct RefStopFeatures {
     RefStopFeature effect_shader;
     RefStopFeature sound;
     RefStopFeatures() = default;
+
     RefStopFeatures(const uint32_t a_tint_id, const uint32_t a_art_id,
                     const uint32_t a_effshd_id,
                     const uint32_t a_sound_id)
-        : tint_color(a_tint_id), art_object(a_art_id), effect_shader(a_effshd_id), sound(a_sound_id) {}
-
+        : tint_color(a_tint_id), art_object(a_art_id), effect_shader(a_effshd_id), sound(a_sound_id) {
+    }
 };
 
 struct RefStop {
@@ -297,6 +298,7 @@ struct RefStop {
     RefStop& operator=(const RefStop& other);
 
     RefID ref_id = 0;
+    FormID source_formid = 0;
     float stop_time = 0;
     RefStopFeatures features;
 

@@ -282,7 +282,7 @@ void Manager::UpdateLoop() {
         ref_stops_due.reserve(ref_stops_copy.size());
         for (
             QUE_SHARED_GUARD;
-            const auto& key : ref_stops_copy) {
+            const auto& key : ref_stops_copy | std::views::keys) {
             auto it = _ref_stops_.find(key);
             if (it == _ref_stops_.end()) continue;
 
@@ -306,10 +306,8 @@ void Manager::UpdateLoop() {
     }
 
     SKSE::GetTaskInterface()->AddTask([ref_stops_copy = std::move(ref_stops_copy)]() {
-        for (const auto key : ref_stops_copy) {
-            if (const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(key)) {
-                M->Update(ref);
-            }
+        for (const auto& [refid, hinted_src] : ref_stops_copy) {
+            M->UpdateQueuedWO(refid, hinted_src);
         }
     });
 }
@@ -357,6 +355,7 @@ void Manager::UpdateRefStop(const Source& src, const StageInstance& wo_inst, Ref
     a_ref_stop.features.sound.id =
         pick(src.settings.transformer_sounds, src.settings.delayer_sounds, src.settings.sounds);
 
+    a_ref_stop.source_formid = src.formid;
     a_ref_stop.stop_time = stop_t;
 }
 
@@ -404,6 +403,8 @@ void Manager::CleanUpSourceData(Source* src) {
 }
 
 Source* Manager::GetSource(const FormID some_formid) {
+    if (do_not_register.contains(some_formid)) return nullptr;
+
     if (const auto it = sources.find(some_formid); it != sources.end()) {
         return it->second.get();
     }
@@ -435,10 +436,10 @@ Source* Manager::ForceGetSource(const FormID some_formid) {
         return nullptr;
     }
 
-    if (const auto* customSetting = Settings::GetCustomSetting(some_form)) {
+    if (const auto customSetting = Settings::GetCustomSetting(some_form)) {
         return MakeSource(some_formid, customSetting);
     }
-    if (const auto* defaultSetting = Settings::GetDefaultSetting(some_formid)) {
+    if (const auto defaultSetting = Settings::GetDefaultSetting(some_formid)) {
         if (defaultSetting->durations.at(0) < Settings::critical_stage_dur || Settings::GetAddOnSettings(some_form)) {
             return MakeSource(some_formid, defaultSetting);
         }
@@ -580,7 +581,7 @@ inline void Manager::RemoveItem(RE::TESObjectREFR* moveFrom, const FormID item_i
             logger::warn("Item count is less than the count to remove.");
         }
 
-        auto* bound = item->first;
+        const auto bound = item->first;
         moveFrom->RemoveItem(bound, count, RE::ITEM_REMOVE_REASON::kRemove, nullptr, nullptr);
     }
 }
@@ -605,7 +606,7 @@ void Manager::AddItem(RE::TESObjectREFR* addTo, RE::TESObjectREFR* addFrom, cons
         }
     }
 
-    if (auto* bound = RE::TESForm::LookupByID<RE::TESBoundObject>(item_id)) {
+    if (const auto bound = RE::TESForm::LookupByID<RE::TESBoundObject>(item_id)) {
         addTo->AddObjectToContainer(bound, nullptr, count, addFrom);
     } else logger::critical("Bound is null.");
 }
@@ -728,7 +729,7 @@ void Manager::SyncWithInventory(RE::TESObjectREFR* ref) {
         for (const auto& [bound, entry] : loc_inventory) {
             if (bound->IsDynamicForm()) {
                 const auto a_formID = bound->GetFormID();
-                auto* name = bound->GetName();
+                const auto name = bound->GetName();
                 const auto nameLen = name != nullptr ? std::strlen(name) : 0;
                 if (nameLen == 0) {
                     RemoveItem(ref, a_formID, std::max(1, entry.first));
@@ -753,7 +754,7 @@ void Manager::SyncWithInventory(RE::TESObjectREFR* ref) {
             if (auto diff = total_registry_count - inventory_count; diff < 0) {
                 Register(formid, -diff, loc_refid, current_time);
             } else if (diff > 0) {
-                for (auto* instance : formid_instances_map.at(formid)) {
+                for (const auto instance : formid_instances_map.at(formid)) {
                     if (instance->xtra.is_fake && needHandling) {
                         AddItem(ref, nullptr, formid, diff);
                         break;
@@ -771,7 +772,7 @@ void Manager::SyncWithInventory(RE::TESObjectREFR* ref) {
     }
 
     for (const auto& [formid,instances] : formid_instances_map) {
-        for (auto* instance : instances) {
+        for (const auto instance : instances) {
             if (instance->xtra.is_fake && needHandling) {
                 AddItem(ref, nullptr, formid, instance->count);
             } else {
@@ -781,6 +782,111 @@ void Manager::SyncWithInventory(RE::TESObjectREFR* ref) {
     }
 
     locs_to_be_handled.erase(loc_refid);
+}
+
+
+void Manager::UpdateQueuedWO(const RefID refid, const FormID hinted_source_formid) {
+    // Called from UpdateLoop task.
+    SRC_UNIQUE_GUARD;
+
+    auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(refid);
+    if (!ref) {
+        QUE_UNIQUE_GUARD;
+        queue_delete_.insert(refid);
+        return;
+    }
+
+    HandleDynamicWO(ref);
+
+    if (!RefIsUpdatable(ref)) {
+        DeRegisterRef(refid);
+        QUE_UNIQUE_GUARD;
+        queue_delete_.insert(refid);
+        return;
+    }
+
+    const auto base = ref->GetObjectReference();
+    const FormID base_id = base ? base->GetFormID() : 0;
+    const auto curr_time = RE::Calendar::GetSingleton()->GetHoursPassed();
+
+    Source* source = nullptr;
+    StageInstance* the_inst = nullptr;
+    bool saw_candidate_source = false;
+
+    for (const FormID a_formid : {hinted_source_formid, base_id}) {
+        if (!a_formid) {
+            continue;
+        }
+
+        auto cand = GetSource(a_formid);
+        if (!cand || !cand->IsHealthy()) {
+            continue;
+        }
+        auto is_stage_item = cand->IsStage(base_id);
+
+        saw_candidate_source |= is_stage_item;
+
+        auto it = cand->data.find(refid);
+        if (!is_stage_item || it == cand->data.end() || it->second.empty() || it->second.front().count <= 0) {
+            if (it != cand->data.end()) {
+                cand->data.erase(it);
+            }
+            continue;
+        }
+
+        source = cand;
+        the_inst = &it->second.front();
+        break;
+    }
+
+    if (!the_inst) {
+        if (saw_candidate_source) {
+            Register(base_id, ref->extraList.GetCount(), refid, curr_time);
+            return;
+        }
+
+        DeRegisterRef(refid);
+        QUE_UNIQUE_GUARD;
+        queue_delete_.insert(refid);
+        return;
+    }
+
+    if (const auto updated_stages = source->UpdateAllStages({refid}, curr_time);
+        updated_stages.contains(refid)) {
+        if (updated_stages.size() > 1) {
+            logger::error("UpdateQueuedWO: Multiple updates for the same ref.");
+        }
+        const auto& update = updated_stages.at(refid).front();
+        const auto src_bound = source->IsFakeStage(update.newstage->no) ? source->GetBoundObject() : nullptr;
+        ApplyStageInWorld(ref, *update.newstage, src_bound);
+        if (source->IsDecayedItem(update.newstage->formid)) {
+            Register(update.newstage->formid, update.count, refid, update.update_time);
+        }
+    }
+
+    auto it = source->data.find(refid);
+    if (it == source->data.end() || it->second.empty()) {
+        Register(ref->GetBaseObject()->GetFormID(), ref->extraList.GetCount(), refid, curr_time);
+        return;
+    }
+
+    auto& wo_inst = it->second.front();
+    if (wo_inst.count <= 0) {
+        source->data.erase(it);
+        Register(ref->GetBaseObject()->GetFormID(), ref->extraList.GetCount(), refid, curr_time);
+        return;
+    }
+
+    if (wo_inst.xtra.is_fake) {
+        ApplyStageInWorld(ref, source->GetStage(wo_inst.no), source->GetBoundObject());
+    }
+
+    source->UpdateTimeModulationInWorld(ref, wo_inst, curr_time);
+    if (const auto next_update = source->GetNextUpdateTime(&wo_inst); next_update > curr_time) {
+        RefStop a_ref_stop(refid);
+        UpdateRefStop(*source, wo_inst, a_ref_stop, next_update);
+        QueueWOUpdate(a_ref_stop);
+    }
 }
 
 void Manager::UpdateWO(RE::TESObjectREFR* ref) {
@@ -863,9 +969,10 @@ bool Manager::RefIsUpdatable(const RE::TESObjectREFR* ref) {
     if (!Settings::world_objects_evolve.load()) return false;
     if (ref->IsDeleted() || ref->IsDisabled() || ref->IsMarkedForDeletion()) return false;
     if (ref->IsActivationBlocked()) return false;
-    if (!Settings::unowned_objects_evolve.load() && RE::PlayerCharacter::GetSingleton()->WouldBeStealing(ref))
-        return
-            false;
+    if (!Settings::unowned_objects_evolve.load() && RE::PlayerCharacter::GetSingleton()->WouldBeStealing(ref)) {
+        return false;
+    }
+    if (!ref->GetObjectReference()) return false;
     return true;
 }
 
@@ -964,7 +1071,7 @@ void Manager::Register(const FormID some_formid, const Count count, const RefID 
             logger::error("Register: InsertNewInstance failed 1.");
         }
     } else {
-        if (const auto* inserted_instance = src->InitInsertInstanceWO(stage_no, count, location_refid, register_time); !
+        if (const auto inserted_instance = src->InitInsertInstanceWO(stage_no, count, location_refid, register_time); !
             inserted_instance) {
             logger::error("Register: InsertNewInstance failed 2.");
         } else {
@@ -1197,7 +1304,7 @@ void Manager::SwapWithStage(RE::TESObjectREFR* wo_ref) {
     RE::TESBoundObject* toSwap;
     {
         SRC_SHARED_GUARD;
-        if (const auto* st_inst = GetWOStageInstance(wo_ref)) {
+        if (const auto st_inst = GetWOStageInstance(wo_ref)) {
             toSwap = st_inst->GetBound();
         } else {
             logger::warn("SwapWithStage: Source not found.");
@@ -1329,7 +1436,7 @@ StageInstance* Manager::RegisterAtReceiveData(const FormID source_formid, const 
 
     // make new registry
 
-    auto* src = ForceGetSource(source_formid);
+    const auto src = ForceGetSource(source_formid);
     if (!src) {
         logger::warn("Source could not be obtained for formid {:x}.", source_formid);
         return nullptr;
@@ -1385,7 +1492,7 @@ void Manager::ReceiveData() {
 
     // I need to deal with the fake forms from last session
     // trying to make sure that the fake forms in bank will be used when needed
-    auto* DFT = DynamicFormTracker::GetSingleton();
+    const auto DFT = DynamicFormTracker::GetSingleton();
     for (const auto source_forms = DFT->GetSourceForms(); const auto& [source_formid, source_editorid] : source_forms) {
         if (IsSource(source_formid)) {
             for (const auto dynamic_formid : DFT->GetFormSet(source_formid, source_editorid)) {
@@ -1428,7 +1535,7 @@ void Manager::ReceiveData() {
         SRC_UNIQUE_GUARD;
         for (const auto& st_plain : rhs) {
             if (st_plain.is_fake) locs_to_be_handled[loc].push_back(st_plain.form_id);
-            if (const auto* inserted_instance = RegisterAtReceiveData(source_formid, loc, st_plain);
+            if (const auto inserted_instance = RegisterAtReceiveData(source_formid, loc, st_plain);
                 !inserted_instance) {
                 logger::warn("ReceiveData: could not insert instance: formid: {:x}, loc: {:x}", source_formid, loc);
                 continue;
@@ -1497,7 +1604,7 @@ void Manager::HandleDynamicWO(RE::TESObjectREFR* ref) {
 
     if (const auto bound = ref->GetObjectReference()) {
         if (!bound->IsDynamicForm()) return;
-        const auto* src = GetSource(bound->GetFormID());
+        const auto src = GetSource(bound->GetFormID());
         if (!src) return;
         WorldObject::SwapObjects(ref, src->GetBoundObject(), false);
     }
@@ -1507,11 +1614,11 @@ void Manager::HandleWOBaseChange(RE::TESObjectREFR* ref) {
     if (!ref) return;
     if (const auto bound = ref->GetObjectReference()) {
         if (bound->IsDynamicForm()) return HandleDynamicWO(ref);
-        const auto* src = GetSource(bound->GetFormID());
+        const auto src = GetSource(bound->GetFormID());
         if (!src || !src->IsHealthy()) return;
-        auto* st_inst = GetWOStageInstance(ref);
+        const auto st_inst = GetWOStageInstance(ref);
         if (!st_inst || st_inst->count <= 0) return;
-        if (const auto* bound_expected = src->IsFakeStage(st_inst->no) ? src->GetBoundObject() : st_inst->GetBound();
+        if (const auto bound_expected = src->IsFakeStage(st_inst->no) ? src->GetBoundObject() : st_inst->GetBound();
             bound_expected->GetFormID() != bound->GetFormID()) {
             st_inst->count = 0;
         }
@@ -1523,14 +1630,12 @@ bool Manager::IsStageItem(const FormID a_formid) {
     return GetSource(a_formid) != nullptr;
 }
 
-std::vector<RefID> Manager::GetRefStops() {
-    std::vector<RefID> ref_stops_copy;
-    {
-        QUE_SHARED_GUARD;
-        ref_stops_copy.reserve(_ref_stops_.size());
-    }
-    for (QUE_SHARED_GUARD; const auto& key : _ref_stops_ | std::views::keys) {
-        ref_stops_copy.push_back(key);
+std::vector<std::pair<RefID, FormID>> Manager::GetRefStops() {
+    std::vector<std::pair<RefID, FormID>> ref_stops_copy;
+    QUE_SHARED_GUARD;
+    ref_stops_copy.reserve(_ref_stops_.size());
+    for (const auto& [refid, rs] : _ref_stops_) {
+        ref_stops_copy.emplace_back(refid, rs.source_formid);
     }
     return ref_stops_copy;
 }

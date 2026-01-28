@@ -96,6 +96,8 @@ class Manager final : public Ticker, public SaveLoadData {
     // [expects: sourceMutex_] (unique)
     void UpdateInventory(RE::TESObjectREFR* ref);
 
+    void UpdateQueuedWO(RefID refid, FormID hinted_source_formid);
+
     // [expects: sourceMutex_] (unique)
     void UpdateWO(RE::TESObjectREFR* ref);
     // [expects: sourceMutex_] (unique)
@@ -201,7 +203,7 @@ public:
 
     bool IsStageItem(FormID a_formid);
 
-    std::vector<RefID> GetRefStops();
+    std::vector<std::pair<RefID, FormID>> GetRefStops();
 };
 
 inline Manager* M = nullptr;
