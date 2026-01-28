@@ -854,6 +854,13 @@ void Manager::UpdateQueuedWO(const RefID refid, const FormID hinted_source_formi
         return;
     }
 
+    const auto expected = source->IsFakeStage(the_inst->no) ? source->GetBoundObject() : the_inst->GetBound();
+    if (expected && expected->GetFormID() != base_id) {
+        source->data.erase(refid);
+        Register(base_id, ref->extraList.GetCount(), refid, curr_time);
+        return;
+    }
+
     if (const auto updated_stages = source->UpdateAllStages({refid}, curr_time);
         updated_stages.contains(refid)) {
         if (updated_stages.size() > 1) {
