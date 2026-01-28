@@ -2,6 +2,7 @@
 #include "CLibUtilsQTR/DrawDebug.hpp"
 #include "CLibUtilsQTR/BoundingBox.hpp"
 #include "MCP.h"
+#include "Manager.h"
 
 void Source::Init(const DefaultSettings* defaultsettings) {
     if (!defaultsettings) {
@@ -138,12 +139,12 @@ std::unordered_map<RefID, std::vector<StageUpdate>> Source::UpdateAllStages(
         return updated_instances;
     }
 
-    for (auto& reffid : filter) {
-        if (!data.contains(reffid)) {
-            logger::warn("Refid {} not found in data.", reffid);
+    for (auto& a_refID : filter) {
+        if (!data.contains(a_refID)) {
+            logger::warn("RefID {} not found in data.", a_refID);
             continue;
         }
-        for (auto& instances = data.at(reffid); auto& instance : instances) {
+        for (auto& instances = data.at(a_refID); auto& instance : instances) {
             const Stage* old_stage = IsStageNo(instance.no) ? &GetStage(instance.no) : nullptr;
             if (UpdateStageInstance(instance, time)) {
                 const Stage* new_stage = nullptr;
@@ -161,8 +162,8 @@ std::unordered_map<RefID, std::vector<StageUpdate>> Source::UpdateAllStages(
                     new_stage = &decayed_stage;
                 }
                 auto is_fake_ = IsFakeStage(instance.no);
-                updated_instances[reffid].emplace_back(old_stage, new_stage ? new_stage : &GetStage(instance.no),
-                                                       instance.count, instance.start_time, is_fake_);
+                updated_instances[a_refID].emplace_back(old_stage, new_stage ? new_stage : &GetStage(instance.no),
+                                                        instance.count, instance.start_time, is_fake_);
             }
         }
     }
@@ -901,7 +902,7 @@ bool Source::CheckIntegrity() {
     }
 
     if (!GetBoundObject()) {
-        logger::error("Formid {} does not exist.", formid);
+        logger::error("FormID {} does not exist.", formid);
         return false;
     }
 
@@ -999,7 +1000,7 @@ void Source::RegisterStage(const FormID stage_formid, const StageNo stage_no) {
     }
     if (stage_formid == formid && stage_no != 0) {
         // not allowed. if you want to go back to beginning use decayed stage
-        logger::error("Formid of non initial stage is equal to source formid.");
+        logger::error("FormID of non initial stage is equal to source FormID.");
         return;
     }
 
@@ -1025,6 +1026,10 @@ void Source::RegisterStage(const FormID stage_formid, const StageNo stage_no) {
         return;
     }
 
+    if (M) {
+        M->IndexStage(stage_formid, this);
+    }
+
     Lorebox::AddKeyword(stage_form->As<RE::BGSKeywordForm>(), stage_formid);
 }
 
@@ -1034,7 +1039,7 @@ FormID Source::FetchFake(const StageNo st_no) {
         return 0;
     }
     if (editorid.empty()) {
-        logger::error("Editorid is empty.");
+        logger::error("EditorID is empty.");
         return 0;
     }
     if (!std::ranges::contains(Settings::fakes_allowedQFORMS, qFormType)) {
