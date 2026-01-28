@@ -897,6 +897,8 @@ void Manager::UpdateQueuedWO(const RefID refid, const FormID hinted_source_formi
         UpdateRefStop(*source, wo_inst, a_ref_stop, next_update);
         QueueWOUpdate(a_ref_stop);
     }
+
+    //CleanUpSourceData(source);
 }
 
 void Manager::UpdateWO(RE::TESObjectREFR* ref) {
