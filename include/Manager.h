@@ -114,21 +114,13 @@ class Manager final : public Ticker, public SaveLoadData {
     bool DeRegisterRef(RefID refid);
 
 public:
-    Manager(const std::vector<Source>& data, const std::chrono::milliseconds interval)
+    explicit Manager(const std::chrono::milliseconds interval)
         : Ticker([this]() { UpdateLoop(); }, interval) {
-        sources.reserve(data.size());
-        for (const auto& source : data) {
-            auto [it, inserted] = sources.try_emplace(source.formid, std::make_unique<Source>(source));
-            if (inserted) {
-                IndexSourceStages(*it->second);
-            }
-        }
         Init();
     }
 
-    static Manager* GetSingleton(const std::vector<Source>& data,
-                                 const int u_intervall = Settings::Ticker::GetInterval(Settings::ticker_speed)) {
-        static Manager singleton(data, std::chrono::milliseconds(u_intervall));
+    static Manager* GetSingleton() {
+        static Manager singleton(std::chrono::milliseconds(Settings::Ticker::GetInterval(Settings::ticker_speed)));
         return &singleton;
     }
 

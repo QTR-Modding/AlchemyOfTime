@@ -35,8 +35,7 @@ namespace {
             }
 
             // 3) Initialize Manager
-            constexpr auto sources = std::vector<Source>{};
-            M = Manager::GetSingleton(sources);
+            M = Manager::GetSingleton();
             if (!M) return;
 
             // 4) Register event sinks

@@ -407,7 +407,6 @@ void Manager::CleanUpSourceData(Source* src) {
 }
 
 Source* Manager::GetSource(const FormID some_formid) {
-
     if (const auto it = sources.find(some_formid); it != sources.end()) {
         return it->second.get();
     }
@@ -909,6 +908,13 @@ void Manager::UpdateWO(RE::TESObjectREFR* ref) {
         QUE_UNIQUE_GUARD;
         queue_delete_.insert(refid);
         return;
+    }
+
+    {
+        QUE_SHARED_GUARD;
+        if (_ref_stops_.contains(refid)) {
+            return;
+        }
     }
 
     const auto curr_time = RE::Calendar::GetSingleton()->GetHoursPassed();
