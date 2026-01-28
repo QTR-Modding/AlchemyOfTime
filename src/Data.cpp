@@ -901,7 +901,7 @@ bool Source::CheckIntegrity() {
     }
 
     if (!GetBoundObject()) {
-        logger::error("Formid {} does not exist.", formid);
+        logger::error("FormID {} does not exist.", formid);
         return false;
     }
 
@@ -999,7 +999,7 @@ void Source::RegisterStage(const FormID stage_formid, const StageNo stage_no) {
     }
     if (stage_formid == formid && stage_no != 0) {
         // not allowed. if you want to go back to beginning use decayed stage
-        logger::error("Formid of non initial stage is equal to source formid.");
+        logger::error("FormID of non initial stage is equal to source FormID.");
         return;
     }
 
@@ -1034,7 +1034,7 @@ FormID Source::FetchFake(const StageNo st_no) {
         return 0;
     }
     if (editorid.empty()) {
-        logger::error("Editorid is empty.");
+        logger::error("EditorID is empty.");
         return 0;
     }
     if (!std::ranges::contains(Settings::fakes_allowedQFORMS, qFormType)) {
