@@ -1031,8 +1031,6 @@ void Source::RegisterStage(const FormID stage_formid, const StageNo stage_no) {
     }
 
     Lorebox::AddKeyword(stage_form->As<RE::BGSKeywordForm>(), stage_formid);
-
-    Lorebox::AddKeyword(stage_form->As<RE::BGSKeywordForm>(), stage_formid);
 }
 
 FormID Source::FetchFake(const StageNo st_no) {
