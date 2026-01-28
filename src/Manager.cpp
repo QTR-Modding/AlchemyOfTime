@@ -407,7 +407,6 @@ void Manager::CleanUpSourceData(Source* src) {
 }
 
 Source* Manager::GetSource(const FormID some_formid) {
-    if (do_not_register.contains(some_formid)) return nullptr;
 
     if (const auto it = sources.find(some_formid); it != sources.end()) {
         return it->second.get();
@@ -416,6 +415,8 @@ Source* Manager::GetSource(const FormID some_formid) {
     if (const auto it = stage_to_source.find(some_formid); it != stage_to_source.end()) {
         return it->second;
     }
+
+    if (do_not_register.contains(some_formid)) return nullptr;
 
     // fallback for fake stages created later on
     for (const auto& src : sources | std::views::values) {
