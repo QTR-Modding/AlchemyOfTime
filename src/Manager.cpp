@@ -385,6 +385,10 @@ Source* Manager::MakeSource(const FormID source_formid, const DefaultSettings* s
     return it->second.get();
 }
 
+void Manager::IndexStage(const FormID stage_formid, Source* src) {
+    stage_to_source[stage_formid] = src;
+}
+
 void Manager::IndexSourceStages(Source& source) {
     stage_to_source[source.formid] = &source;
     StageNo stage_no = 0;
@@ -417,7 +421,6 @@ Source* Manager::GetSource(const FormID some_formid) {
     for (const auto& src : sources | std::views::values) {
         if (!src->IsHealthy()) continue;
         if (src->IsStage(some_formid)) {
-            stage_to_source[some_formid] = src.get();
             return src.get();
         }
     }

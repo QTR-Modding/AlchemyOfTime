@@ -2,6 +2,7 @@
 #include "CLibUtilsQTR/DrawDebug.hpp"
 #include "CLibUtilsQTR/BoundingBox.hpp"
 #include "MCP.h"
+#include "Manager.h"
 
 void Source::Init(const DefaultSettings* defaultsettings) {
     if (!defaultsettings) {
@@ -162,7 +163,7 @@ std::unordered_map<RefID, std::vector<StageUpdate>> Source::UpdateAllStages(
                 }
                 auto is_fake_ = IsFakeStage(instance.no);
                 updated_instances[a_refID].emplace_back(old_stage, new_stage ? new_stage : &GetStage(instance.no),
-                                                       instance.count, instance.start_time, is_fake_);
+                                                        instance.count, instance.start_time, is_fake_);
             }
         }
     }
@@ -1024,6 +1025,12 @@ void Source::RegisterStage(const FormID stage_formid, const StageNo stage_no) {
         logger::error("Could not insert stage");
         return;
     }
+
+    if (M) {
+        M->IndexStage(stage_formid, this);
+    }
+
+    Lorebox::AddKeyword(stage_form->As<RE::BGSKeywordForm>(), stage_formid);
 
     Lorebox::AddKeyword(stage_form->As<RE::BGSKeywordForm>(), stage_formid);
 }

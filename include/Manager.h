@@ -204,6 +204,8 @@ public:
     bool IsStageItem(FormID a_formid);
 
     std::vector<std::pair<RefID, FormID>> GetRefStops();
+
+    void IndexStage(FormID stage_formid, Source* src);
 };
 
 inline Manager* M = nullptr;
