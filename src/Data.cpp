@@ -710,11 +710,11 @@ void Source::CleanUpData() {
             const auto curr_delayer = it->GetDelayerFormID();
             if (it->xtra.is_transforming) {
                 if (!settings.transformers.contains(curr_delayer)) {
-                    logger::warn("Transformer Formid {:x} not found in default settings.", curr_delayer);
+                    logger::warn("Transformer FormID {:x} not found in default settings.", curr_delayer);
                     it->RemoveTimeMod(curr_time);
                 }
             } else if (curr_delayer != 0 && !settings.delayers.contains(curr_delayer)) {
-                logger::warn("Delayer Formid {:x} not found in default settings.", curr_delayer);
+                logger::warn("Delayer FormID {:x} not found in default settings.", curr_delayer);
                 it->RemoveTimeMod(curr_time);
             }
 
@@ -758,9 +758,7 @@ void Source::CleanUpData(const RefID a_loc) {
     }
     if (instances.size() > 1) {
         for (auto it = instances.begin(); it + 1 != instances.end(); ++it) {
-            size_t ind = 1;
-            for (auto it2 = it + ind; it2 != instances.end(); it2 = it + ind) {
-                ++ind;
+            for (auto it2 = it + 1; it2 != instances.end(); it2 = ++it2) {
                 if (it == it2) continue;
                 if (it2->count <= 0) continue;
                 if (it->AlmostSameExceptCount(*it2, curr_time)) {
