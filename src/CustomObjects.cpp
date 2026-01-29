@@ -375,7 +375,7 @@ RefStop& RefStop::operator=(const RefStop& other) {
         ref_id = other.ref_id;
         stop_time = other.stop_time;
         features = other.features;
-
+        ref_handle = other.ref_handle;
         // Manually handle any special cases for members
     }
     return *this;
@@ -383,6 +383,9 @@ RefStop& RefStop::operator=(const RefStop& other) {
 
 RefStop::RefStop(const RefID ref_id_) {
     ref_id = ref_id_;
+    if (const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(ref_id_)) {
+        ref_handle = ref->GetHandle();
+    }
 }
 
 bool RefStop::IsDue(const float curr_time) const { return stop_time <= curr_time; }
@@ -509,7 +512,7 @@ RE::BSSoundHandle& RefStop::GetSoundHandle() const {
 
 
 void RefStop::RemoveTint() {
-    if (const auto a_refr = RE::TESForm::LookupByID<RE::TESObjectREFR>(ref_id)) {
+    if (const auto a_refr = GetRef()) {
         if (const auto a_obj3d = a_refr->Get3D()) {
             const auto color = RE::NiColorA(0.0f, 0.0f, 0.0f, 0.0f);
             a_obj3d->TintScenegraph(color);
@@ -522,7 +525,7 @@ void RefStop::RemoveArtObject() {
     //if (model_ref_eff) model_ref_eff->finished = true;
 
     if (applied_art_objects.empty()) return;
-    if (const auto a_ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(ref_id)) {
+    if (const auto a_ref = GetRef()) {
         if (const auto processLists = RE::ProcessLists::GetSingleton()) {
             const auto handle = a_ref->CreateRefHandle();
             processLists->ForEachModelEffect([&](RE::ModelReferenceEffect* a_modelEffect) {
@@ -551,7 +554,7 @@ void RefStop::RemoveShader() {
 
     //}
     if (applied_effect_shaders.empty()) return;
-    if (const auto a_ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(ref_id)) {
+    if (const auto a_ref = GetRef()) {
         if (const auto processLists = RE::ProcessLists::GetSingleton()) {
             const auto handle = a_ref->CreateRefHandle();
             processLists->ForEachShaderEffect([&](RE::ShaderReferenceEffect* a_modelEffect) {

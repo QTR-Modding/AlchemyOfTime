@@ -300,6 +300,7 @@ struct RefStop {
     RefID ref_id = 0;
     float stop_time = 0;
     RefStopFeatures features;
+    mutable RE::ObjectRefHandle ref_handle;
 
     //RE::ShaderReferenceEffect* shader_ref_eff;
     //RE::ModelReferenceEffect* model_ref_eff;
@@ -312,6 +313,9 @@ struct RefStop {
 
     RefStop(const RefID ref_id_, const float stop_t, const RefStopFeatures& a_features)
         : ref_id(ref_id_), stop_time(stop_t), features(a_features) {
+        if (const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(ref_id)) {
+            ref_handle = ref->GetHandle();
+        }
     }
 
     [[nodiscard]] bool IsDue(float curr_time) const;
@@ -332,6 +336,16 @@ struct RefStop {
     void Update(const RefStop& other);
 
     RE::TESObjectREFR* GetRef() const {
-        return RE::TESForm::LookupByID<RE::TESObjectREFR>(ref_id);
+        if (const auto ref = ref_handle.get().get()) {
+            if (ref->GetFormID() == ref_id) {
+                return ref;
+            }
+        }
+        if (const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(ref_id)) {
+            ref_handle.reset();
+            ref_handle = ref->GetHandle();
+            return ref;
+        }
+        return nullptr;
     }
 };

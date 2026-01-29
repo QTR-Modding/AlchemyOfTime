@@ -301,7 +301,7 @@ void Manager::UpdateLoop() {
     } else if (QUE_UNIQUE_GUARD;
         !queue_delete_.empty() || !Settings::placed_objects_evolve.load()) {
         for (auto it = _ref_stops_.begin(); it != _ref_stops_.end();) {
-            if (const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(it->first);
+            if (const auto ref = it->second.GetRef();
                 queue_delete_.contains(it->first) ||
                 ref && !Settings::placed_objects_evolve.load() && WorldObject::IsPlacedObject(ref)) {
                 PreDeleteRefStop(it->second);
@@ -346,7 +346,7 @@ void Manager::UpdateLoop() {
 
             if (auto& val = it->second; val.IsDue(curr_time)) {
                 ref_stops_due.push_back(key);
-            } else if (const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(key)) {
+            } else if (const auto ref = val.GetRef()) {
                 val.ApplyTint(ref);
                 val.ApplyArtObject(ref);
                 val.ApplyShader(ref);
@@ -809,7 +809,8 @@ bool Manager::UpdateInventory(RE::TESObjectREFR* ref, const float t) {
         if (!update_took_place && !updates.empty()) update_took_place = true;
         CleanUpSourceData(&source);
         for (const auto& update : updates) {
-            if (ApplyEvolutionInInventory(ref, update.count, update.oldstage->formid, update.newstage->formid) && source.IsDecayedItem(update.newstage->formid)) {
+            if (ApplyEvolutionInInventory(ref, update.count, update.oldstage->formid, update.newstage->formid) && source
+                .IsDecayedItem(update.newstage->formid)) {
                 Register(update.newstage->formid, update.count, refid, t);
             }
         }
@@ -933,7 +934,14 @@ void Manager::UpdateQueuedWO(const RefID refid, const float curr_time) {
     // Called from UpdateLoop task.
     SRC_UNIQUE_GUARD;
 
-    const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(refid);
+    RE::TESObjectREFR* ref = nullptr;
+    {
+        QUE_SHARED_GUARD;
+        if (const auto it = _ref_stops_.find(refid); it != _ref_stops_.end()) {
+            ref = it->second.GetRef();
+        }
+    }
+
     if (!ref) {
         QUE_UNIQUE_GUARD;
         queue_delete_.insert(refid);

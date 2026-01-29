@@ -205,7 +205,7 @@ std::vector<StageUpdate> Source::UpdateAllStages(RefID a_refID, const float time
             }
             auto is_fake_ = IsFakeStage(instance.no);
             updated_instances.emplace_back(old_stage, new_stage ? new_stage : &GetStage(instance.no),
-                                                    instance.count, instance.start_time, is_fake_);
+                                           instance.count, instance.start_time, is_fake_);
         }
     }
     return updated_instances;
