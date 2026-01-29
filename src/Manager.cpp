@@ -934,13 +934,15 @@ void Manager::UpdateQueuedWO(const RefID refid, const float curr_time) {
     // Called from UpdateLoop task.
     SRC_UNIQUE_GUARD;
 
-    RE::TESObjectREFR* ref = nullptr;
+    /*RE::TESObjectREFR* ref = nullptr;
     {
         QUE_SHARED_GUARD;
         if (const auto it = _ref_stops_.find(refid); it != _ref_stops_.end()) {
             ref = it->second.GetRef();
         }
-    }
+    }*/
+
+    RE::TESObjectREFR* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(refid);
 
     if (!ref) {
         QUE_UNIQUE_GUARD;
@@ -1026,6 +1028,8 @@ void Manager::UpdateQueuedWO(const RefID refid, const float curr_time) {
         UpdateRefStop(*source, wo_inst, a_ref_stop, next_update);
         QueueWOUpdate(a_ref_stop);
     }
+
+    CleanUpSourceData(source);
 }
 
 void Manager::UpdateWO(RE::TESObjectREFR* ref) {
