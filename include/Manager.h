@@ -193,6 +193,9 @@ public:
     // Snapshot copy of sources (read-only). [locks: sourceMutex_] (shared)
     std::vector<Source> GetSources();
 
+    // Snapshot copy of sources matching a stage form and location. [locks: sourceMutex_] (shared)
+    std::vector<Source> GetSourcesByStageAndOwner(FormID stage_formid, RefID location_id);
+
     // Snapshot of the update queue. [locks: queueMutex_] (shared)
     std::unordered_map<RefID, float> GetUpdateQueue();
 

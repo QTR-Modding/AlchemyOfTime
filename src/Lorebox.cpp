@@ -119,12 +119,68 @@ namespace {
         float slope{1.f};
         FormID mod{0};
         bool transforming{false};
+        bool frozen{false};
         std::wstring next;
         // percentage in range [0,100]
         int pct{-1};
         std::wstring tag; // bracketed name (and optional multiplier)
         std::wstring curr; // current stage name if available
     };
+
+    int ComputeMinutesRemaining(const Source& src, const StageInstance& st, float now) {
+        const float slope = st.GetDelaySlope();
+        if (std::abs(slope) < EPSILON) {
+            return -1;
+        }
+
+        const float nextT = src.GetNextUpdateTime(&st);
+        if (nextT <= 0.f) {
+            return -1;
+        }
+
+        return static_cast<int>(std::round((nextT - now) * 60.f));
+    }
+
+    int ComputePercentage(const Source& src, const StageInstance& st, float now) {
+        float pct = -1.f;
+        if (st.xtra.is_transforming) {
+            const auto tr = st.GetDelayerFormID();
+            if (tr && src.settings.transformers.contains(tr)) {
+                const float elapsed = st.GetTransformElapsed(now);
+                const float total = std::get<1>(src.settings.transformers.at(tr));
+                if (total > 0.f) pct = std::clamp(elapsed / total * 100.f, 0.f, 100.f);
+            }
+        } else {
+            if (src.IsStageNo(st.no)) {
+                const float elapsed = st.GetElapsed(now);
+                const float total = src.GetStageDuration(st.no);
+                if (total > 0.f) pct = std::clamp(elapsed / total * 100.f, 0.f, 100.f);
+            }
+        }
+
+        if (pct < 0.f) return -1;
+        return static_cast<int>(std::round(pct));
+    }
+
+    std::wstring BuildModulatorTag(const Source& src, const Row& r) {
+        if (!Lorebox::show_modulator_name.load(std::memory_order_relaxed)) return {};
+
+        auto nm = FormNameW(r.mod);
+        if (nm.empty()) return {};
+
+        if (r.transforming) {
+            return std::format(L"[{}]", nm);
+        }
+
+        if (Lorebox::show_multiplier.load(std::memory_order_relaxed)) {
+            float mult = r.slope;
+            if (src.settings.delayers.contains(r.mod)) {
+                mult = src.settings.delayers.at(r.mod);
+            }
+            nm += std::format(L": x{:.2f}", mult);
+        }
+        return std::format(L"[{}]", nm);
+    }
 }
 
 bool Lorebox::AddKeyword(RE::BGSKeywordForm* a_form, FormID a_formid) {
@@ -214,17 +270,8 @@ bool Lorebox::IsRemoved(const FormID a_formid) {
 
 std::wstring Lorebox::BuildLoreFor(FormID hovered, RefID ownerId) {
     // Snapshot sources safely
-    const auto sources = M->GetSources();
-
-    const Source* src = nullptr;
-    for (const auto& s : sources) {
-        if (!s.IsHealthy()) continue;
-        if (s.IsStage(hovered)) {
-            src = &s;
-            break;
-        }
-    }
-    if (!src) return return_str;
+    const auto sources = M->GetSourcesByStageAndOwner(hovered, ownerId);
+    if (sources.empty()) return return_str;
 
     const auto now = RE::Calendar::GetSingleton()->GetHoursPassed();
 
@@ -232,87 +279,47 @@ std::wstring Lorebox::BuildLoreFor(FormID hovered, RefID ownerId) {
     std::vector<Row> rows;
     rows.reserve(16);
 
-    if (ownerId > 0 && src->data.contains(ownerId)) {
-        for (const auto& st : src->data.at(ownerId)) {
-            if (st.count <= 0 || st.xtra.is_decayed) continue;
-            if (st.xtra.form_id != hovered) continue;
+    if (ownerId > 0) {
+        for (const auto& src : sources) {
+            if (!src.data.contains(ownerId)) continue;
 
-            // Compute next transition once and reuse
-            const auto trans = ComputeNext(*src, st);
-            if (trans.nextFormId != 0 && trans.nextFormId == st.xtra.form_id) {
-                // Frozen lore
-                std::wstring stageNameW;
-                if (const auto name = src->GetStageName(st.no); !name.empty()) {
-                    stageNameW = std::wstring(name.begin(), name.end());
+            for (const auto& st : src.data.at(ownerId)) {
+                if (st.count <= 0 || st.xtra.is_decayed) continue;
+                if (st.xtra.form_id != hovered) continue;
+
+                const auto trans = ComputeNext(src, st);
+                const bool isFrozen = (trans.nextFormId != 0 && trans.nextFormId == st.xtra.form_id);
+
+                Row r;
+                r.count = st.count;
+                r.slope = st.GetDelaySlope();
+                r.mod = st.GetDelayerFormID();
+                r.transforming = st.xtra.is_transforming;
+                r.frozen = isFrozen;
+                if (!isFrozen) {
+                    r.next = trans.label;
                 }
-                return BuildFrozenLore(stageNameW);
-            }
-
-            Row r;
-            r.count = st.count;
-            r.slope = st.GetDelaySlope();
-            r.mod = st.GetDelayerFormID();
-            r.transforming = st.xtra.is_transforming;
-            r.next = trans.label;
-            if (const auto curName = src->GetStageName(st.no); !curName.empty()) {
-                r.curr = Widen(curName);
-            }
-
-            const float nextT = src->GetNextUpdateTime(&st);
-            r.minutes = std::abs(r.slope) < EPSILON
-                            ? -1
-                            : nextT > 0.f
-                            ? static_cast<int>(std::round((nextT - now) * 60.f))
-                            : -1;
-
-            // Compute percentage
-            if (show_percentage.load(std::memory_order_relaxed)) {
-                float pct = -1.f;
-                if (st.xtra.is_transforming) {
-                    const auto tr = st.GetDelayerFormID();
-                    if (tr && src->settings.transformers.contains(tr)) {
-                        const float elapsed = st.GetTransformElapsed(now);
-                        const float total = std::get<1>(src->settings.transformers.at(tr));
-                        if (total > 0.f) pct = std::clamp(elapsed / total * 100.f, 0.f, 100.f);
-                    }
-                } else {
-                    // Regular stage progress = elapsed / current stage duration
-                    if (src->IsStageNo(st.no)) {
-                        const float elapsed = st.GetElapsed(now);
-                        const float total = src->GetStageDuration(st.no);
-                        if (total > 0.f) pct = std::clamp(elapsed / total * 100.f, 0.f, 100.f);
-                    }
+                if (const auto curName = src.GetStageName(st.no); !curName.empty()) {
+                    r.curr = Widen(curName);
                 }
-                if (pct >= 0.f) r.pct = static_cast<int>(std::round(pct));
-            }
 
-            // If due/past (negative remaining) and not frozen, force to 0s and 100%
-            if (r.minutes < 0 && std::abs(r.slope) >= EPSILON) {
-                r.pct = 100;
-            }
-
-            // Collect mod/transformer name for separate line if enabled
-            if (auto nm = FormNameW(r.mod); !nm.empty()) {
-                if (r.transforming) {
-                    if (show_modulator_name.load(std::memory_order_relaxed)) {
-                        r.tag = std::format(L"[{}]", nm);
-                    }
-                } else {
-                    if (show_modulator_name.load(std::memory_order_relaxed)) {
-                        if (show_multiplier.load(std::memory_order_relaxed)) {
-                            // Append multiplier if known; fall back to slope if not found in settings
-                            float mult = r.slope;
-                            if (src->settings.delayers.contains(r.mod)) {
-                                mult = src->settings.delayers.at(r.mod);
-                            }
-                            nm += std::format(L": x{:.2f}", mult);
-                        }
-                        r.tag = std::format(L"[{}]", nm);
-                    }
+                r.minutes = ComputeMinutesRemaining(src, st, now);
+                if (isFrozen) {
+                    r.minutes = -1;
                 }
-            }
 
-            rows.push_back(std::move(r));
+                if (show_percentage.load(std::memory_order_relaxed)) {
+                    r.pct = ComputePercentage(src, st, now);
+                }
+
+                if (r.minutes < 0 && std::abs(r.slope) >= EPSILON && !r.frozen) {
+                    r.pct = 100;
+                }
+
+                r.tag = BuildModulatorTag(src, r);
+
+                rows.push_back(std::move(r));
+            }
         }
     }
 
@@ -351,7 +358,9 @@ std::wstring Lorebox::BuildLoreFor(FormID hovered, RefID ownerId) {
     for (const auto& r : rows) {
         if (printed >= MAX_ROWS) break;
 
-        const std::wstring eta = std::abs(r.slope) < EPSILON ? std::wstring{INFINITY_SYM} : HrsMinsW(r.minutes / 60.f);
+        const std::wstring eta = (r.frozen || std::abs(r.slope) < EPSILON)
+                                     ? std::wstring{INFINITY_SYM}
+                                     : HrsMinsW(r.minutes / 60.f);
 
         // choose color if enabled
         const bool doColors = colorize_rows.load(std::memory_order_relaxed);
@@ -372,15 +381,23 @@ std::wstring Lorebox::BuildLoreFor(FormID hovered, RefID ownerId) {
         std::wstring line;
         if (show_percentage.load(std::memory_order_relaxed) && r.pct >= 0) {
             if (!r.curr.empty()) {
-                line = std::format(L"{}x {} {} | {} ({}%)", r.count, r.curr, r.next, eta, r.pct);
+                line = r.next.empty()
+                           ? std::format(L"{}x {} | {} ({}%)", r.count, r.curr, eta, r.pct)
+                           : std::format(L"{}x {} {} | {} ({}%)", r.count, r.curr, r.next, eta, r.pct);
             } else {
-                line = std::format(L"{}x {} | {} ({}%)", r.count, r.next, eta, r.pct);
+                line = r.next.empty()
+                           ? std::format(L"{}x | {} ({}%)", r.count, eta, r.pct)
+                           : std::format(L"{}x {} | {} ({}%)", r.count, r.next, eta, r.pct);
             }
         } else {
             if (!r.curr.empty()) {
-                line = std::format(L"{}x {} {} | {}", r.count, r.curr, r.next, eta);
+                line = r.next.empty()
+                           ? std::format(L"{}x {} | {}", r.count, r.curr, eta)
+                           : std::format(L"{}x {} {} | {}", r.count, r.curr, r.next, eta);
             } else {
-                line = std::format(L"{}x {} | {}", r.count, r.next, eta);
+                line = r.next.empty()
+                           ? std::format(L"{}x | {}", r.count, eta)
+                           : std::format(L"{}x {} | {}", r.count, r.next, eta);
             }
         }
 
