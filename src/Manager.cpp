@@ -9,6 +9,8 @@
 #include <unordered_map>
 #include <atomic>
 
+#include "CellScan.h"
+
 #ifndef NDEBUG
 namespace {
     // Tags to distinguish per-mutex state
@@ -234,6 +236,59 @@ namespace {
 #define QUE_UNIQUE_GUARD  std::unique_lock  AOT_CONCAT(que_ulock_, __COUNTER__){queueMutex_}
 #endif
 
+std::vector<Manager::ScanRequest> Manager::BuildCellScanRequests_(
+    const std::vector<std::pair<RefID, FormID>>& refStopsCopy) {
+    std::vector<ScanRequest> out;
+    out.reserve(refStopsCopy.size());
+
+    // Only touches plugin-owned data => guarded by sourceMutex_.
+    SRC_SHARED_GUARD;
+
+    for (const auto& [refid, hintedSrcFormID] : refStopsCopy) {
+        if (!refid || !hintedSrcFormID) {
+            continue;
+        }
+
+        auto* src = GetSource(hintedSrcFormID);
+        if (!src || !src->IsHealthy()) {
+            continue;
+        }
+
+        const auto it = src->data.find(refid);
+        if (it == src->data.end() || it->second.empty()) {
+            continue;
+        }
+
+        const auto& inst = it->second.front();
+        if (inst.count <= 0) {
+            continue;
+        }
+
+        const StageNo no = inst.no;
+
+        std::vector<FormID> bases;
+        bases.reserve(src->settings.transformers_order.size() + src->settings.delayers_order.size());
+
+        // Include *all* bases you want CellScanner to collect for this WO.
+        for (const auto trns : src->settings.transformers_order) {
+            if (src->settings.transformer_allowed_stages.at(trns).contains(no)) {
+                bases.push_back(trns);
+            }
+        }
+        for (const auto dlyr : src->settings.delayers_order) {
+            if (src->settings.delayer_allowed_stages.at(dlyr).contains(no)) {
+                bases.push_back(dlyr);
+            }
+        }
+
+        if (!bases.empty()) {
+            out.emplace_back(refid, std::move(bases));
+        }
+    }
+
+    return out;
+}
+
 void Manager::PreDeleteRefStop(RefStop& a_ref_stop) {
     a_ref_stop.RemoveTint();
     a_ref_stop.RemoveArtObject();
@@ -275,6 +330,9 @@ void Manager::UpdateLoop() {
 
     const auto ref_stops_copy = GetRefStops();
 
+    auto scanReq = BuildCellScanRequests_(ref_stops_copy);
+    CellScanner::GetSingleton()->RequestRefresh(std::move(scanReq));
+
     if (const auto cal = RE::Calendar::GetSingleton()) {
         // make copy with only stops
         const auto curr_time = cal->GetHoursPassed();
@@ -305,21 +363,27 @@ void Manager::UpdateLoop() {
         }
     }
 
-    SKSE::GetTaskInterface()->AddTask([ref_stops_copy = std::move(ref_stops_copy)]() {
+    //SKSE::GetTaskInterface()->AddTask([ref_stops_copy = std::move(ref_stops_copy)]() mutable {
         for (const auto& [refid, hinted_src] : ref_stops_copy) {
             M->UpdateQueuedWO(refid, hinted_src);
         }
-    });
+    //});
 }
 
 void Manager::QueueWOUpdate(const RefStop& a_refstop) {
     if (!Settings::world_objects_evolve.load()) return;
-    const auto refid = a_refstop.ref_id;
-    QUE_UNIQUE_GUARD;
-    if (auto [it, inserted] = _ref_stops_.try_emplace(refid, a_refstop); !inserted) {
-        it->second.Update(a_refstop);
+    
+    bool needStart = false;
+    {
+        const auto refid = a_refstop.ref_id;
+        QUE_UNIQUE_GUARD;
+        if (auto [it, inserted] = _ref_stops_.try_emplace(refid, a_refstop); !inserted) {
+            it->second.Update(a_refstop);
+        }
+        needStart = !isRunning();
     }
-    Start();
+
+    if (needStart) Start();
 }
 
 void Manager::UpdateRefStop(const Source& src, const StageInstance& wo_inst, RefStop& a_ref_stop, const float stop_t) {
@@ -897,8 +961,6 @@ void Manager::UpdateQueuedWO(const RefID refid, const FormID hinted_source_formi
         UpdateRefStop(*source, wo_inst, a_ref_stop, next_update);
         QueueWOUpdate(a_ref_stop);
     }
-
-    //CleanUpSourceData(source);
 }
 
 void Manager::UpdateWO(RE::TESObjectREFR* ref) {

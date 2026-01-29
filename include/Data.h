@@ -197,6 +197,8 @@ private:
     static void SearchModulatorInCell(FormID& result, const RE::TESObjectREFR* a_origin,
                                       const RE::TESObjectCELL* a_cell, const std::unordered_set<FormID>&
                                       modulators, float range = 0);
+
+    static FormID SearchNearbyModulatorsCached(const RE::TESObjectREFR* a_obj, const std::vector<FormID>& candidates);
 };
 
 template <typename T>

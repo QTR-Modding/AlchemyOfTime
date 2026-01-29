@@ -113,6 +113,11 @@ class Manager final : public Ticker, public SaveLoadData {
     // [expects: sourceMutex_] (unique)
     bool DeRegisterRef(RefID refid);
 
+    using ScanRequest = std::pair<RefID, std::vector<FormID>>;
+
+    [[nodiscard]] std::vector<ScanRequest> BuildCellScanRequests_(
+        const std::vector<std::pair<RefID, FormID>>& refStopsCopy);
+
 public:
     explicit Manager(const std::chrono::milliseconds interval)
         : Ticker([this]() { UpdateLoop(); }, interval) {
