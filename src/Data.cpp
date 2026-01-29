@@ -688,9 +688,7 @@ void Source::CleanUpData() {
         if (instances.empty()) continue;
         if (instances.size() > 1) {
             for (auto it = instances.begin(); it + 1 != instances.end(); ++it) {
-                size_t ind = 1;
-                for (auto it2 = it + ind; it2 != instances.end(); it2 = it + ind) {
-                    ++ind;
+                for (auto it2 = it + 1; it2 != instances.end(); ++it2) {
                     if (it == it2) continue;
                     if (it2->count <= 0) continue;
                     if (it->AlmostSameExceptCount(*it2, curr_time)) {
