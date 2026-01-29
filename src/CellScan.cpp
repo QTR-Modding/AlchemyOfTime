@@ -11,7 +11,7 @@ void CellScanner::RequestRefresh(const std::vector<Request>& requests) {
         return;
     }
 
-    if (work->bases->empty() || work->refIDs->empty()) {
+    if (work->bases->empty() || work->refInfos->empty()) {
         Publish_(std::move(work->next));
         return;
     }
@@ -42,13 +42,13 @@ CellScanner::WorkItemPtr CellScanner::BuildWorkItem_(const std::uint64_t gen,
     work->next->generation = gen;
 
     work->bases = std::make_shared<std::unordered_set<FormID>>();
-    work->refIDs = std::make_shared<std::vector<RefID>>();
+    work->refInfos = std::make_shared<std::vector<RefInfo>>();
 
-    work->refIDs->reserve(requests.size());
+    work->refInfos->reserve(requests.size());
 
-    // CPU-only: union bases + extract refIDs
-    for (auto& [refid, bases] : requests) {
-        work->refIDs->push_back(refid);
+    // CPU-only: union bases + extract refInfos
+    for (auto& [ref_info, bases] : requests) {
+        work->refInfos->push_back(ref_info);
 
         for (auto base : bases) {
             if (base != 0) {
@@ -87,15 +87,15 @@ void CellScanner::TryAddExteriorCell_(RE::TESWorldSpace* ws, const std::int32_t 
     }
 }
 
-void CellScanner::CollectCellsToScan_(const std::vector<RefID>& refIDs,
+void CellScanner::CollectCellsToScan_(const std::vector<RefInfo>& refInfos,
                                       std::unordered_set<RE::TESObjectCELL*>& cellsToScan) {
     std::unordered_set<RE::TESWorldSpace*> skyAdded;
-    skyAdded.reserve(refIDs.size());
+    skyAdded.reserve(refInfos.size());
 
-    cellsToScan.reserve(refIDs.size() * 10);
+    cellsToScan.reserve(refInfos.size() * 10);
 
-    for (const auto refid : refIDs) {
-        const auto wo = RE::TESForm::LookupByID<RE::TESObjectREFR>(refid);
+    for (const auto& refInfo : refInfos) {
+        const auto wo = refInfo.GetRef();
         if (!wo) {
             continue;
         }
@@ -175,7 +175,7 @@ void CellScanner::RunScanTaskOnGameThread_(const WorkItemPtr& work) {
     }
 
     std::unordered_set<RE::TESObjectCELL*> cellsToScan;
-    CollectCellsToScan_(*work->refIDs, cellsToScan);
+    CollectCellsToScan_(*work->refInfos, cellsToScan);
 
     ScanCells_(cellsToScan, *work->bases, *work->next);
 

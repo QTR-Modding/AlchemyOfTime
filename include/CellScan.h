@@ -3,6 +3,8 @@
 #include <shared_mutex>
 #include <unordered_set>
 
+#include "CustomObjects.h"
+
 class CellScanner final :
     public REX::Singleton<CellScanner> {
 public:
@@ -18,7 +20,7 @@ public:
 
     using CachePtr = std::shared_ptr<const Cache>;
 
-    using Request = std::pair<RefID, std::vector<FormID>>;
+    using Request = std::pair<RefInfo, std::vector<FormID>>;
 
     void RequestRefresh(const std::vector<Request>& requests);
 
@@ -31,7 +33,7 @@ private:
         // Built off-thread
         std::shared_ptr<Cache> next;
         std::shared_ptr<std::unordered_set<FormID>> bases;
-        std::shared_ptr<std::vector<RefID>> refIDs;
+        std::shared_ptr<std::vector<RefInfo>> refInfos;
     };
 
     using WorkItemPtr = std::shared_ptr<WorkItem>;
@@ -48,7 +50,7 @@ private:
     static void TryAddExteriorCell_(RE::TESWorldSpace* ws, std::int32_t x, std::int32_t y,
                                     std::unordered_set<RE::TESObjectCELL*>& cellsToScan);
 
-    static void CollectCellsToScan_(const std::vector<RefID>& refIDs,
+    static void CollectCellsToScan_(const std::vector<RefInfo>& refInfos,
                                     std::unordered_set<RE::TESObjectCELL*>& cellsToScan);
 
     static void ScanCells_(const std::unordered_set<RE::TESObjectCELL*>& cellsToScan,

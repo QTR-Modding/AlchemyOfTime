@@ -372,20 +372,12 @@ RefStopFeature& RefStopFeature::operator=(const RefStopFeature& other) {
 
 RefStop& RefStop::operator=(const RefStop& other) {
     if (this != &other) {
-        ref_id = other.ref_id;
+        ref_info = other.ref_info;
         stop_time = other.stop_time;
         features = other.features;
-        ref_handle = other.ref_handle;
         // Manually handle any special cases for members
     }
     return *this;
-}
-
-RefStop::RefStop(const RefID ref_id_) {
-    ref_id = ref_id_;
-    if (const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(ref_id_)) {
-        ref_handle = ref->GetHandle();
-    }
 }
 
 bool RefStop::IsDue(const float curr_time) const { return stop_time <= curr_time; }
@@ -501,13 +493,13 @@ void RefStop::ApplySound(const float volume) {
         return RemoveSound();
     }
     const auto soundhelper = SoundHelper::GetSingleton();
-    soundhelper->Play(ref_id, sound.id, volume);
+    soundhelper->Play(ref_info.ref_id, sound.id, volume);
     sound.enabled = true;
 }
 
 RE::BSSoundHandle& RefStop::GetSoundHandle() const {
     auto* soundhelper = SoundHelper::GetSingleton();
-    return soundhelper->GetHandle(ref_id);
+    return soundhelper->GetHandle(ref_info.ref_id);
 }
 
 
@@ -575,7 +567,7 @@ void RefStop::RemoveShader() {
 
 void RefStop::RemoveSound() {
     const auto soundhelper = SoundHelper::GetSingleton();
-    soundhelper->Stop(ref_id);
+    soundhelper->Stop(ref_info.ref_id);
     features.sound.enabled = false;
 }
 
@@ -596,7 +588,7 @@ bool RefStop::HasArtObject(RE::TESObjectREFR* a_ref, const RE::BGSArtObject* a_a
 }
 
 void RefStop::Update(const RefStop& other) {
-    if (ref_id != other.ref_id) {
+    if (ref_info.ref_id != other.ref_info.ref_id) {
         logger::critical("RefID not the same.");
         return;
     }

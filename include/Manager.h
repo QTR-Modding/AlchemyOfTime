@@ -103,7 +103,7 @@ class Manager final : public Ticker, public SaveLoadData {
     // [expects: sourceMutex_] (unique)
     void UpdateInventory(RE::TESObjectREFR* ref);
 
-    void UpdateQueuedWO(RefID refid, float curr_time);
+    void UpdateQueuedWO(const RefInfo& ref_info, float curr_time);
 
     // [expects: sourceMutex_] (unique)
     void UpdateWO(RE::TESObjectREFR* ref);
@@ -120,10 +120,10 @@ class Manager final : public Ticker, public SaveLoadData {
     // [expects: sourceMutex_] (unique)
     bool DeRegisterRef(RefID refid);
 
-    using ScanRequest = std::pair<RefID, std::vector<FormID>>;
+    using ScanRequest = std::pair<RefInfo, std::vector<FormID>>;
 
     [[nodiscard]] std::vector<ScanRequest> BuildCellScanRequests_(
-        const std::vector<RefID>& refStopsCopy);
+        const std::vector<RefInfo>& refStopsCopy);
 
 public:
     explicit Manager(const std::chrono::milliseconds interval)
@@ -207,7 +207,7 @@ public:
         return isRunning();
     }
 
-    std::vector<RefID> GetRefStops();
+    std::vector<RefInfo> GetRefStops();
 
     void IndexStage(FormID stage_formid, FormID source_formid);
 };

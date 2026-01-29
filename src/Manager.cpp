@@ -84,7 +84,7 @@ namespace {
                 m->lock_shared();
             }
 
-            // register this thread as shared owner (for optional diagnostics you already have)
+            // register this thread as shared owner (for optional diagnostics we already have)
             {
                 std::scoped_lock g(DebugMeta<Tag>::metaMutex);
                 DebugMeta<Tag>::sharedOwners[dbg_tid()] += 1;
@@ -236,19 +236,20 @@ namespace {
 #endif
 
 std::vector<Manager::ScanRequest> Manager::BuildCellScanRequests_(
-    const std::vector<RefID>& refStopsCopy) {
+    const std::vector<RefInfo>& refStopsCopy) {
     std::vector<ScanRequest> out;
     out.reserve(refStopsCopy.size());
 
     // Only touches plugin-owned data => guarded by sourceMutex_.
     SRC_SHARED_GUARD;
 
-    for (const auto& refid : refStopsCopy) {
+    for (const auto& ref_info : refStopsCopy) {
+        const auto refid = ref_info.ref_id;
         if (!refid) {
             continue;
         }
 
-        auto* src = GetSourceByLocation(refid);
+        const auto src = GetSourceByLocation(refid);
         if (!src || !src->IsHealthy()) {
             continue;
         }
@@ -268,7 +269,7 @@ std::vector<Manager::ScanRequest> Manager::BuildCellScanRequests_(
         std::vector<FormID> bases;
         bases.reserve(src->settings.transformers_order.size() + src->settings.delayers_order.size());
 
-        // Include *all* bases you want CellScanner to collect for this WO.
+        // Include all bases we want CellScanner to collect for this WO.
         for (const auto trns : src->settings.transformers_order) {
             if (src->settings.transformer_allowed_stages.at(trns).contains(no)) {
                 bases.push_back(trns);
@@ -281,7 +282,7 @@ std::vector<Manager::ScanRequest> Manager::BuildCellScanRequests_(
         }
 
         if (!bases.empty()) {
-            out.emplace_back(refid, std::move(bases));
+            out.emplace_back(ref_info, std::move(bases));
         }
     }
 
@@ -329,8 +330,8 @@ void Manager::UpdateLoop() {
 
     const auto ref_stops_copy = GetRefStops();
 
-    auto scanReq = BuildCellScanRequests_(ref_stops_copy);
-    CellScanner::GetSingleton()->RequestRefresh(std::move(scanReq));
+    const auto scanReq = BuildCellScanRequests_(ref_stops_copy);
+    CellScanner::GetSingleton()->RequestRefresh(scanReq);
 
     float curr_time = -1.0f;
     if (const auto cal = RE::Calendar::GetSingleton()) {
@@ -341,11 +342,11 @@ void Manager::UpdateLoop() {
         for (
             QUE_SHARED_GUARD;
             const auto& key : ref_stops_copy) {
-            auto it = _ref_stops_.find(key);
+            auto it = _ref_stops_.find(key.ref_id);
             if (it == _ref_stops_.end()) continue;
 
             if (auto& val = it->second; val.IsDue(curr_time)) {
-                ref_stops_due.push_back(key);
+                ref_stops_due.push_back(key.ref_id);
             } else if (const auto ref = val.GetRef()) {
                 val.ApplyTint(ref);
                 val.ApplyArtObject(ref);
@@ -365,8 +366,8 @@ void Manager::UpdateLoop() {
 
     //SKSE::GetTaskInterface()->AddTask([ref_stops_copy = std::move(ref_stops_copy)]() mutable {
     if (curr_time > 0.f) {
-        for (const auto& refid : ref_stops_copy) {
-            M->UpdateQueuedWO(refid, curr_time);
+        for (const auto& ref_info : ref_stops_copy) {
+            M->UpdateQueuedWO(ref_info, curr_time);
         }
     }
     //});
@@ -377,7 +378,7 @@ void Manager::QueueWOUpdate(const RefStop& a_refstop) {
 
     bool needStart;
     {
-        const auto refid = a_refstop.ref_id;
+        const auto refid = a_refstop.ref_info.ref_id;
         QUE_UNIQUE_GUARD;
         if (auto [it, inserted] = _ref_stops_.try_emplace(refid, a_refstop); !inserted) {
             it->second.Update(a_refstop);
@@ -553,7 +554,7 @@ Source* Manager::GetSourceByLocation(const RefID location_id) {
     }
 
     for (auto& uptr : sources | std::views::values) {
-        auto* src = uptr.get();
+        const auto src = uptr.get();
         if (!src || !src->IsHealthy()) {
             continue;
         }
@@ -935,20 +936,14 @@ void Manager::SyncWithInventory(RE::TESObjectREFR* ref) {
 }
 
 
-void Manager::UpdateQueuedWO(const RefID refid, const float curr_time) {
+void Manager::UpdateQueuedWO(const RefInfo& ref_info, const float curr_time) {
     // Called from UpdateLoop task.
+
+    const auto refid = ref_info.ref_id;
+
     SRC_UNIQUE_GUARD;
 
-    /*RE::TESObjectREFR* ref = nullptr;
-    {
-        QUE_SHARED_GUARD;
-        if (const auto it = _ref_stops_.find(refid); it != _ref_stops_.end()) {
-            ref = it->second.GetRef();
-        }
-    }*/
-
-    RE::TESObjectREFR* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(refid);
-
+    RE::TESObjectREFR* ref = ref_info.GetRef();
     if (!ref) {
         QUE_UNIQUE_GUARD;
         queue_delete_.insert(refid);
@@ -1785,12 +1780,12 @@ void Manager::HandleWOBaseChange(RE::TESObjectREFR* ref) {
     }
 }
 
-std::vector<RefID> Manager::GetRefStops() {
-    std::vector<RefID> ref_stops_copy;
+std::vector<RefInfo> Manager::GetRefStops() {
+    std::vector<RefInfo> ref_stops_copy;
     QUE_SHARED_GUARD;
     ref_stops_copy.reserve(_ref_stops_.size());
-    for (const auto& refid : _ref_stops_ | std::views::keys) {
-        ref_stops_copy.emplace_back(refid);
+    for (const auto& refstop : _ref_stops_ | std::views::values) {
+        ref_stops_copy.emplace_back(refstop.ref_info);
     }
     return ref_stops_copy;
 }
