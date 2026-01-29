@@ -298,7 +298,6 @@ struct RefStop {
     RefStop& operator=(const RefStop& other);
 
     RefID ref_id = 0;
-    FormID source_formid = 0;
     float stop_time = 0;
     RefStopFeatures features;
 

@@ -373,7 +373,6 @@ RefStopFeature& RefStopFeature::operator=(const RefStopFeature& other) {
 RefStop& RefStop::operator=(const RefStop& other) {
     if (this != &other) {
         ref_id = other.ref_id;
-        source_formid = other.source_formid;
         stop_time = other.stop_time;
         features = other.features;
 
@@ -617,10 +616,6 @@ void RefStop::Update(const RefStop& other) {
     }
     if (fabs(stop_time - other.stop_time) > EPSILON) {
         stop_time = other.stop_time;
-    }
-    // Refresh cached source hint when available.
-    if (other.source_formid != 0 && source_formid != other.source_formid) {
-        source_formid = other.source_formid;
     }
 }
 
