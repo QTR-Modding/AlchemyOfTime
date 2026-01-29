@@ -809,9 +809,7 @@ bool Manager::UpdateInventory(RE::TESObjectREFR* ref, const float t) {
         if (!update_took_place && !updates.empty()) update_took_place = true;
         CleanUpSourceData(&source);
         for (const auto& update : updates) {
-            if (ApplyEvolutionInInventory(ref, update.count, update.oldstage->formid, update.newstage->formid) && source
-                .
-                IsDecayedItem(update.newstage->formid)) {
+            if (ApplyEvolutionInInventory(ref, update.count, update.oldstage->formid, update.newstage->formid) && source.IsDecayedItem(update.newstage->formid)) {
                 Register(update.newstage->formid, update.count, refid, t);
             }
         }
