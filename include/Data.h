@@ -31,6 +31,7 @@ struct Source {
     [[nodiscard]] RE::TESBoundObject* GetBoundObject() const;;
 
     std::unordered_map<RefID, std::vector<StageUpdate>> UpdateAllStages(const std::vector<RefID>& filter, float time);
+    std::vector<StageUpdate> UpdateAllStages(RefID a_refID, float time);
 
     // daha once yaratilmis bi stage olmasi gerekiyo
     bool IsStage(FormID some_formid) const;
@@ -80,6 +81,7 @@ struct Source {
     float GetNextUpdateTime(const StageInstance* st_inst) const;
 
     void CleanUpData();
+    void CleanUpData(RefID a_loc);
 
     void PrintData();
 
@@ -197,6 +199,8 @@ private:
     static void SearchModulatorInCell(FormID& result, const RE::TESObjectREFR* a_origin,
                                       const RE::TESObjectCELL* a_cell, const std::unordered_set<FormID>&
                                       modulators, float range = 0);
+
+    static FormID SearchNearbyModulatorsCached(const RE::TESObjectREFR* a_obj, const std::vector<FormID>& candidates);
 };
 
 template <typename T>

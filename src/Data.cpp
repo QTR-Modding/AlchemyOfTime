@@ -1,4 +1,5 @@
 #include "Data.h"
+#include "CellScan.h"
 #include "CLibUtilsQTR/DrawDebug.hpp"
 #include "CLibUtilsQTR/BoundingBox.hpp"
 #include "MCP.h"
@@ -43,7 +44,7 @@ void Source::Init(const DefaultSettings* defaultsettings) {
     // get settings
     settings = *defaultsettings;
     // put addons
-    if (auto* addon = Settings::GetAddOnSettings(form); addon && addon->IsHealthy()) {
+    if (const auto addon = Settings::GetAddOnSettings(form); addon && addon->IsHealthy()) {
         settings.Add(*addon);
     }
 
@@ -107,12 +108,12 @@ std::string_view Source::GetName() const {
 }
 
 void Source::UpdateAddons() {
-    const auto* form = FormReader::GetFormByID(formid, editorid);
+    const auto form = FormReader::GetFormByID(formid, editorid);
     if (!form) {
         logger::error("UpdateAddons: Form not found.");
         return;
     }
-    if (auto* addon = Settings::GetAddOnSettings(form); addon && addon->IsHealthy()) {
+    if (const auto addon = Settings::GetAddOnSettings(form); addon && addon->IsHealthy()) {
         settings.Add(*addon);
     }
 
@@ -169,6 +170,47 @@ std::unordered_map<RefID, std::vector<StageUpdate>> Source::UpdateAllStages(
     }
     return updated_instances;
 }
+
+std::vector<StageUpdate> Source::UpdateAllStages(RefID a_refID, const float time) {
+    if (init_failed) {
+        logger::critical("UpdateAllStages: Initialisation failed.");
+        return {};
+    }
+
+    std::vector<StageUpdate> updated_instances;
+    if (data.empty()) {
+        logger::warn("No data found for source {}", editorid);
+        return updated_instances;
+    }
+    if (!data.contains(a_refID)) {
+        logger::warn("RefID {} not found in data.", a_refID);
+        return updated_instances;
+    }
+    for (auto& instances = data.at(a_refID); auto& instance : instances) {
+        const Stage* old_stage = IsStageNo(instance.no) ? &GetStage(instance.no) : nullptr;
+        if (UpdateStageInstance(instance, time)) {
+            const Stage* new_stage = nullptr;
+            if (instance.xtra.is_transforming) {
+                instance.xtra.is_decayed = true;
+                instance.xtra.is_fake = false;
+                const auto temp_formid = instance.GetDelayerFormID();
+                if (!transformed_stages.contains(temp_formid)) {
+                    logger::error("Transformed stage not found.");
+                    continue;
+                }
+                new_stage = &transformed_stages.at(temp_formid);
+                instance.xtra.is_transforming = false;
+            } else if (instance.xtra.is_decayed || !IsStageNo(instance.no)) {
+                new_stage = &decayed_stage;
+            }
+            auto is_fake_ = IsFakeStage(instance.no);
+            updated_instances.emplace_back(old_stage, new_stage ? new_stage : &GetStage(instance.no),
+                                           instance.count, instance.start_time, is_fake_);
+        }
+    }
+    return updated_instances;
+}
+
 
 bool Source::IsStage(const FormID some_formid) const {
     return std::ranges::any_of(stages | std::views::values, [&](const auto& stage) {
@@ -470,16 +512,6 @@ inline FormID Source::GetModulatorInInventory(RE::TESObjectREFR* inventory_owner
     return 0;
 }
 
-inline FormID Source::GetModulatorInWorld(const RE::TESObjectREFR* wo, const StageNo a_no) const {
-    // idea: scan proximity for the modulators
-    std::vector<FormID> candidates;
-    for (const auto& dlyr_fid : settings.delayers_order) {
-        if (!settings.delayer_allowed_stages.at(dlyr_fid).contains(a_no)) continue;
-        candidates.push_back(dlyr_fid);
-    }
-    return SearchNearbyModulators(wo, candidates);
-}
-
 inline FormID Source::GetTransformerInInventory(RE::TESObjectREFR* inventory_owner, const StageNo a_no) const {
     const auto inventory_owner_base_id = inventory_owner->GetBaseObject()->GetFormID();
     const auto inventory = inventory_owner->GetInventory();
@@ -499,13 +531,40 @@ inline FormID Source::GetTransformerInInventory(RE::TESObjectREFR* inventory_own
     return 0;
 }
 
+inline FormID Source::GetModulatorInWorld(const RE::TESObjectREFR* wo, const StageNo a_no) const {
+    std::vector<FormID> candidates;
+    candidates.reserve(settings.delayers_order.size());
+
+    for (const auto& dlyr_fid : settings.delayers_order) {
+        if (!settings.delayer_allowed_stages.at(dlyr_fid).contains(a_no)) {
+            continue;
+        }
+        candidates.push_back(dlyr_fid);
+    }
+
+    if (const auto hit = SearchNearbyModulatorsCached(wo, candidates); hit) {
+        return hit;
+    }
+
+    return 0;
+}
+
 inline FormID Source::GetTransformerInWorld(const RE::TESObjectREFR* wo, const StageNo a_no) const {
     std::vector<FormID> candidates;
+    candidates.reserve(settings.transformers_order.size());
+
     for (const auto& trns_fid : settings.transformers_order) {
-        if (!settings.transformer_allowed_stages.at(trns_fid).contains(a_no)) continue;
+        if (!settings.transformer_allowed_stages.at(trns_fid).contains(a_no)) {
+            continue;
+        }
         candidates.push_back(trns_fid);
     }
-    return SearchNearbyModulators(wo, candidates);
+
+    if (const auto hit = SearchNearbyModulatorsCached(wo, candidates); hit) {
+        return hit;
+    }
+
+    return 0;
 }
 
 void Source::UpdateTimeModulationInInventory(RE::TESObjectREFR* inventory_owner, const float _time) {
@@ -672,6 +731,74 @@ void Source::CleanUpData() {
     for (auto it = data.begin(); it != data.end();) {
         if (it->second.empty()) it = data.erase(it);
         else ++it;
+    }
+}
+
+void Source::CleanUpData(const RefID a_loc) {
+    if (!CheckIntegrity()) {
+        logger::critical("CheckIntegrity failed");
+        InitFailed();
+    }
+
+    if (init_failed) {
+        logger::critical("CleanUpData: Initialisation failed.");
+        return;
+    }
+    if (data.empty()) {
+        logger::info("No data found for source {}", editorid);
+        return;
+    }
+
+    const auto curr_time = RE::Calendar::GetSingleton()->GetHoursPassed();
+    const auto it_instances = data.find(a_loc);
+    if (it_instances == data.end()) {
+        return;
+    }
+    auto& instances = it_instances->second;
+    if (instances.empty()) {
+        return;
+    }
+    if (instances.size() > 1) {
+        for (auto it = instances.begin(); it + 1 != instances.end(); ++it) {
+            size_t ind = 1;
+            for (auto it2 = it + ind; it2 != instances.end(); it2 = it + ind) {
+                ++ind;
+                if (it == it2) continue;
+                if (it2->count <= 0) continue;
+                if (it->AlmostSameExceptCount(*it2, curr_time)) {
+                    it->count += it2->count;
+                    it2->count = 0;
+                }
+            }
+        }
+    }
+    for (auto it = instances.begin(); it != instances.end();) {
+        if (it->count <= 0 || it->start_time > curr_time || (it->xtra.is_decayed || !IsStageNo(it->no))) {
+            it = instances.erase(it);
+            continue;
+        }
+
+        // check if current time modulator is valid
+        const auto curr_delayer = it->GetDelayerFormID();
+        if (it->xtra.is_transforming) {
+            if (!settings.transformers.contains(curr_delayer)) {
+                logger::warn("Transformer FormID {:x} not found in default settings.", curr_delayer);
+                it->RemoveTimeMod(curr_time);
+            }
+        } else if (curr_delayer != 0 && !settings.delayers.contains(curr_delayer)) {
+            logger::warn("Delayer FormID {:x} not found in default settings.", curr_delayer);
+            it->RemoveTimeMod(curr_time);
+        }
+
+        if (curr_time - GetDecayTime(*it) > static_cast<float>(Settings::nForgettingTime)) {
+            it = instances.erase(it);
+            continue;
+        }
+        ++it;
+    }
+
+    if (instances.empty()) {
+        data.erase(it_instances);
     }
 }
 
@@ -1027,7 +1154,7 @@ void Source::RegisterStage(const FormID stage_formid, const StageNo stage_no) {
     }
 
     if (M) {
-        M->IndexStage(stage_formid, this);
+        M->IndexStage(stage_formid, formid);
     }
 
     Lorebox::AddKeyword(stage_form->As<RE::BGSKeywordForm>(), stage_formid);
@@ -1219,4 +1346,61 @@ void Source::SearchModulatorInCell(FormID& result, const RE::TESObjectREFR* a_or
     } else {
         a_cell->ForEachReference(callback);
     }
+}
+
+FormID Source::SearchNearbyModulatorsCached(const RE::TESObjectREFR* a_obj, const std::vector<FormID>& candidates) {
+    if (!a_obj || candidates.empty()) {
+        return 0;
+    }
+
+    const auto cache = CellScanner::GetSingleton()->GetCache();
+    if (!cache || cache->byBase.empty()) {
+        return 0;
+    }
+
+    const auto originPos = WorldObject::GetPosition(a_obj);
+
+    const float r = Settings::search_radius;
+    const float r2 = (r > 0.0f) ? (r * r) : std::numeric_limits<float>::infinity();
+
+    // Respect candidate ordering (unlike your current unordered_set path).
+    for (const auto baseID : candidates) {
+        const auto it = cache->byBase.find(baseID);
+        if (it == cache->byBase.end()) {
+            continue;
+        }
+
+        // For this baseID, try the closest refs first (without sorting):
+        // we scan all within r2 and keep the best hit that passes the OBB check.
+        float bestD2 = r2;
+        bool found = false;
+
+        for (const auto& e : it->second) {
+            const float dx = e.pos.x - originPos.x;
+            const float dy = e.pos.y - originPos.y;
+            const float dz = e.pos.z - originPos.z;
+            const float d2 = dx * dx + dy * dy + dz * dz;
+
+            if (d2 > bestD2) {
+                continue;
+            }
+
+            const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(e.refid);
+            if (!ref || ref->IsDisabled() || ref->IsDeleted() || ref->IsMarkedForDeletion()) {
+                continue;
+            }
+
+            // Reuse your existing strict proximity test (OBB / collision aware).
+            if (SearchModulatorInCell_Sub(a_obj, ref)) {
+                bestD2 = d2;
+                found = true;
+            }
+        }
+
+        if (found) {
+            return baseID;
+        }
+    }
+
+    return 0;
 }

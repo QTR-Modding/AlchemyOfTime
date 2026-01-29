@@ -372,18 +372,12 @@ RefStopFeature& RefStopFeature::operator=(const RefStopFeature& other) {
 
 RefStop& RefStop::operator=(const RefStop& other) {
     if (this != &other) {
-        ref_id = other.ref_id;
-        source_formid = other.source_formid;
+        ref_info = other.ref_info;
         stop_time = other.stop_time;
         features = other.features;
-
         // Manually handle any special cases for members
     }
     return *this;
-}
-
-RefStop::RefStop(const RefID ref_id_) {
-    ref_id = ref_id_;
 }
 
 bool RefStop::IsDue(const float curr_time) const { return stop_time <= curr_time; }
@@ -499,18 +493,18 @@ void RefStop::ApplySound(const float volume) {
         return RemoveSound();
     }
     const auto soundhelper = SoundHelper::GetSingleton();
-    soundhelper->Play(ref_id, sound.id, volume);
+    soundhelper->Play(ref_info.ref_id, sound.id, volume);
     sound.enabled = true;
 }
 
 RE::BSSoundHandle& RefStop::GetSoundHandle() const {
     auto* soundhelper = SoundHelper::GetSingleton();
-    return soundhelper->GetHandle(ref_id);
+    return soundhelper->GetHandle(ref_info.ref_id);
 }
 
 
 void RefStop::RemoveTint() {
-    if (const auto a_refr = RE::TESForm::LookupByID<RE::TESObjectREFR>(ref_id)) {
+    if (const auto a_refr = GetRef()) {
         if (const auto a_obj3d = a_refr->Get3D()) {
             const auto color = RE::NiColorA(0.0f, 0.0f, 0.0f, 0.0f);
             a_obj3d->TintScenegraph(color);
@@ -523,7 +517,7 @@ void RefStop::RemoveArtObject() {
     //if (model_ref_eff) model_ref_eff->finished = true;
 
     if (applied_art_objects.empty()) return;
-    if (const auto a_ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(ref_id)) {
+    if (const auto a_ref = GetRef()) {
         if (const auto processLists = RE::ProcessLists::GetSingleton()) {
             const auto handle = a_ref->CreateRefHandle();
             processLists->ForEachModelEffect([&](RE::ModelReferenceEffect* a_modelEffect) {
@@ -552,7 +546,7 @@ void RefStop::RemoveShader() {
 
     //}
     if (applied_effect_shaders.empty()) return;
-    if (const auto a_ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(ref_id)) {
+    if (const auto a_ref = GetRef()) {
         if (const auto processLists = RE::ProcessLists::GetSingleton()) {
             const auto handle = a_ref->CreateRefHandle();
             processLists->ForEachShaderEffect([&](RE::ShaderReferenceEffect* a_modelEffect) {
@@ -573,7 +567,7 @@ void RefStop::RemoveShader() {
 
 void RefStop::RemoveSound() {
     const auto soundhelper = SoundHelper::GetSingleton();
-    soundhelper->Stop(ref_id);
+    soundhelper->Stop(ref_info.ref_id);
     features.sound.enabled = false;
 }
 
@@ -594,7 +588,7 @@ bool RefStop::HasArtObject(RE::TESObjectREFR* a_ref, const RE::BGSArtObject* a_a
 }
 
 void RefStop::Update(const RefStop& other) {
-    if (ref_id != other.ref_id) {
+    if (ref_info.ref_id != other.ref_info.ref_id) {
         logger::critical("RefID not the same.");
         return;
     }
@@ -617,10 +611,6 @@ void RefStop::Update(const RefStop& other) {
     }
     if (fabs(stop_time - other.stop_time) > EPSILON) {
         stop_time = other.stop_time;
-    }
-    // Refresh cached source hint when available.
-    if (other.source_formid != 0 && source_formid != other.source_formid) {
-        source_formid = other.source_formid;
     }
 }
 

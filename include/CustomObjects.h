@@ -288,17 +288,41 @@ struct RefStopFeatures {
     }
 };
 
+struct RefInfo {
+    RefID ref_id = 0;
+    mutable RE::ObjectRefHandle ref_handle;
+
+    explicit RefInfo(const RefID a_ref_id) {
+        ref_id = a_ref_id;
+        if (const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(ref_id)) {
+            ref_handle = ref->GetHandle();
+        }
+    }
+
+    RE::TESObjectREFR* GetRef() const {
+        if (const auto ref = ref_handle.get().get()) {
+            if (ref->GetFormID() == ref_id) {
+                return ref;
+            }
+        }
+        if (const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(ref_id)) {
+            ref_handle.reset();
+            ref_handle = ref->GetHandle();
+            return ref;
+        }
+        return nullptr;
+    }
+};
+
+
 struct RefStop {
     ~RefStop() = default;
 
-    bool operator<(const RefStop& other) const {
-        return ref_id < other.ref_id;
-    }
+    bool operator<(const RefStop& other) const { return ref_info.ref_id < other.ref_info.ref_id; }
 
     RefStop& operator=(const RefStop& other);
 
-    RefID ref_id = 0;
-    FormID source_formid = 0;
+    RefInfo ref_info;
     float stop_time = 0;
     RefStopFeatures features;
 
@@ -308,12 +332,10 @@ struct RefStop {
     std::unordered_set<FormID> applied_art_objects;
     std::unordered_set<FormID> applied_effect_shaders;
 
-    RefStop() = default;
-    explicit RefStop(RefID ref_id_);
+    explicit RefStop(const RefID ref_id_) : ref_info(ref_id_) {}
 
     RefStop(const RefID ref_id_, const float stop_t, const RefStopFeatures& a_features)
-        : ref_id(ref_id_), stop_time(stop_t), features(a_features) {
-    }
+        : ref_info(ref_id_), stop_time(stop_t), features(a_features) {}
 
     [[nodiscard]] bool IsDue(float curr_time) const;
 
@@ -333,6 +355,6 @@ struct RefStop {
     void Update(const RefStop& other);
 
     RE::TESObjectREFR* GetRef() const {
-        return RE::TESForm::LookupByID<RE::TESObjectREFR>(ref_id);
+        return ref_info.GetRef();
     }
 };

@@ -27,7 +27,8 @@ class Manager final : public Ticker, public SaveLoadData {
     std::shared_mutex queueMutex_;
 
     std::unordered_map<FormID, std::unique_ptr<Source>> sources;
-    std::unordered_map<FormID, Source*> stage_to_source;
+    // maps stage formid to source formids
+    std::unordered_map<FormID, std::unordered_set<FormID>> stage_to_sources;
 
     std::unordered_map<std::string, bool> _other_settings;
 
@@ -59,16 +60,22 @@ class Manager final : public Ticker, public SaveLoadData {
 
     // Cleans up a Source instance. [expects: sourceMutex_] (unique)
     static void CleanUpSourceData(Source* src);
+    static void CleanUpSourceData(Source* src, RefID a_loc);
 
     // Lookup by form id among existing sources. [expects: sourceMutex_] (shared)
     [[nodiscard]] Source* GetSource(FormID some_formid);
+    // Lookup by form id among existing sources. [expects: sourceMutex_] (shared)
+    [[nodiscard]] Source* GetSource(FormID stage_formid, RefID location_id);
+    // Lookup by form id among existing sources. [expects: sourceMutex_] (shared)
+    [[nodiscard]] Source* GetSourceByLocation(RefID location_id);
 
     // Get or create a Source; may mutate the sources list. [expects: sourceMutex_] (unique)
     [[nodiscard]] Source* ForceGetSource(FormID some_formid);
 
     static bool IsSource(FormID some_formid);
 
-    // Returns pointer into Source::data; pointer valid only while sourceMutex_ remains held. [expects: sourceMutex_] (shared)
+    // Returns pointer into Source::data; pointer valid only while sourceMutex_ remains held. 
+    // [expects: sourceMutex_] (shared)
     [[nodiscard]] StageInstance* GetWOStageInstance(const RE::TESObjectREFR* wo_ref);
 
     static inline void ApplyStageInWorld_Fake(RE::TESObjectREFR* wo_ref, const char* xname);
@@ -96,7 +103,7 @@ class Manager final : public Ticker, public SaveLoadData {
     // [expects: sourceMutex_] (unique)
     void UpdateInventory(RE::TESObjectREFR* ref);
 
-    void UpdateQueuedWO(RefID refid, FormID hinted_source_formid);
+    void UpdateQueuedWO(const RefInfo& ref_info, float curr_time);
 
     // [expects: sourceMutex_] (unique)
     void UpdateWO(RE::TESObjectREFR* ref);
@@ -112,6 +119,11 @@ class Manager final : public Ticker, public SaveLoadData {
     static bool RefIsUpdatable(const RE::TESObjectREFR* ref);
     // [expects: sourceMutex_] (unique)
     bool DeRegisterRef(RefID refid);
+
+    using ScanRequest = std::pair<RefInfo, std::vector<FormID>>;
+
+    [[nodiscard]] std::vector<ScanRequest> BuildCellScanRequests_(
+        const std::vector<RefInfo>& refStopsCopy);
 
 public:
     explicit Manager(const std::chrono::milliseconds interval)
@@ -184,20 +196,20 @@ public:
     // Snapshot of the update queue. [locks: queueMutex_] (shared)
     std::unordered_map<RefID, float> GetUpdateQueue();
 
+    // [expects: sourceMutex_] (shared)
     void HandleDynamicWO(RE::TESObjectREFR* ref);
 
-    // Note: called from contexts that already hold sourceMutex_. Do not acquire it inside.
+    // Note: called from contexts that already hold sourceMutex_. Do not acquire it inside. 
+    // [expects: sourceMutex_] (shared)
     void HandleWOBaseChange(RE::TESObjectREFR* ref);
 
     bool IsTickerActive() const {
         return isRunning();
     }
 
-    bool IsStageItem(FormID a_formid);
+    std::vector<RefInfo> GetRefStops();
 
-    std::vector<std::pair<RefID, FormID>> GetRefStops();
-
-    void IndexStage(FormID stage_formid, Source* src);
+    void IndexStage(FormID stage_formid, FormID source_formid);
 };
 
 inline Manager* M = nullptr;
