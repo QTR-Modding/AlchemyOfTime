@@ -810,13 +810,12 @@ bool Manager::UpdateInventory(RE::TESObjectREFR* ref, const float t) {
         if (source.data.empty()) continue;
         if (!source.data.contains(refid)) continue;
         if (source.data.at(refid).empty()) continue;
-        const auto updated_stages = source.UpdateAllStages(refid, t);
-        const auto& updates = !updated_stages.empty() ? updated_stages : std::vector<StageUpdate>();
+        const auto& updates = source.UpdateAllStages(refid, t);
         if (!update_took_place && !updates.empty()) update_took_place = true;
         CleanUpSourceData(&source);
         for (const auto& update : updates) {
-            if (ApplyEvolutionInInventory(ref, update.count, update.oldstage->formid, update.newstage->formid) && source
-                .IsDecayedItem(update.newstage->formid)) {
+            if (ApplyEvolutionInInventory(ref, update.count, update.oldstage->formid, update.newstage->formid) && 
+                source.IsDecayedItem(update.newstage->formid)) {
                 Register(update.newstage->formid, update.count, refid, t);
             }
         }
@@ -1737,6 +1736,53 @@ std::vector<Source> Manager::GetSources() {
     for (const auto& src : sources | std::views::values) {
         sources_copy.push_back(*src);
     }
+    return sources_copy;
+}
+
+std::vector<Source> Manager::GetSourcesByStageAndOwner(const FormID stage_formid, const RefID location_id) {
+    std::vector<Source> sources_copy;
+    if (!stage_formid || !location_id) {
+        return sources_copy;
+    }
+
+    SRC_SHARED_GUARD;
+
+    std::unordered_set<FormID> seen;
+    const auto append_if_match = [&](Source* src) {
+        if (!src || !src->IsHealthy()) {
+            return;
+        }
+
+        const auto dit = src->data.find(location_id);
+        if (dit == src->data.end() || dit->second.empty()) {
+            return;
+        }
+
+        for (const auto& inst : dit->second) {
+            if (inst.count > 0 && inst.xtra.form_id == stage_formid) {
+                sources_copy.push_back(*src);
+                return;
+            }
+        }
+    };
+
+    if (const auto it = sources.find(stage_formid); it != sources.end()) {
+        if (seen.insert(stage_formid).second) {
+            append_if_match(it->second.get());
+        }
+    }
+
+    if (const auto it = stage_to_sources.find(stage_formid); it != stage_to_sources.end()) {
+        for (const FormID src_formid : it->second) {
+            if (!seen.insert(src_formid).second) {
+                continue;
+            }
+            if (const auto sit = sources.find(src_formid); sit != sources.end()) {
+                append_if_match(sit->second.get());
+            }
+        }
+    }
+
     return sources_copy;
 }
 
