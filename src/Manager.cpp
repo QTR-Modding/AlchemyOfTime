@@ -475,6 +475,11 @@ void Manager::CleanUpSourceData(Source* src) {
     src->CleanUpData();
 }
 
+void Manager::CleanUpSourceData(Source* src, const RefID a_loc) {
+    if (!src) return;
+    src->CleanUpData(a_loc);
+}
+
 Source* Manager::GetSource(const FormID some_formid) {
     if (const auto it = sources.find(some_formid); it != sources.end()) {
         return it->second.get();
@@ -1029,7 +1034,7 @@ void Manager::UpdateQueuedWO(const RefID refid, const float curr_time) {
         QueueWOUpdate(a_ref_stop);
     }
 
-    CleanUpSourceData(source);
+    CleanUpSourceData(source, refid);
 }
 
 void Manager::UpdateWO(RE::TESObjectREFR* ref) {
@@ -1101,7 +1106,8 @@ void Manager::UpdateWO(RE::TESObjectREFR* ref) {
         UpdateRefStop(*source, wo_inst, a_ref_stop, next_update);
         QueueWOUpdate(a_ref_stop);
     }
-    CleanUpSourceData(source);
+
+    CleanUpSourceData(source, refid);
 }
 
 void Manager::UpdateRef(RE::TESObjectREFR* loc) {

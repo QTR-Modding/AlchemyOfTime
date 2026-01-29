@@ -734,6 +734,74 @@ void Source::CleanUpData() {
     }
 }
 
+void Source::CleanUpData(const RefID a_loc) {
+    if (!CheckIntegrity()) {
+        logger::critical("CheckIntegrity failed");
+        InitFailed();
+    }
+
+    if (init_failed) {
+        logger::critical("CleanUpData: Initialisation failed.");
+        return;
+    }
+    if (data.empty()) {
+        logger::info("No data found for source {}", editorid);
+        return;
+    }
+
+    const auto curr_time = RE::Calendar::GetSingleton()->GetHoursPassed();
+    const auto it_instances = data.find(a_loc);
+    if (it_instances == data.end()) {
+        return;
+    }
+    auto& instances = it_instances->second;
+    if (instances.empty()) {
+        return;
+    }
+    if (instances.size() > 1) {
+        for (auto it = instances.begin(); it + 1 != instances.end(); ++it) {
+            size_t ind = 1;
+            for (auto it2 = it + ind; it2 != instances.end(); it2 = it + ind) {
+                ++ind;
+                if (it == it2) continue;
+                if (it2->count <= 0) continue;
+                if (it->AlmostSameExceptCount(*it2, curr_time)) {
+                    it->count += it2->count;
+                    it2->count = 0;
+                }
+            }
+        }
+    }
+    for (auto it = instances.begin(); it != instances.end();) {
+        if (it->count <= 0 || it->start_time > curr_time || (it->xtra.is_decayed || !IsStageNo(it->no))) {
+            it = instances.erase(it);
+            continue;
+        }
+
+        // check if current time modulator is valid
+        const auto curr_delayer = it->GetDelayerFormID();
+        if (it->xtra.is_transforming) {
+            if (!settings.transformers.contains(curr_delayer)) {
+                logger::warn("Transformer FormID {:x} not found in default settings.", curr_delayer);
+                it->RemoveTimeMod(curr_time);
+            }
+        } else if (curr_delayer != 0 && !settings.delayers.contains(curr_delayer)) {
+            logger::warn("Delayer FormID {:x} not found in default settings.", curr_delayer);
+            it->RemoveTimeMod(curr_time);
+        }
+
+        if (curr_time - GetDecayTime(*it) > static_cast<float>(Settings::nForgettingTime)) {
+            it = instances.erase(it);
+            continue;
+        }
+        ++it;
+    }
+
+    if (instances.empty()) {
+        data.erase(it_instances);
+    }
+}
+
 void Source::PrintData() {
     if (init_failed) {
         logger::critical("PrintData: Initialisation failed.");

@@ -60,6 +60,7 @@ class Manager final : public Ticker, public SaveLoadData {
 
     // Cleans up a Source instance. [expects: sourceMutex_] (unique)
     static void CleanUpSourceData(Source* src);
+    static void CleanUpSourceData(Source* src, RefID a_loc);
 
     // Lookup by form id among existing sources. [expects: sourceMutex_] (shared)
     [[nodiscard]] Source* GetSource(FormID some_formid);

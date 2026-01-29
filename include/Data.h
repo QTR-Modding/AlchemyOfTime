@@ -81,6 +81,7 @@ struct Source {
     float GetNextUpdateTime(const StageInstance* st_inst) const;
 
     void CleanUpData();
+    void CleanUpData(RefID a_loc);
 
     void PrintData();
 
