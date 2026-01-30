@@ -339,7 +339,7 @@ std::vector<Manager::ScanRequest> Manager::BuildCellScanRequests_(
 }
 
 void Manager::UpdateImpl(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::TESForm* what, Count count,
-                         RefID from_refid, bool update_refs) {
+                         RefID from_refid, const bool update_refs) {
     const bool to_is_world_object = to && !to->HasContainer();
     if (to_is_world_object) count = to->extraList.GetCount();
 
@@ -433,7 +433,7 @@ void Manager::UpdateImpl(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const R
     }
 }
 
-void Manager::QueueTransfer(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::TESForm* what, Count count) {
+void Manager::QueueTransfer(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::TESForm* what, const Count count) {
     if (!from || !to || !what || count <= 0) {
         return;
     }
@@ -1593,8 +1593,8 @@ void Manager::HandleCraftingExit() {
     Update(player_ref);
 }
 
-void Manager::Update(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::TESForm* what, Count count,
-                     RefID from_refid) {
+void Manager::Update(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::TESForm* what, const Count count,
+                     const RefID from_refid) {
     UpdateImpl(from, to, what, count, from_refid, true);
 }
 
