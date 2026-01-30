@@ -1227,7 +1227,6 @@ bool Manager::RefIsRegistered(const RefID refid) {
     }
     SRC_SHARED_GUARD;
     if (sources.empty()) {
-        logger::warn("Sources is empty.");
         return false;
     }
     for (const auto& src : sources | std::views::values) {
@@ -1749,21 +1748,21 @@ void Manager::ReceiveData() {
         const auto& source_editorid = editor_id;
         const auto loc = lhs.second;
         if (!source_formid) {
-            logger::error("ReceiveData: Formid is null.");
+            logger::error("ReceiveData: FormID is null.");
             continue;
         }
         if (source_editorid.empty()) {
-            logger::error("ReceiveData: Editorid is empty.");
+            logger::error("ReceiveData: EditorID is empty.");
             continue;
         }
         const auto source_form = FormReader::GetFormByID(0, source_editorid);
         if (!source_form) {
-            logger::critical("ReceiveData: Source form not found. Saved formid: {:x}, editorid: {}", source_formid,
+            logger::critical("ReceiveData: Source form not found. Saved FormID: {:x}, EditorID: {}", source_formid,
                              source_editorid);
             continue;
         }
         if (source_form->GetFormID() != source_formid) {
-            logger::warn("ReceiveData: Source formid does not match. Saved formid: {:x}, editorid: {}", source_formid,
+            logger::warn("ReceiveData: Source FormID does not match. Saved FormID: {:x}, EditorID: {}", source_formid,
                          source_editorid);
             source_formid = source_form->GetFormID();
         }
@@ -1773,7 +1772,7 @@ void Manager::ReceiveData() {
             if (st_plain.is_fake) locs_to_be_handled[loc].push_back(st_plain.form_id);
             if (const auto inserted_instance = RegisterAtReceiveData(source_formid, loc, st_plain);
                 !inserted_instance) {
-                logger::warn("ReceiveData: could not insert instance: formid: {:x}, loc: {:x}", source_formid, loc);
+                logger::warn("ReceiveData: could not insert instance: FormID: {:x}, loc: {:x}", source_formid, loc);
                 continue;
             }
             n_instances++;
