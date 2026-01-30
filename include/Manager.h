@@ -54,6 +54,7 @@ class Manager final : public Ticker, public SaveLoadData {
         std::size_t operator()(const TransferKey& k) const noexcept;
     };
 
+    // queueMutex_ guards pending_transfers_; pending_transfers_scheduled is the scheduling gate for that queue
     std::unordered_map<TransferKey, Count, TransferKeyHash> pending_transfers_;
     std::atomic<bool> pending_transfers_scheduled{false};
 
