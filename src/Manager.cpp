@@ -418,14 +418,14 @@ void Manager::UpdateImpl(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const R
     if (update_refs) {
         if (to) {
             const auto h = to->GetHandle();
-            if (auto* a_ref = h.get().get()) {
+            if (const auto a_ref = h.get().get()) {
                 SRC_UNIQUE_GUARD;
                 UpdateRef(a_ref);
             }
         }
         if (from && (from->HasContainer() || !to)) {
             const auto h = from->GetHandle();
-            if (auto* a_ref = h.get().get()) {
+            if (const auto a_ref = h.get().get()) {
                 SRC_UNIQUE_GUARD;
                 UpdateRef(a_ref);
             }
@@ -445,7 +445,7 @@ void Manager::QueueTransfer(RE::TESObjectREFR* from, RE::TESObjectREFR* to, cons
     }
 
     {
-        const TransferKey key{what->GetFormID(), from->GetFormID(), to->GetFormID()};
+        const TransferKey key{.what = what->GetFormID(), .from = from->GetFormID(), .to = to->GetFormID()};
         QUE_UNIQUE_GUARD;
         pending_transfers_[key] += count;
     }
@@ -467,9 +467,9 @@ void Manager::FlushQueuedTransfers() {
     for (const auto& [k, count] : batch) {
         if (count <= 0) continue;
 
-        auto* from = RE::TESForm::LookupByID<RE::TESObjectREFR>(k.from);
-        auto* to = RE::TESForm::LookupByID<RE::TESObjectREFR>(k.to);
-        const auto* what = RE::TESForm::LookupByID<RE::TESForm>(k.what);
+        const auto from = RE::TESForm::LookupByID<RE::TESObjectREFR>(k.from);
+        const auto to = RE::TESForm::LookupByID<RE::TESObjectREFR>(k.to);
+        const auto what = RE::TESForm::LookupByID<RE::TESForm>(k.what);
         if (!from || !to || !what) continue;
 
         UpdateImpl(from, to, what, count, 0, false);
@@ -479,7 +479,7 @@ void Manager::FlushQueuedTransfers() {
     }
 
     for (const RefID rid : dirty) {
-        if (auto* r = RE::TESForm::LookupByID<RE::TESObjectREFR>(rid)) {
+        if (const auto r = RE::TESForm::LookupByID<RE::TESObjectREFR>(rid)) {
             SRC_UNIQUE_GUARD;
             UpdateRef(r);
         }
