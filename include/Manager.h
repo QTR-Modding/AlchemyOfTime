@@ -29,6 +29,8 @@ class Manager final : public Ticker, public SaveLoadData {
     std::unordered_map<FormID, std::unique_ptr<Source>> sources;
     // maps stage formid to source formids
     std::unordered_map<FormID, std::unordered_set<FormID>> stage_to_sources;
+    // maps location refid to source formids. we only care about location presence in sources in this one (e.g. the count is irrelevant)
+    std::unordered_map<RefID, std::unordered_set<FormID>> loc_to_sources;
 
     std::unordered_map<std::string, bool> _other_settings;
 
@@ -58,15 +60,18 @@ class Manager final : public Ticker, public SaveLoadData {
 
     void IndexSourceStages(Source& source);
 
+    void AddLocationIndex(RefID location_id, FormID source_formid);
+    void RemoveLocationIndex(RefID location_id, FormID source_formid);
+    void UpdateLocationIndexForSource(const Source& src, RefID location_id);
+    void RefreshLocationIndex(RefID location_id);
+
     // Cleans up a Source instance. [expects: sourceMutex_] (unique)
-    static void CleanUpSourceData(Source* src);
-    static void CleanUpSourceData(Source* src, RefID a_loc);
+    void CleanUpSourceData(Source* src);
+    void CleanUpSourceData(Source* src, RefID a_loc);
 
     // Lookup by form id among existing sources. [expects: sourceMutex_] (shared)
     [[nodiscard]] Source* GetSource(FormID some_formid);
-    // Lookup by form id among existing sources. [expects: sourceMutex_] (shared)
-    [[nodiscard]] Source* GetSource(FormID stage_formid, RefID location_id);
-    // Lookup by form id among existing sources. [expects: sourceMutex_] (shared)
+    // Lookup by ref id among existing sources. [expects: sourceMutex_] (shared)
     [[nodiscard]] Source* GetSourceByLocation(RefID location_id);
 
     // Get or create a Source; may mutate the sources list. [expects: sourceMutex_] (unique)

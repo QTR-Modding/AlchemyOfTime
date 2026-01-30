@@ -127,50 +127,6 @@ RE::TESBoundObject* Source::GetBoundObject() const {
     return FormReader::GetFormByID<RE::TESBoundObject>(formid, editorid);
 }
 
-std::unordered_map<RefID, std::vector<StageUpdate>> Source::UpdateAllStages(
-    const std::vector<RefID>& filter, const float time) {
-    if (init_failed) {
-        logger::critical("UpdateAllStages: Initialisation failed.");
-        return {};
-    }
-    // save the updated instances
-    std::unordered_map<RefID, std::vector<StageUpdate>> updated_instances;
-    if (data.empty()) {
-        logger::warn("No data found for source {}", editorid);
-        return updated_instances;
-    }
-
-    for (auto& a_refID : filter) {
-        if (!data.contains(a_refID)) {
-            logger::warn("RefID {} not found in data.", a_refID);
-            continue;
-        }
-        for (auto& instances = data.at(a_refID); auto& instance : instances) {
-            const Stage* old_stage = IsStageNo(instance.no) ? &GetStage(instance.no) : nullptr;
-            if (UpdateStageInstance(instance, time)) {
-                const Stage* new_stage = nullptr;
-                if (instance.xtra.is_transforming) {
-                    instance.xtra.is_decayed = true;
-                    instance.xtra.is_fake = false;
-                    const auto temp_formid = instance.GetDelayerFormID();
-                    if (!transformed_stages.contains(temp_formid)) {
-                        logger::error("Transformed stage not found.");
-                        continue;
-                    }
-                    new_stage = &transformed_stages.at(temp_formid);
-                    instance.xtra.is_transforming = false;
-                } else if (instance.xtra.is_decayed || !IsStageNo(instance.no)) {
-                    new_stage = &decayed_stage;
-                }
-                auto is_fake_ = IsFakeStage(instance.no);
-                updated_instances[a_refID].emplace_back(old_stage, new_stage ? new_stage : &GetStage(instance.no),
-                                                        instance.count, instance.start_time, is_fake_);
-            }
-        }
-    }
-    return updated_instances;
-}
-
 std::vector<StageUpdate> Source::UpdateAllStages(RefID a_refID, const float time) {
     if (init_failed) {
         logger::critical("UpdateAllStages: Initialisation failed.");

@@ -30,7 +30,6 @@ struct Source {
 
     [[nodiscard]] RE::TESBoundObject* GetBoundObject() const;;
 
-    std::unordered_map<RefID, std::vector<StageUpdate>> UpdateAllStages(const std::vector<RefID>& filter, float time);
     std::vector<StageUpdate> UpdateAllStages(RefID a_refID, float time);
 
     // daha once yaratilmis bi stage olmasi gerekiyo

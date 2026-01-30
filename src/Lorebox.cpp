@@ -127,7 +127,7 @@ namespace {
         std::wstring curr; // current stage name if available
     };
 
-    int ComputeMinutesRemaining(const Source& src, const StageInstance& st, float now) {
+    int ComputeMinutesRemaining(const Source& src, const StageInstance& st, const float now) {
         const float slope = st.GetDelaySlope();
         if (std::abs(slope) < EPSILON) {
             return -1;
@@ -141,7 +141,7 @@ namespace {
         return static_cast<int>(std::round((nextT - now) * 60.f));
     }
 
-    int ComputePercentage(const Source& src, const StageInstance& st, float now) {
+    int ComputePercentage(const Source& src, const StageInstance& st, const float now) {
         float pct = -1.f;
         if (st.xtra.is_transforming) {
             const auto tr = st.GetDelayerFormID();
