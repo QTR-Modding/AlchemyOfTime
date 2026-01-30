@@ -42,6 +42,24 @@ class Manager final : public Ticker, public SaveLoadData {
 
     std::unordered_set<FormID> do_not_register;
 
+    struct TransferKey {
+        FormID what{0};
+        RefID from{0};
+        RefID to{0};
+
+        bool operator==(const TransferKey& o) const noexcept { return what == o.what && from == o.from && to == o.to; }
+    };
+
+    struct TransferKeyHash {
+        std::size_t operator()(const TransferKey& k) const noexcept;
+    };
+
+    // queueMutex_ guards pending_transfers_; pending_transfers_scheduled is the scheduling gate for that queue
+    std::unordered_map<TransferKey, Count, TransferKeyHash> pending_transfers_;
+    std::atomic<bool> pending_transfers_scheduled{false};
+
+    void FlushQueuedTransfers();
+
     static void PreDeleteRefStop(RefStop& a_ref_stop);
 
     // Ticker thread entry. [locks: queueMutex_]
@@ -129,6 +147,9 @@ class Manager final : public Ticker, public SaveLoadData {
 
     [[nodiscard]] std::vector<ScanRequest> BuildCellScanRequests_(
         const std::vector<RefInfo>& refStopsCopy);
+
+    void UpdateImpl(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::TESForm* what, Count count,
+                    RefID from_refid, bool update_refs);
 
 public:
     explicit Manager(const std::chrono::milliseconds interval)
@@ -218,6 +239,16 @@ public:
     std::vector<RefInfo> GetRefStops();
 
     void IndexStage(FormID stage_formid, FormID source_formid);
+
+    void QueueTransfer(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::TESForm* what, Count count);
 };
+
+inline std::size_t Manager::TransferKeyHash::operator()(const TransferKey& k) const noexcept {
+    // decent mix
+    std::size_t h = std::hash<FormID>{}(k.what);
+    h ^= (std::hash<RefID>{}(k.from) + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2));
+    h ^= (std::hash<RefID>{}(k.to) + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2));
+    return h;
+}
 
 inline Manager* M = nullptr;

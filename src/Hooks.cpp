@@ -121,7 +121,7 @@ RE::ObjectRefHandle* Hooks::MoveItemHooks<RefType>::RemoveItem(RefType* a_this,
                                             a_move_to_ref,
                             a_drop_loc, a_rotate);
 
-    M->Update(a_this, a_move_to_ref ? a_move_to_ref : res ? res->get().get() : nullptr, a_item, a_count);
+    M->QueueTransfer(a_this, a_move_to_ref ? a_move_to_ref : res ? res->get().get() : nullptr, a_item, a_count);
 
     return res;
 }
@@ -137,5 +137,5 @@ void Hooks::MoveItemHooks<RefType>::addObjectToContainer(RefType* a_this, RE::TE
 
     add_object_to_container_(a_this, a_object, a_extraList, a_count, a_fromRefr);
 
-    M->Update(a_fromRefr, a_this, a_object, a_count);
+    M->QueueTransfer(a_fromRefr, a_this, a_object, a_count);
 }
