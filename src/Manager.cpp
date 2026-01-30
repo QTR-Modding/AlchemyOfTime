@@ -1297,7 +1297,7 @@ void Manager::Register(const FormID some_formid, const Count count, const RefID 
             UpdateLocationIndexForSource(*src, location_refid);
         }
     } else {
-        if (const auto inserted_instance = src->InitInsertInstanceWO(stage_no, count, location_refid, register_time); 
+        if (const auto inserted_instance = src->InitInsertInstanceWO(stage_no, count, location_refid, register_time);
             !inserted_instance) {
             logger::error("Register: InsertNewInstance failed 2.");
         } else {
@@ -1826,46 +1826,62 @@ std::vector<Source> Manager::GetSources() {
 }
 
 std::vector<Source> Manager::GetSourcesByStageAndOwner(const FormID stage_formid, const RefID location_id) {
-    std::vector<Source> sources_copy;
+    std::vector<Source> out;
     if (!stage_formid || !location_id) {
-        return sources_copy;
+        return out;
     }
 
     SRC_SHARED_GUARD;
 
     const auto lit = loc_to_sources.find(location_id);
-    if (lit == loc_to_sources.end() || lit->second.empty()) {
-        return sources_copy;
+    const size_t nLoc = (lit == loc_to_sources.end()) ? 0 : lit->second.size();
+    if (nLoc == 0) {
+        return out;
     }
 
-    sources_copy.reserve(lit->second.size());
+    const auto stIt = stage_to_sources.find(stage_formid);
+    const bool haveStageSet = (stIt != stage_to_sources.end() && !stIt->second.empty());
+    const size_t nStage = haveStageSet ? stIt->second.size() : SIZE_MAX;
 
-    for (const FormID src_formid : lit->second) {
+    out.reserve(haveStageSet ? std::min(nLoc, nStage) : nLoc);
+
+    auto try_add_if_match = [&](const FormID src_formid) {
         const auto sit = sources.find(src_formid);
-        if (sit == sources.end()) {
-            continue;  // stale index entry; ignore under shared lock
-        }
+        if (sit == sources.end()) return;
 
         Source* src = sit->second.get();
-        if (!src || !src->IsHealthy()) {
-            continue;
-        }
+        if (!src || !src->IsHealthy()) return;
 
         const auto dit = src->data.find(location_id);
-        if (dit == src->data.end() || dit->second.empty()) {
-            continue;  // stale index entry; ignore
-        }
+        if (dit == src->data.end() || dit->second.empty()) return;
 
         for (const auto& inst : dit->second) {
             if (inst.count > 0 && inst.xtra.form_id == stage_formid) {
-                sources_copy.push_back(*src);
-                break;
+                out.push_back(*src);
+                return;
             }
         }
+    };
+
+    // Iterate the smaller candidate set
+    if (haveStageSet && nStage <= nLoc) {
+        for (const FormID src_formid : stIt->second) {
+            try_add_if_match(src_formid);
+        }
+        return out;
     }
 
-    return sources_copy;
+    // Location-first route (usually best for "one chest with lots of staged items")
+    const auto stageSet = haveStageSet ? &stIt->second : nullptr;
+
+    for (const FormID src_formid : lit->second) {
+        if (stageSet && !stageSet->contains(src_formid)) continue;
+        try_add_if_match(src_formid);
+    }
+
+    return out;
 }
+
 
 std::unordered_map<RefID, float> Manager::GetUpdateQueue() {
     std::unordered_map<RefID, float> _ref_stops_copy;
