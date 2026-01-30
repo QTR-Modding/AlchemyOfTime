@@ -1866,12 +1866,12 @@ std::vector<Source> Manager::GetSourcesByStageAndOwner(const FormID stage_formid
     // Iterate the smaller candidate set
     if (haveStageSet && nStage <= nLoc) {
         for (const FormID src_formid : stIt->second) {
+            if (!lit->second.contains(src_formid)) continue;
             try_add_if_match(src_formid);
         }
         return out;
     }
 
-    // Location-first route (usually best for "one chest with lots of staged items")
     const auto stageSet = haveStageSet ? &stIt->second : nullptr;
 
     for (const FormID src_formid : lit->second) {
@@ -1881,7 +1881,6 @@ std::vector<Source> Manager::GetSourcesByStageAndOwner(const FormID stage_formid
 
     return out;
 }
-
 
 std::unordered_map<RefID, float> Manager::GetUpdateQueue() {
     std::unordered_map<RefID, float> _ref_stops_copy;
