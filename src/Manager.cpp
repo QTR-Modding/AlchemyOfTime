@@ -966,17 +966,24 @@ void Manager::SyncWithInventory(RE::TESObjectREFR* ref) {
     formid_instances_map.reserve(loc_inventory.size());
     total_registry_counts.reserve(loc_inventory.size());
 
-    for (auto& src : sources | std::views::values) {
-        auto& source = *src;
-        if (!source.data.contains(loc_refid)) continue;
-        for (auto& st_inst : source.data.at(loc_refid)) {
-            // bu liste onceski savele ayni deil cunku source.datayi
-            // _registeratreceivedata deistirdi
-            if (!st_inst.xtra.is_decayed && st_inst.count > 0) {
-                auto& vecRef = formid_instances_map[st_inst.xtra.form_id];
-                vecRef.push_back(&st_inst);
-                auto& countRef = total_registry_counts[st_inst.xtra.form_id];
-                countRef += st_inst.count;
+    // Only iterate sources that have this location (via index)
+    if (const auto lit = loc_to_sources.find(loc_refid); lit != loc_to_sources.end()) {
+        for (const auto src_formid : lit->second) {
+            const auto sit = sources.find(src_formid);
+            if (sit == sources.end()) continue;
+
+            auto& source = *sit->second;
+            if (!source.data.contains(loc_refid)) continue;
+
+            for (auto& st_inst : source.data.at(loc_refid)) {
+                // bu liste onceski savele ayni deil cunku source.datayi
+                // _registeratreceivedata deistirdi
+                if (!st_inst.xtra.is_decayed && st_inst.count > 0) {
+                    auto& vecRef = formid_instances_map[st_inst.xtra.form_id];
+                    vecRef.push_back(&st_inst);
+                    auto& countRef = total_registry_counts[st_inst.xtra.form_id];
+                    countRef += st_inst.count;
+                }
             }
         }
     }
@@ -995,7 +1002,6 @@ void Manager::SyncWithInventory(RE::TESObjectREFR* ref) {
     }
 
     // for every formid, handle the discrepancies
-
     const auto current_time = RE::Calendar::GetSingleton()->GetHoursPassed();
 
     for (const auto& [bound, entry] : loc_inventory) {
@@ -1027,7 +1033,7 @@ void Manager::SyncWithInventory(RE::TESObjectREFR* ref) {
         formid_instances_map.erase(formid);
     }
 
-    for (const auto& [formid,instances] : formid_instances_map) {
+    for (const auto& [formid, instances] : formid_instances_map) {
         for (const auto instance : instances) {
             if (instance->xtra.is_fake && needHandling) {
                 AddItem(ref, nullptr, formid, instance->count);
@@ -1039,7 +1045,6 @@ void Manager::SyncWithInventory(RE::TESObjectREFR* ref) {
 
     locs_to_be_handled.erase(loc_refid);
 }
-
 
 void Manager::UpdateQueuedWO(const RefInfo& ref_info, const float curr_time) {
     // Called from UpdateLoop task.
