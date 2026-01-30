@@ -461,8 +461,8 @@ void Manager::FlushQueuedTransfers() {
     {
         QUE_UNIQUE_GUARD;
         batch.swap(pending_transfers_);
+        pending_transfers_scheduled.store(false, std::memory_order_release);
     }
-    pending_transfers_scheduled.store(false);
 
     for (const auto& [k, count] : batch) {
         if (count <= 0) continue;
@@ -474,14 +474,22 @@ void Manager::FlushQueuedTransfers() {
 
         UpdateImpl(from, to, what, count, 0, false);
 
-        if (from && from->HasContainer()) dirty.insert(k.from);
-        if (to && to->HasContainer()) dirty.insert(k.to);
+        if (from->HasContainer()) dirty.insert(k.from);
+        if (to->HasContainer()) dirty.insert(k.to);
     }
 
     for (const RefID rid : dirty) {
         if (auto* r = RE::TESForm::LookupByID<RE::TESObjectREFR>(rid)) {
             SRC_UNIQUE_GUARD;
-            UpdateRef(r); // heavy, but only once per container now
+            UpdateRef(r);
+        }
+    }
+
+    // If anything got queued while we were processing, schedule another flush.
+    {
+        QUE_UNIQUE_GUARD;
+        if (!pending_transfers_.empty() && !pending_transfers_scheduled.exchange(true, std::memory_order_acq_rel)) {
+            SKSE::GetTaskInterface()->AddTask([this]() { this->FlushQueuedTransfers(); });
         }
     }
 }
