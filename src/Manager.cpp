@@ -846,19 +846,28 @@ std::set<float> Manager::GetUpdateTimes(const RE::TESObjectREFR* inventory_owner
 
     const auto inventory_owner_refid = inventory_owner->GetFormID();
 
-    for (auto& src : sources | std::views::values) {
-        auto& source = *src;
+    const auto lit = loc_to_sources.find(inventory_owner_refid);
+    if (lit == loc_to_sources.end()) {
+        return queued_updates;
+    }
+
+    for (const auto src_formid : lit->second) {
+        const auto sit = sources.find(src_formid);
+        if (sit == sources.end()) continue;
+
+        auto& source = *sit->second;
         if (!source.IsHealthy()) {
             logger::error("_UpdateTimeModulators: Source is not healthy.");
             continue;
         }
+
         if (!source.data.contains(inventory_owner_refid)) continue;
 
         for (auto& st_inst : source.data.at(inventory_owner_refid)) {
             if (st_inst.xtra.is_decayed || !source.IsStageNo(st_inst.no)) continue;
-            if (const auto hitting_time = source.GetNextUpdateTime(&st_inst); hitting_time > 0)
-                queued_updates.insert(
-                    hitting_time);
+            if (const auto hitting_time = source.GetNextUpdateTime(&st_inst); hitting_time > 0) {
+                queued_updates.insert(hitting_time);
+            }
         }
     }
 
