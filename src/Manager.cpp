@@ -1875,38 +1875,33 @@ std::vector<Source> Manager::GetSourcesByStageAndOwner(const FormID stage_formid
 
     SRC_SHARED_GUARD;
 
-    std::unordered_set<FormID> seen;
-    const auto append_if_match = [&](Source* src) {
+    const auto lit = loc_to_sources.find(location_id);
+    if (lit == loc_to_sources.end() || lit->second.empty()) {
+        return sources_copy;
+    }
+
+    sources_copy.reserve(lit->second.size());
+
+    for (const FormID src_formid : lit->second) {
+        const auto sit = sources.find(src_formid);
+        if (sit == sources.end()) {
+            continue;  // stale index entry; ignore under shared lock
+        }
+
+        Source* src = sit->second.get();
         if (!src || !src->IsHealthy()) {
-            return;
+            continue;
         }
 
         const auto dit = src->data.find(location_id);
         if (dit == src->data.end() || dit->second.empty()) {
-            return;
+            continue;  // stale index entry; ignore
         }
 
         for (const auto& inst : dit->second) {
             if (inst.count > 0 && inst.xtra.form_id == stage_formid) {
                 sources_copy.push_back(*src);
-                return;
-            }
-        }
-    };
-
-    if (const auto it = sources.find(stage_formid); it != sources.end()) {
-        if (seen.insert(stage_formid).second) {
-            append_if_match(it->second.get());
-        }
-    }
-
-    if (const auto it = stage_to_sources.find(stage_formid); it != stage_to_sources.end()) {
-        for (const FormID src_formid : it->second) {
-            if (!seen.insert(src_formid).second) {
-                continue;
-            }
-            if (const auto sit = sources.find(src_formid); sit != sources.end()) {
-                append_if_match(sit->second.get());
+                break;
             }
         }
     }
