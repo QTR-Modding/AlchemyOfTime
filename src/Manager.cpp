@@ -627,6 +627,9 @@ Source* Manager::GetSourceByLocation(const RefID location_id) {
             if (dit == src->data.end() || dit->second.empty()) {
                 continue;
             }
+            if (dit->second.size() == 1 && dit->second.front().count > 0) {
+                return src;
+            }
             if (std::ranges::any_of(dit->second, [](const StageInstance& inst) { return inst.count > 0; })) {
                 return src;
             }
@@ -866,25 +869,57 @@ bool Manager::UpdateInventory(RE::TESObjectREFR* ref, const float t) {
     bool update_took_place = false;
     const auto refid = ref->GetFormID();
 
-    for (auto& src : sources | std::views::values) {
-        auto& source = *src;
+    std::vector<FormID> candidate_sources;
+    if (const auto it = loc_to_sources.find(refid); it != loc_to_sources.end()) {
+        candidate_sources.reserve(it->second.size());
+        candidate_sources.insert(candidate_sources.end(), it->second.begin(), it->second.end());
+    } else {
+        return false;
+    }
+
+    for (const auto src_formid : candidate_sources) {
+        const auto sit = sources.find(src_formid);
+        if (sit == sources.end()) {
+            RemoveLocationIndex(refid, src_formid);
+            continue;
+        }
+
+        auto& source = *sit->second;
         if (!source.IsHealthy()) continue;
-        if (source.data.empty()) continue;
-        if (!source.data.contains(refid)) continue;
-        if (source.data.at(refid).empty()) continue;
+
+        const auto dit = source.data.find(refid);
+        if (dit == source.data.end() || dit->second.empty()) {
+            UpdateLocationIndexForSource(source, refid);
+            continue;
+        }
+
         const auto& updates = source.UpdateAllStages(refid, t);
-        if (!update_took_place && !updates.empty()) update_took_place = true;
-        CleanUpSourceData(&source);
+        if (!updates.empty()) update_took_place = true;
+
+        CleanUpSourceData(&source, refid);
+
         for (const auto& update : updates) {
-            if (ApplyEvolutionInInventory(ref, update.count, update.oldstage->formid, update.newstage->formid) && 
+            if (ApplyEvolutionInInventory(ref, update.count, update.oldstage->formid, update.newstage->formid) &&
                 source.IsDecayedItem(update.newstage->formid)) {
                 Register(update.newstage->formid, update.count, refid, t);
             }
         }
     }
 
-    for (const auto& src : sources | std::views::values) {
-        src->UpdateTimeModulationInInventory(ref, t);
+    // Time modulation: re-snapshot in case Register() added new sources at this location
+    if (const auto it = loc_to_sources.find(refid); it != loc_to_sources.end()) {
+        std::vector<FormID> mod_sources;
+        mod_sources.reserve(it->second.size());
+        mod_sources.insert(mod_sources.end(), it->second.begin(), it->second.end());
+
+        for (const auto src_formid : mod_sources) {
+            const auto sit = sources.find(src_formid);
+            if (sit == sources.end()) {
+                RemoveLocationIndex(refid, src_formid);
+                continue;
+            }
+            sit->second->UpdateTimeModulationInInventory(ref, t);
+        }
     }
 
     return update_took_place;
