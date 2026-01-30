@@ -71,8 +71,6 @@ class Manager final : public Ticker, public SaveLoadData {
 
     // Lookup by form id among existing sources. [expects: sourceMutex_] (shared)
     [[nodiscard]] Source* GetSource(FormID some_formid);
-    // Lookup by form id and ref id among existing sources. [expects: sourceMutex_] (shared)
-    [[nodiscard]] Source* GetSource(FormID stage_formid, RefID location_id);
     // Lookup by ref id among existing sources. [expects: sourceMutex_] (shared)
     [[nodiscard]] Source* GetSourceByLocation(RefID location_id);
 

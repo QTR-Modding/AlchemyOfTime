@@ -566,48 +566,6 @@ Source* Manager::GetSource(const FormID some_formid) {
     return nullptr;
 }
 
-Source* Manager::GetSource(const FormID stage_formid, const RefID location_id) {
-    if (!stage_formid || !location_id) {
-        return nullptr;
-    }
-
-    // if stage 0
-    if (const auto it = sources.find(stage_formid); it != sources.end()) {
-        return it->second.get();
-    }
-
-    const auto it = stage_to_sources.find(stage_formid);
-    if (it == stage_to_sources.end() || it->second.empty()) {
-        return nullptr;
-    }
-
-    for (const FormID src_formid : it->second) {
-        const auto sit = sources.find(src_formid);
-        if (sit == sources.end()) {
-            continue;
-        }
-
-        Source* src = sit->second.get();
-        if (!src || !src->IsHealthy()) {
-            continue;
-        }
-
-        const auto dit = src->data.find(location_id);
-        if (dit == src->data.end() || dit->second.empty()) {
-            continue;
-        }
-
-        // inventory locations can have multiple instances; world refs usually just one.
-        for (const auto& inst : dit->second) {
-            if (inst.count > 0 && inst.xtra.form_id == stage_formid) {
-                return src;
-            }
-        }
-    }
-
-    return nullptr;
-}
-
 Source* Manager::GetSourceByLocation(const RefID location_id) {
     if (!location_id) {
         return nullptr;
