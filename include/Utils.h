@@ -316,9 +316,9 @@ struct FormTraits<RE::TESAmmo> {
     }
 };
 
+
 struct ListenGuard {
-    std::atomic_bool& flag;
-    bool prev;
-    explicit ListenGuard(std::atomic_bool& f) : flag(f), prev(f.exchange(false)) {}
-    ~ListenGuard() { flag.store(prev); }
+    std::atomic<int>& depth;
+    explicit ListenGuard(std::atomic<int>& d) : depth(d) { depth.fetch_add(1, std::memory_order_acq_rel); }
+    ~ListenGuard() { depth.fetch_sub(1, std::memory_order_acq_rel); }
 };

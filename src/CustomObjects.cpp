@@ -457,9 +457,11 @@ void RefStop::ApplyArtObject(RE::TESObjectREFR* a_ref, const float duration) {
         return;
     }
 
-    SKSE::GetTaskInterface()->AddTask([a_ref, a_art_obj, duration]() {
-        if (!a_ref || !a_art_obj) return;
-        a_ref->ApplyArtObject(a_art_obj, duration);
+    auto h = a_ref->GetHandle();
+    SKSE::GetTaskInterface()->AddTask([h, a_art_obj, duration]() {
+        const auto ref = h.get().get();
+        if (!ref || !a_art_obj) return;
+        ref->ApplyArtObject(a_art_obj, duration);
     });
 
     applied_art_objects.insert(art_object.id);
@@ -476,9 +478,12 @@ void RefStop::ApplyShader(RE::TESObjectREFR* a_ref, const float duration) {
         logger::error("Shader not found.");
         return;
     }
-    SKSE::GetTaskInterface()->AddTask([a_ref, eff_shader, duration]() {
-        if (!a_ref || !eff_shader) return;
-        a_ref->ApplyEffectShader(eff_shader, duration);
+
+    auto h = a_ref->GetHandle();
+    SKSE::GetTaskInterface()->AddTask([h, eff_shader, duration]() {
+        const auto ref = h.get().get();
+        if (!ref || !eff_shader) return;
+        ref->ApplyEffectShader(eff_shader, duration);
     });
     //shader_ref_eff = a_shader_ref_eff_ptr;
 

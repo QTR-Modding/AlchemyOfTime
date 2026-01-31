@@ -3,6 +3,12 @@
 namespace Hooks {
     inline bool is_menu_open = false;
 
+    inline std::atomic_int listen_disable_depth{0};
+
+    inline bool ListenEnabled() { return listen_disable_depth.load(std::memory_order_acquire) == 0; }
+
+    inline int n_process = 100;
+
     void Install();
 
     template <typename MenuType>

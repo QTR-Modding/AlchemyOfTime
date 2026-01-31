@@ -11,4 +11,5 @@ set(sources ${sources}
 	src/Data.cpp
 	src/Lorebox.cpp
 	src/CellScan.cpp
+	src/Queue.cpp
 )

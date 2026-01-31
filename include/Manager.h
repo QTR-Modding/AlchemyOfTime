@@ -2,6 +2,8 @@
 #include "Data.h"
 #include "ClibUtilsQTR/Ticker.hpp"
 
+class QueueManager;
+
 class Manager final : public Ticker, public SaveLoadData {
     RE::TESObjectREFR* player_ref = RE::PlayerCharacter::GetSingleton()->As<RE::TESObjectREFR>();
 
@@ -13,6 +15,7 @@ class Manager final : public Ticker, public SaveLoadData {
     std::unordered_map<RefID, std::vector<FormID>> locs_to_be_handled; // onceki sessiondan kalan fake formlar
 
     bool should_reset = false;
+    std::atomic_int iBusy = 0;
 
     // 0x0003eb42 damage health
 
@@ -41,24 +44,6 @@ class Manager final : public Ticker, public SaveLoadData {
     std::unordered_set<RefID> queue_delete_;
 
     std::unordered_set<FormID> do_not_register;
-
-    struct TransferKey {
-        FormID what{0};
-        RefID from{0};
-        RefID to{0};
-
-        bool operator==(const TransferKey& o) const noexcept { return what == o.what && from == o.from && to == o.to; }
-    };
-
-    struct TransferKeyHash {
-        std::size_t operator()(const TransferKey& k) const noexcept;
-    };
-
-    // queueMutex_ guards pending_transfers_; pending_transfers_scheduled is the scheduling gate for that queue
-    std::unordered_map<TransferKey, Count, TransferKeyHash> pending_transfers_;
-    std::atomic<bool> pending_transfers_scheduled{false};
-
-    void FlushQueuedTransfers();
 
     static void PreDeleteRefStop(RefStop& a_ref_stop);
 
@@ -107,13 +92,13 @@ class Manager final : public Ticker, public SaveLoadData {
     static void ApplyStageInWorld(RE::TESObjectREFR* wo_ref, const Stage& stage,
                                   RE::TESBoundObject* source_bound = nullptr);
 
-    [[nodiscard]] static bool ApplyEvolutionInInventory(RE::TESObjectREFR* inventory_owner,
+    [[nodiscard]] static bool ApplyEvolutionInInventory(const RE::TESObjectREFR* inventory_owner,
                                                         Count update_count,
                                                         FormID old_item, FormID new_item);
 
-    static inline void RemoveItem(RE::TESObjectREFR* moveFrom, FormID item_id, Count count);
+    static void RemoveItem(const RE::TESObjectREFR* moveFrom, FormID item_id, Count count);
 
-    static void AddItem(RE::TESObjectREFR* addTo, RE::TESObjectREFR* addFrom, FormID item_id, Count count);
+    static void AddItem(const RE::TESObjectREFR* addTo, const RE::TESObjectREFR* addFrom, FormID item_id, Count count);
 
     void Init();
 
@@ -148,8 +133,12 @@ class Manager final : public Ticker, public SaveLoadData {
     [[nodiscard]] std::vector<ScanRequest> BuildCellScanRequests_(
         const std::vector<RefInfo>& refStopsCopy);
 
+    bool IsBusy() const { return iBusy.load(std::memory_order_acquire) > 0; }
+
+protected:
     void UpdateImpl(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::TESForm* what, Count count,
-                    RefID from_refid, bool update_refs);
+                    RefID from_refid, bool refreshRefs);
+    friend QueueManager;
 
 public:
     explicit Manager(const std::chrono::milliseconds interval)
@@ -161,10 +150,6 @@ public:
         static Manager singleton(std::chrono::milliseconds(Settings::Ticker::GetInterval(Settings::ticker_speed)));
         return &singleton;
     }
-
-    // Use Or Take Compatibility
-    std::atomic<bool> listen_equip = true;
-    std::atomic<bool> listen_container_change = true;
 
     std::atomic<bool> isUninstalled = false;
     std::atomic<bool> isLoading = false;
@@ -239,16 +224,6 @@ public:
     std::vector<RefInfo> GetRefStops();
 
     void IndexStage(FormID stage_formid, FormID source_formid);
-
-    void QueueTransfer(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::TESForm* what, Count count);
 };
-
-inline std::size_t Manager::TransferKeyHash::operator()(const TransferKey& k) const noexcept {
-    // decent mix
-    std::size_t h = std::hash<FormID>{}(k.what);
-    h ^= (std::hash<RefID>{}(k.from) + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2));
-    h ^= (std::hash<RefID>{}(k.to) + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2));
-    return h;
-}
 
 inline Manager* M = nullptr;

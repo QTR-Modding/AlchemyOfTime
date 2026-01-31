@@ -9,6 +9,8 @@
 #include <unordered_map>
 #include <atomic>
 #include "CellScan.h"
+#include "Hooks.h"
+#include "Queue.h"
 
 #ifndef NDEBUG
 namespace {
@@ -339,7 +341,8 @@ std::vector<Manager::ScanRequest> Manager::BuildCellScanRequests_(
 }
 
 void Manager::UpdateImpl(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::TESForm* what, Count count,
-                         RefID from_refid, const bool update_refs) {
+    RefID from_refid, bool refreshRefs) {
+
     const bool to_is_world_object = to && !to->HasContainer();
     if (to_is_world_object) count = to->extraList.GetCount();
 
@@ -397,7 +400,7 @@ void Manager::UpdateImpl(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const R
                         }
                         handled_first = true;
                     } else if (const auto new_ref = WorldObject::DropObjectIntoTheWorld(st_inst.GetBound(), temp_count,
-                        is_player_owned)) {
+                                                                                        is_player_owned)) {
                         if (!src->MoveInstance(to_refid, new_ref->GetFormID(), &st_inst)) {
                             logger::error("Update: MoveInstance failed for form {} and loc {}.", what_formid, to_refid);
                         } else {
@@ -415,7 +418,7 @@ void Manager::UpdateImpl(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const R
         }
     }
 
-    if (update_refs) {
+    if (refreshRefs) {
         if (to) {
             const auto h = to->GetHandle();
             if (const auto a_ref = h.get().get()) {
@@ -429,67 +432,6 @@ void Manager::UpdateImpl(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const R
                 SRC_UNIQUE_GUARD;
                 UpdateRef(a_ref);
             }
-        }
-    }
-}
-
-void Manager::QueueTransfer(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::TESForm* what, const Count count) {
-    if (!from || !to || !what || count <= 0) {
-        return;
-    }
-
-    // If world objects are involved, keep old immediate behavior (count/extraList logic etc.)
-    if (!from->HasContainer() || !to->HasContainer()) {
-        Update(from, to, what, count);
-        return;
-    }
-
-    {
-        const TransferKey key{.what = what->GetFormID(), .from = from->GetFormID(), .to = to->GetFormID()};
-        QUE_UNIQUE_GUARD;
-        pending_transfers_[key] += count;
-    }
-
-    if (!pending_transfers_scheduled.exchange(true)) {
-        SKSE::GetTaskInterface()->AddTask([this]() { this->FlushQueuedTransfers(); });
-    }
-}
-
-void Manager::FlushQueuedTransfers() {
-    std::unordered_map<TransferKey, Count, TransferKeyHash> batch;
-    std::unordered_set<RefID> dirty;
-    {
-        QUE_UNIQUE_GUARD;
-        batch.swap(pending_transfers_);
-        pending_transfers_scheduled.store(false, std::memory_order_release);
-    }
-
-    for (const auto& [k, count] : batch) {
-        if (count <= 0) continue;
-
-        const auto from = RE::TESForm::LookupByID<RE::TESObjectREFR>(k.from);
-        const auto to = RE::TESForm::LookupByID<RE::TESObjectREFR>(k.to);
-        const auto what = RE::TESForm::LookupByID<RE::TESForm>(k.what);
-        if (!from || !to || !what) continue;
-
-        UpdateImpl(from, to, what, count, 0, false);
-
-        if (from->HasContainer()) dirty.insert(k.from);
-        if (to->HasContainer()) dirty.insert(k.to);
-    }
-
-    for (const RefID rid : dirty) {
-        if (const auto r = RE::TESForm::LookupByID<RE::TESObjectREFR>(rid)) {
-            SRC_UNIQUE_GUARD;
-            UpdateRef(r);
-        }
-    }
-
-    // If anything got queued while we were processing, schedule another flush.
-    {
-        QUE_UNIQUE_GUARD;
-        if (!pending_transfers_.empty() && !pending_transfers_scheduled.exchange(true, std::memory_order_acq_rel)) {
-            SKSE::GetTaskInterface()->AddTask([this]() { this->FlushQueuedTransfers(); });
         }
     }
 }
@@ -832,7 +774,7 @@ void Manager::ApplyStageInWorld(RE::TESObjectREFR* wo_ref, const Stage& stage, R
     }
 }
 
-bool Manager::ApplyEvolutionInInventory(RE::TESObjectREFR* inventory_owner,
+bool Manager::ApplyEvolutionInInventory(const RE::TESObjectREFR* inventory_owner,
                                         Count update_count, const FormID old_item, const FormID new_item) {
     if (!inventory_owner) {
         logger::error("Inventory owner is null.");
@@ -850,48 +792,15 @@ bool Manager::ApplyEvolutionInInventory(RE::TESObjectREFR* inventory_owner,
         return false;
     }
 
-    const auto old_bound = RE::TESForm::LookupByID<RE::TESBoundObject>(old_item);
-    if (!old_bound) {
-        logger::error("Old item is null.");
-        return false;
-    }
-    const auto new_bound = RE::TESForm::LookupByID<RE::TESBoundObject>(new_item);
-    if (!new_bound) {
-        logger::error("New item is null.");
-        return false;
-    }
-
-    const auto inventory = inventory_owner->GetInventory();
-    const auto entry = inventory.find(old_bound);
-    if (entry == inventory.end()) {
-        logger::error("Item not found in inventory.");
-        return false;
-    }
-    const auto inv_data = entry->second.second.get();
-    if (!inv_data) {
-        logger::error("Inv data is null.");
-        return false;
-    }
-    if (inv_data->IsQuestObject()) {
-        logger::warn("Item is a quest object.");
-        return false;
-    }
-
-    const auto inv_count = entry->second.first;
-    if (inv_count <= 0) {
-        logger::warn("Item count in inventory is 0 or less {}.", inv_count);
-        return false;
-    }
-
-    update_count = std::min(update_count, inv_count);
-    inventory_owner->RemoveItem(old_bound, update_count, RE::ITEM_REMOVE_REASON::kRemove, nullptr, nullptr);
-    inventory_owner->AddObjectToContainer(new_bound, nullptr, update_count, nullptr);
+    QueueManager::GetSingleton()->QueueAddRemoveItemTask(
+        AddItemTask{inventory_owner->GetFormID(), 0, new_item, update_count},
+        RemoveItemTask{inventory_owner->GetFormID(), old_item, update_count});
 
     return true;
 }
 
 
-inline void Manager::RemoveItem(RE::TESObjectREFR* moveFrom, const FormID item_id, const Count count) {
+void Manager::RemoveItem(const RE::TESObjectREFR* moveFrom, const FormID item_id, const Count count) {
     if (!moveFrom) {
         logger::warn("RemoveItem: moveFrom is null.");
         return;
@@ -900,24 +809,20 @@ inline void Manager::RemoveItem(RE::TESObjectREFR* moveFrom, const FormID item_i
         logger::warn("RemoveItem: Count is 0 or less.");
         return;
     }
-
-    const auto inventory = moveFrom->GetInventory();
-    if (const auto item = inventory.find(RE::TESForm::LookupByID<RE::TESBoundObject>(item_id));
-        item != inventory.end()) {
-        if (item->second.second->IsQuestObject()) {
-            logger::warn("Item is a quest object.");
-            return;
-        }
-        if (item->second.first < count) {
-            logger::warn("Item count is less than the count to remove.");
-        }
-
-        const auto bound = item->first;
-        moveFrom->RemoveItem(bound, count, RE::ITEM_REMOVE_REASON::kRemove, nullptr, nullptr);
+    if (!item_id) {
+        logger::warn("RemoveItem: item_id is null.");
+        return;
     }
+    if (!moveFrom->HasContainer()) {
+        logger::warn("RemoveItem: moveFrom does not have a container.");
+        return;
+    }
+
+    QueueManager::GetSingleton()->QueueAddRemoveItemTask({}, RemoveItemTask{moveFrom->GetFormID(), item_id, count});
 }
 
-void Manager::AddItem(RE::TESObjectREFR* addTo, RE::TESObjectREFR* addFrom, const FormID item_id, const Count count) {
+void Manager::AddItem(const RE::TESObjectREFR* addTo, const RE::TESObjectREFR* addFrom, const FormID item_id,
+                      const Count count) {
     if (!addTo) {
         logger::critical("add to is null!");
         return;
@@ -926,8 +831,12 @@ void Manager::AddItem(RE::TESObjectREFR* addTo, RE::TESObjectREFR* addFrom, cons
         logger::error("Count is 0 or less.");
         return;
     }
+
+    const FormID to_id = addTo->GetFormID();
+    FormID from_id = 0;
     if (addFrom) {
-        if (addTo->GetFormID() == addFrom->GetFormID()) {
+        from_id = addFrom->GetFormID();
+        if (to_id == from_id) {
             logger::warn("Add to and add from are the same.");
             return;
         }
@@ -937,9 +846,8 @@ void Manager::AddItem(RE::TESObjectREFR* addTo, RE::TESObjectREFR* addFrom, cons
         }
     }
 
-    if (const auto bound = RE::TESForm::LookupByID<RE::TESBoundObject>(item_id)) {
-        addTo->AddObjectToContainer(bound, nullptr, count, addFrom);
-    } else logger::critical("Bound is null.");
+    QueueManager::GetSingleton()->QueueAddRemoveItemTask(AddItemTask{to_id, from_id, item_id, count}, {});
+    
 }
 
 
@@ -1049,7 +957,6 @@ bool Manager::UpdateInventory(RE::TESObjectREFR* ref, const float t) {
 }
 
 void Manager::UpdateInventory(RE::TESObjectREFR* ref) {
-    ListenGuard lg(listen_container_change);
     SyncWithInventory(ref);
 
     // if there are time modulators which can also evolve, they need to be updated first
@@ -1377,18 +1284,10 @@ void Manager::ClearWOUpdateQueue() {
 }
 
 bool Manager::RefIsRegistered(const RefID refid) {
-    if (!refid) {
-        logger::warn("RefID is null.");
-        return false;
-    }
+    if (!refid) return false;
     SRC_SHARED_GUARD;
-    if (sources.empty()) {
-        return false;
-    }
-    for (const auto& src : sources | std::views::values) {
-        if (src->data.contains(refid) && !src->data.at(refid).empty()) return true;
-    }
-    return false;
+    const auto it = loc_to_sources.find(refid);
+    return it != loc_to_sources.end() && !it->second.empty();
 }
 
 void Manager::Register(const FormID some_formid, const Count count, const RefID location_refid,
@@ -1480,7 +1379,7 @@ void Manager::HandleCraftingEnter(const unsigned int bench_type) {
     }
 
     Update(player_ref);
-    ListenGuard lg(listen_container_change);
+    ListenGuard lg(Hooks::listen_disable_depth);
 
     const auto& q_form_types = Settings::qform_bench_map.at(bench_type);
 
@@ -1500,7 +1399,7 @@ void Manager::HandleCraftingEnter(const unsigned int bench_type) {
         for (const auto& st_inst : src.data.at(player_refid)) {
             const auto stage_formid = st_inst.xtra.form_id;
             if (!stage_formid) {
-                logger::error("HandleCraftingEnter: Stage formid is null!!!");
+                logger::error("HandleCraftingEnter: Stage FormID is null!!!");
                 continue;
             }
 
@@ -1549,7 +1448,7 @@ void Manager::HandleCraftingExit() {
     }
 
     {
-        ListenGuard lg(listen_container_change);
+        ListenGuard lg(Hooks::listen_disable_depth);
 
         // need to figure out how many items were used up in crafting and how many were left
         const auto player_inventory = player_ref->GetInventory();
@@ -1595,7 +1494,21 @@ void Manager::HandleCraftingExit() {
 
 void Manager::Update(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::TESForm* what, const Count count,
                      const RefID from_refid) {
-    UpdateImpl(from, to, what, count, from_refid, true);
+
+    if (!from && !to) {
+        return;
+    }
+
+    QueueManager::GetSingleton()->QueueUpdate(from, to, what, count, from_refid);
+    
+    /*ListenGuard lg(iBusy);
+    if (IsBusy()) {
+        QueueManager::GetSingleton()->QueueUpdate(from, to, what, count, from_refid);
+        return;
+    }
+
+    UpdateImpl(from, to, what, count, from_refid);*/
+
 }
 
 void Manager::SwapWithStage(RE::TESObjectREFR* wo_ref) {
@@ -1637,7 +1550,6 @@ void Manager::Reset() {
     equipped_list.clear();
     locs_to_be_handled.clear();
     Clear();
-    listen_container_change.store(true);
     isUninstalled.store(false);
 
     logger::info("Manager reset.");
@@ -1687,7 +1599,7 @@ void Manager::SendData() {
 
 void Manager::HandleLoc(RE::TESObjectREFR* loc_ref) {
     SRC_UNIQUE_GUARD;
-    ListenGuard lg(listen_container_change);
+    ListenGuard lg(Hooks::listen_disable_depth);
 
     if (!loc_ref) {
         logger::error("Loc ref is null.");
@@ -1705,7 +1617,8 @@ void Manager::HandleLoc(RE::TESObjectREFR* loc_ref) {
         return;
     }
 
-    for (const auto loc_inventory_temp = loc_ref->GetInventory(); const auto& [bound, entry] : loc_inventory_temp) {
+    for (const auto loc_inventory_temp = loc_ref->GetInventory();
+         const auto& [bound, entry] : loc_inventory_temp) {
         if (bound && IsDynamicFormID(bound->GetFormID()) && std::strlen(bound->GetName()) == 0) {
             RemoveItem(loc_ref, bound->GetFormID(), std::max(1, entry.first));
         }
@@ -1852,7 +1765,7 @@ void Manager::ReceiveData() {
     }
 
     {
-        ListenGuard lg(listen_container_change);
+        ListenGuard lg(Hooks::listen_disable_depth);
         DFT->DeleteInactives();
     }
     if (DFT->GetNDeleted() > 0) {

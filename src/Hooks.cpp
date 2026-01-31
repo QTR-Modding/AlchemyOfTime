@@ -46,9 +46,9 @@ void Hooks::Install() {
     MenuHook<RE::FavoritesMenu>::InstallHook(RE::FavoritesMenu::VTABLE[0]);
     MenuHook<RE::InventoryMenu>::InstallHook(RE::InventoryMenu::VTABLE[0]);
 
-#ifndef NDEBUG
+    #ifndef NDEBUG
     UpdateHook::Install();
-#endif
+    #endif
 
     MoveItemHooks<RE::PlayerCharacter>::install();
     MoveItemHooks<RE::TESObjectREFR>::install(false);
@@ -66,9 +66,9 @@ void Hooks::Install() {
 void Hooks::UpdateHook::Update(RE::Actor* a_this, float a_delta) {
     Update_(a_this, a_delta);
 
-#ifndef NDEBUG
+    #ifndef NDEBUG
     DebugAPI_IMPL::DebugAPI::GetSingleton()->Update();
-#endif
+    #endif
 }
 
 void Hooks::UpdateHook::Install() {
@@ -78,7 +78,7 @@ void Hooks::UpdateHook::Install() {
 
 void Hooks::add_item_functor(RE::TESObjectREFR* a_this, RE::TESObjectREFR* a_object, int32_t a_count, bool a4,
                              bool a5) {
-    if (M->isUninstalled.load() || M->isLoading.load() || !M->listen_container_change.load() || a_count <= 0) {
+    if (M->isUninstalled.load() || M->isLoading.load() || !ListenEnabled() || a_count <= 0) {
         return add_item_functor_(a_this, a_object, a_count, a4, a5);
     }
 
@@ -91,7 +91,7 @@ template <typename RefType>
 void Hooks::MoveItemHooks<RefType>::pickUpObject(RefType* a_this, RE::TESObjectREFR* a_object, int32_t a_count,
                                                  bool a_arg3,
                                                  bool a_play_sound) {
-    if (M->isUninstalled.load() || M->isLoading.load() || !M->listen_container_change.load() || a_count <= 0) {
+    if (M->isUninstalled.load() || M->isLoading.load() || !ListenEnabled() || a_count <= 0) {
         return pick_up_object_(a_this, a_object, a_count, a_arg3, a_play_sound);
     }
 
@@ -111,7 +111,7 @@ RE::ObjectRefHandle* Hooks::MoveItemHooks<RefType>::RemoveItem(RefType* a_this,
                                                                RE::TESObjectREFR* a_move_to_ref,
                                                                const RE::NiPoint3* a_drop_loc,
                                                                const RE::NiPoint3* a_rotate) {
-    if (a_move_to_ref || M->isUninstalled.load() || M->isLoading.load() || !M->listen_container_change.load() || a_count
+    if (a_move_to_ref || M->isUninstalled.load() || M->isLoading.load() || !ListenEnabled() || a_count
         <= 0 || a_this == a_move_to_ref) {
         return remove_item_(a_this, a_hidden_return_argument, a_item, a_count, a_reason, a_extra_list, a_move_to_ref,
                             a_drop_loc, a_rotate);
@@ -119,9 +119,15 @@ RE::ObjectRefHandle* Hooks::MoveItemHooks<RefType>::RemoveItem(RefType* a_this,
 
     RE::ObjectRefHandle* res = remove_item_(a_this, a_hidden_return_argument, a_item, a_count, a_reason, a_extra_list,
                                             a_move_to_ref,
-                            a_drop_loc, a_rotate);
+                                            a_drop_loc, a_rotate);
 
-    M->QueueTransfer(a_this, a_move_to_ref ? a_move_to_ref : res ? res->get().get() : nullptr, a_item, a_count);
+    M->Update(a_this,
+              a_move_to_ref
+                  ? a_move_to_ref
+                  : res
+                  ? res->get().get()
+                  : nullptr,
+              a_item, a_count);
 
     return res;
 }
@@ -130,12 +136,12 @@ template <typename RefType>
 void Hooks::MoveItemHooks<RefType>::addObjectToContainer(RefType* a_this, RE::TESBoundObject* a_object,
                                                          RE::ExtraDataList* a_extraList, std::int32_t a_count,
                                                          RE::TESObjectREFR* a_fromRefr) {
-    if (M->isUninstalled.load() || M->isLoading.load() || !M->listen_container_change.load() || a_count <= 0 || a_this
+    if (M->isUninstalled.load() || M->isLoading.load() || !ListenEnabled() || a_count <= 0 || a_this
         == a_fromRefr) {
         return add_object_to_container_(a_this, a_object, a_extraList, a_count, a_fromRefr);
     }
 
     add_object_to_container_(a_this, a_object, a_extraList, a_count, a_fromRefr);
 
-    M->QueueTransfer(a_fromRefr, a_this, a_object, a_count);
+    M->Update(a_fromRefr, a_this, a_object, a_count);
 }

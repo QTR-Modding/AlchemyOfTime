@@ -53,7 +53,7 @@ RE::BSEventNotifyControl EventSink::ProcessEvent(const SKSE::CrosshairRefEvent* 
     if (!event->crosshairRef) return RE::BSEventNotifyControl::kContinue;
 
     if (!event->crosshairRef->HasContainer()) HandleWO(event->crosshairRef.get());
-    else if (M->RefIsRegistered(event->crosshairRef->GetFormID())) M->Update(event->crosshairRef.get());
+    else M->Update(event->crosshairRef.get());
 
     return RE::BSEventNotifyControl::kContinue;
 }
