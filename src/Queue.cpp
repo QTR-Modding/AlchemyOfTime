@@ -166,7 +166,6 @@ void QueueManager::QueueUpdate(const RE::TESObjectREFR* from, const RE::TESObjec
         std::lock_guard lock(mutex_process_);
         pending_process[{from_id, to_id}].push_back(Transfer{what_id, count, from_refid});
     }
-    Start();
 }
 
 void QueueManager::QueueAddRemoveItemTask(const AddItemTask& add_task, const RemoveItemTask& remove_task) {

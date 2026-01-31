@@ -3,6 +3,7 @@
 #include "Lorebox.h"
 #include "MCP.h"
 #include "Manager.h"
+#include "Queue.h"
 #include "Threading.h"
 
 namespace {
@@ -34,9 +35,10 @@ namespace {
                 return;
             }
 
-            // 3) Initialize Manager
+            // 3) Initialize Managers
             M = Manager::GetSingleton();
             if (!M) return;
+            QueueManager::GetSingleton()->Start();
 
             // 4) Register event sinks
             const auto eventSink = EventSink::GetSingleton();
