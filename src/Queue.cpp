@@ -186,8 +186,6 @@ void QueueManager::QueueAddRemoveItemTask(const AddItemTask& add_task, const Rem
         std::lock_guard lock(mutex_moveitem_);
         pending_moveitem_[owner].push_back(AddRemoveItemTask{add_task, remove_task});
     }
-
-    Start();
 }
 
 
