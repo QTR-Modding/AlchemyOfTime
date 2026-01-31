@@ -171,6 +171,13 @@ class Manager final : public Ticker, public SaveLoadData {
     [[nodiscard]] std::vector<ScanRequest> BuildCellScanRequests_(
         const std::vector<RefInfo>& refStopsCopy);
 
+    static bool LocHasStage(Source* src, RefID loc, FormID stage_formid);
+
+    // best-effort disambiguation: owner-ref first, then stage-only
+    Source* UpdateGetSource(const FormID stage_formid, const RefID owner_refid);
+
+    std::optional<float> GetNextUpdateTime(const RE::TESObjectREFR* owner);
+
 protected:
     void UpdateImpl(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::TESForm* what, Count count,
                     RefID from_refid, bool refreshRefs);

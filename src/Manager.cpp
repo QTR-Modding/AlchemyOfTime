@@ -340,6 +340,98 @@ std::vector<Manager::ScanRequest> Manager::BuildCellScanRequests_(
     return out;
 }
 
+bool Manager::LocHasStage(Source* src, RefID loc, FormID stage_formid) {
+    if (!src) return false;
+    const auto it = src->data.find(loc);
+    if (it == src->data.end()) return false;
+
+    for (const auto& inst : it->second) {
+        if (inst.count > 0 && inst.xtra.form_id == stage_formid) {
+            return true;
+        }
+    }
+    return false;
+}
+
+Source* Manager::UpdateGetSource(const FormID stage_formid, const RefID owner_refid) {
+    if (!stage_formid) return nullptr;
+    if (do_not_register.contains(stage_formid)) return nullptr;
+
+    if (owner_refid) {
+        // 1) If this owner belongs to exactly 1 source, just take it (no scan)
+        const auto lit = loc_to_sources.find(owner_refid);
+        if (lit != loc_to_sources.end() && lit->second.size() == 1) {
+            const FormID src_formid = *lit->second.begin();
+            if (const auto it = sources.find(src_formid); it != sources.end()) {
+                const auto s = it->second.get();
+                if (s && s->IsHealthy() && s->IsStage(stage_formid)) {
+                    return s;
+                }
+            }
+        }
+
+        // 2) Otherwise fall back to your intersection logic,
+        // and ONLY then use LocHasStage() as a tie-breaker.
+
+        const auto sit = stage_to_sources.find(stage_formid);
+
+        if (lit != loc_to_sources.end() && sit != stage_to_sources.end()) {
+            // exact match: intersection candidates where this owner already has this stage
+            for (const FormID src_formid : lit->second) {
+                if (!sit->second.contains(src_formid)) continue;
+                const auto srcIt = sources.find(src_formid);
+                if (srcIt == sources.end()) continue;
+                const auto src = srcIt->second.get();
+                if (!src || !src->IsHealthy()) continue;
+                if (LocHasStage(src, owner_refid, stage_formid)) return src;
+            }
+
+            // if none has it yet, pick any healthy source from the intersection
+            for (const FormID src_formid : lit->second) {
+                if (!sit->second.contains(src_formid)) continue;
+                const auto srcIt = sources.find(src_formid);
+                if (srcIt == sources.end()) continue;
+                const auto src = srcIt->second.get();
+                if (src && src->IsHealthy()) return src;
+            }
+        }
+    }
+
+    // Stage-only fallback
+    return GetSource(stage_formid);
+}
+
+std::optional<float> Manager::GetNextUpdateTime(const RE::TESObjectREFR* owner) {
+    const auto refid = owner->GetFormID();
+    const auto lit = loc_to_sources.find(refid);
+    if (lit == loc_to_sources.end()) return std::nullopt;
+
+    float best = std::numeric_limits<float>::infinity();
+    bool found = false;
+
+    for (FormID src_formid : lit->second) {
+        const auto sit = sources.find(src_formid);
+        if (sit == sources.end()) continue;
+
+        auto& src = *sit->second;
+        if (!src.IsHealthy()) continue;
+
+        const auto dit = src.data.find(refid);
+        if (dit == src.data.end()) continue;
+
+        for (auto& inst : dit->second) {
+            if (inst.xtra.is_decayed || !src.IsStageNo(inst.no)) continue;
+            const float t = src.GetNextUpdateTime(&inst);
+            if (t > 0.0f && t < best) {
+                best = t;
+                found = true;
+            }
+        }
+    }
+    if (!found) return std::nullopt;
+    return best;
+}
+
 void Manager::UpdateImpl(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::TESForm* what, const Count count,
                          const RefID from_refid, const bool refreshRefs) {
     UpdateCtx ctx{.from = from, .to = to, .what = what, .count = count, .from_refid = from_refid,
@@ -356,10 +448,10 @@ void Manager::UpdateImpl(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const R
     }
 
     Source* src = nullptr;
-    auto loc = from ? from->GetFormID() : (from_refid ? from_refid : to ? to->GetFormID() : 0);
+    const auto loc = from ? from->GetFormID() : (from_refid ? from_refid : to ? to->GetFormID() : 0);
     {
         SRC_SHARED_GUARD;
-        src = GetSource(ctx.what->GetFormID());
+        src = UpdateGetSource(ctx.what->GetFormID(), loc);
     }
     if (!src) {
         return;
@@ -367,7 +459,7 @@ void Manager::UpdateImpl(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const R
 
     {
         SRC_UNIQUE_GUARD;
-        if (src = GetSource(ctx.what->GetFormID()); src) {
+        if (src = UpdateGetSource(ctx.what->GetFormID(), loc); src) {
             InitTransferIds_(ctx);
             ApplyTransferToSource_(*src, ctx);
             SplitWorldObjectStackIfNeeded_(*src, ctx);
@@ -1037,19 +1129,16 @@ bool Manager::UpdateInventory(RE::TESObjectREFR* ref, const float t) {
 void Manager::UpdateInventory(RE::TESObjectREFR* ref) {
     SyncWithInventory(ref);
 
-    // if there are time modulators which can also evolve, they need to be updated first
-    const auto curr_time = RE::Calendar::GetSingleton()->GetHoursPassed();
-    while (true) {
-        const auto times = GetUpdateTimes(ref);
-        if (times.empty()) break;
-        if (const auto t = *times.begin() + 0.000028f; t >= curr_time) break;
-        else if (!UpdateInventory(ref, t)) {
-            logger::warn("UpdateInventory: No updates for the time {}", t);
-            break;
-        }
+    const auto curr = RE::Calendar::GetSingleton()->GetHoursPassed();
+    for (;;) {
+        auto next = GetNextUpdateTime(ref);
+        if (!next) break;
+        const float t = *next + 0.000028f;
+        if (t >= curr) break;
+        if (!UpdateInventory(ref, t)) break;
     }
 
-    UpdateInventory(ref, curr_time);
+    UpdateInventory(ref, curr);
 }
 
 void Manager::SyncWithInventory(RE::TESObjectREFR* ref) {
