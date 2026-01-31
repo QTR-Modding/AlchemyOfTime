@@ -5,6 +5,40 @@
 class QueueManager;
 
 class Manager final : public Ticker, public SaveLoadData {
+
+    struct UpdateCtx {
+        RE::TESObjectREFR* from{};
+        RE::TESObjectREFR* to{};
+        const RE::TESForm* what{};
+        Count count{};
+        RefID from_refid{};
+        bool refreshRefs{};
+
+        bool to_is_world_object{false};
+        bool is_player_owned{false};
+
+        FormID what_formid{0};
+        RefID to_refid{0};
+    };
+
+    static void NormalizeWorldObjectCount_(UpdateCtx& ctx);
+
+    // possibly locks: queueMutex_
+    void QueueDeleteIfFromIsWorldObject_(const UpdateCtx& ctx);
+
+    static void ApplyBarterMenuSemantics_(UpdateCtx& ctx);
+
+    static void ApplyAlchemyNullSkip_(UpdateCtx& ctx);
+
+    static void InitTransferIds_(UpdateCtx& ctx);
+
+    void ApplyTransferToSource_(Source& src, UpdateCtx& ctx);
+
+    void SplitWorldObjectStackIfNeeded_(Source& src, const UpdateCtx& ctx);
+
+    void RefreshRefs_(const UpdateCtx& ctx);
+
+
     RE::TESObjectREFR* player_ref = RE::PlayerCharacter::GetSingleton()->As<RE::TESObjectREFR>();
 
     // form_id1: source formid, formid2: stage formid, pair: <number of stage form, initial source count>
@@ -15,7 +49,6 @@ class Manager final : public Ticker, public SaveLoadData {
     std::unordered_map<RefID, std::vector<FormID>> locs_to_be_handled; // onceki sessiondan kalan fake formlar
 
     bool should_reset = false;
-    std::atomic_int iBusy = 0;
 
     // 0x0003eb42 damage health
 
@@ -132,8 +165,6 @@ class Manager final : public Ticker, public SaveLoadData {
 
     [[nodiscard]] std::vector<ScanRequest> BuildCellScanRequests_(
         const std::vector<RefInfo>& refStopsCopy);
-
-    bool IsBusy() const { return iBusy.load(std::memory_order_acquire) > 0; }
 
 protected:
     void UpdateImpl(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::TESForm* what, Count count,

@@ -340,98 +340,146 @@ std::vector<Manager::ScanRequest> Manager::BuildCellScanRequests_(
     return out;
 }
 
-void Manager::UpdateImpl(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::TESForm* what, Count count,
-    RefID from_refid, bool refreshRefs) {
+void Manager::UpdateImpl(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::TESForm* what, const Count count,
+                         const RefID from_refid, const bool refreshRefs) {
+    UpdateCtx ctx{.from = from, .to = to, .what = what, .count = count, .from_refid = from_refid,
+                  .refreshRefs = refreshRefs};
 
-    const bool to_is_world_object = to && !to->HasContainer();
-    if (to_is_world_object) count = to->extraList.GetCount();
+    NormalizeWorldObjectCount_(ctx);
+    QueueDeleteIfFromIsWorldObject_(ctx);
+    ApplyBarterMenuSemantics_(ctx);
+    ApplyAlchemyNullSkip_(ctx);
 
-    if (from && to && !from->HasContainer()) {
-        const auto temp_refid = from->GetFormID();
-        QUE_UNIQUE_GUARD;
-        queue_delete_.insert(temp_refid);
+    if (!ctx.what || ctx.count <= 0) {
+        RefreshRefs_(ctx);
+        return;
     }
 
-    if (RE::UI::GetSingleton()->IsMenuOpen(RE::BarterMenu::MENU_NAME)) {
-        if (from && from->IsPlayerRef())
-            to = nullptr;
-        else if (to && to->IsPlayerRef())
-            from = nullptr;
-    }
-
-    if (!to && what && what->Is(RE::FormType::AlchemyItem)) count = 0;
-
-    if (what && count > 0) {
+    {
         SRC_UNIQUE_GUARD;
-        if (const auto src = GetSource(what->GetFormID())) {
-            from_refid = from ? from->GetFormID() : from_refid;
-            const auto to_refid = to ? to->GetFormID() : 0;
-            auto what_formid = what->GetFormID();
-
-            if (src->data.contains(from_refid)) {
-                // remaining count
-                count = src->MoveInstances(from_refid, to_refid, what_formid, count, true);
-                UpdateLocationIndexForSource(*src, from_refid);
-                if (to_refid > 0) {
-                    UpdateLocationIndexForSource(*src, to_refid);
-                }
-            }
-
-            if (count > 0) Register(what_formid, count, to_refid);
-            CleanUpSourceData(src, from_refid);
-            if (to_refid > 0) CleanUpSourceData(src, to_refid);
-            if (!src->data.contains(from_refid)) {
-                QUE_UNIQUE_GUARD;
-                queue_delete_.insert(from_refid);
-            }
-
-            if (to_is_world_object && src->data.contains(to_refid)) {
-                // need to break down the count of the item out in the world into the counts of the instances
-                bool handled_first = false;
-                const bool is_player_owned = from ? from->IsPlayerRef() : false;
-                for (auto& st_inst : src->data.at(to_refid)) {
-                    const auto temp_count = st_inst.count;
-                    if (!handled_first) {
-                        if (to->extraList.GetCount() != temp_count) {
-                            to->extraList.SetCount(static_cast<uint16_t>(temp_count));
-                        }
-                        if (is_player_owned) {
-                            to->extraList.SetOwner(RE::TESForm::LookupByID(0x07));
-                        }
-                        handled_first = true;
-                    } else if (const auto new_ref = WorldObject::DropObjectIntoTheWorld(st_inst.GetBound(), temp_count,
-                                                                                        is_player_owned)) {
-                        if (!src->MoveInstance(to_refid, new_ref->GetFormID(), &st_inst)) {
-                            logger::error("Update: MoveInstance failed for form {} and loc {}.", what_formid, to_refid);
-                        } else {
-                            UpdateLocationIndexForSource(*src, to_refid);
-                            UpdateLocationIndexForSource(*src, new_ref->GetFormID());
-                            auto a_handle = new_ref->GetHandle();
-                            if (const auto a_ref = a_handle.get().get()) {
-                                UpdateRef(a_ref);
-                            }
-                        }
-                    } else
-                        logger::error("Update: New ref is null.");
-                }
-            }
+        if (const auto src = GetSource(ctx.what->GetFormID())) {
+            InitTransferIds_(ctx);
+            ApplyTransferToSource_(*src, ctx);
+            SplitWorldObjectStackIfNeeded_(*src, ctx);
         }
     }
 
-    if (refreshRefs) {
-        if (to) {
-            const auto h = to->GetHandle();
-            if (const auto a_ref = h.get().get()) {
-                SRC_UNIQUE_GUARD;
-                UpdateRef(a_ref);
+    RefreshRefs_(ctx);
+}
+
+void Manager::NormalizeWorldObjectCount_(UpdateCtx& ctx) {
+    ctx.to_is_world_object = ctx.to && !ctx.to->HasContainer();
+    if (ctx.to_is_world_object) {
+        ctx.count = ctx.to->extraList.GetCount();
+    }
+}
+
+void Manager::QueueDeleteIfFromIsWorldObject_(const UpdateCtx& ctx) {
+    if (ctx.from && ctx.to && !ctx.from->HasContainer()) {
+        const auto id = ctx.from->GetFormID();
+        QUE_UNIQUE_GUARD;
+        queue_delete_.insert(id);
+    }
+}
+
+void Manager::ApplyBarterMenuSemantics_(UpdateCtx& ctx) {
+    if (RE::UI::GetSingleton()->IsMenuOpen(RE::BarterMenu::MENU_NAME)) {
+        if (ctx.from && ctx.from->IsPlayerRef())
+            ctx.to = nullptr;
+        else if (ctx.to && ctx.to->IsPlayerRef())
+            ctx.from = nullptr;
+    }
+}
+
+void Manager::ApplyAlchemyNullSkip_(UpdateCtx& ctx) {
+    if (!ctx.to && ctx.what && ctx.what->Is(RE::FormType::AlchemyItem)) {
+        ctx.count = 0;
+    }
+}
+
+void Manager::InitTransferIds_(UpdateCtx& ctx) {
+    ctx.what_formid = ctx.what->GetFormID();
+    ctx.from_refid = ctx.from ? ctx.from->GetFormID() : ctx.from_refid;
+    ctx.to_refid = ctx.to ? ctx.to->GetFormID() : 0;
+    ctx.is_player_owned = ctx.from ? ctx.from->IsPlayerRef() : false;
+}
+
+void Manager::ApplyTransferToSource_(Source& src, UpdateCtx& ctx) {
+    if (src.data.contains(ctx.from_refid)) {
+        ctx.count = src.MoveInstances(ctx.from_refid, ctx.to_refid, ctx.what_formid, ctx.count, true);
+    }
+
+    if (ctx.count > 0) {
+        Register(ctx.what_formid, ctx.count, ctx.to_refid);
+    }
+
+    CleanUpSourceData(&src, ctx.from_refid);
+    if (ctx.to_refid > 0) {
+        CleanUpSourceData(&src, ctx.to_refid);
+    }
+
+    if (!src.data.contains(ctx.from_refid)) {
+        QUE_UNIQUE_GUARD;
+        queue_delete_.insert(ctx.from_refid);
+    }
+}
+
+void Manager::SplitWorldObjectStackIfNeeded_(Source& src, const UpdateCtx& ctx) {
+    if (!ctx.to_is_world_object) return;
+    if (!ctx.to_refid) return;
+    if (!src.data.contains(ctx.to_refid)) return;
+
+    bool handled_first = false;
+
+    for (auto& st_inst : src.data.at(ctx.to_refid)) {
+        const auto temp_count = st_inst.count;
+
+        if (!handled_first) {
+            if (ctx.to->extraList.GetCount() != temp_count) {
+                ctx.to->extraList.SetCount(static_cast<uint16_t>(temp_count));
             }
+            if (ctx.is_player_owned) {
+                ctx.to->extraList.SetOwner(RE::TESForm::LookupByID(0x07));
+            }
+            handled_first = true;
+            continue;
         }
-        if (from && (from->HasContainer() || !to)) {
-            const auto h = from->GetHandle();
-            if (const auto a_ref = h.get().get()) {
-                SRC_UNIQUE_GUARD;
-                UpdateRef(a_ref);
-            }
+
+        const auto new_ref =
+            WorldObject::DropObjectIntoTheWorld(st_inst.GetBound(), temp_count, ctx.is_player_owned);
+        if (!new_ref) {
+            logger::error("Update: New ref is null.");
+            continue;
+        }
+
+        if (!src.MoveInstance(ctx.to_refid, new_ref->GetFormID(), &st_inst)) {
+            logger::error("Update: MoveInstance failed for form {} and loc {}.", ctx.what_formid, ctx.to_refid);
+            continue;
+        }
+
+        UpdateLocationIndexForSource(src, ctx.to_refid);
+        UpdateLocationIndexForSource(src, new_ref->GetFormID());
+
+        if (const auto a_ref = new_ref->GetHandle().get().get()) {
+            UpdateRef(a_ref);
+        }
+    }
+}
+
+void Manager::RefreshRefs_(const UpdateCtx& ctx) {
+    if (!ctx.refreshRefs) return;
+
+    if (ctx.to) {
+        if (const auto a_ref = ctx.to->GetHandle().get().get()) {
+            SRC_UNIQUE_GUARD;
+            UpdateRef(a_ref);
+        }
+    }
+
+    if (ctx.from && (ctx.from->HasContainer() || !ctx.to)) {
+        if (const auto a_ref = ctx.from->GetHandle().get().get()) {
+            SRC_UNIQUE_GUARD;
+            UpdateRef(a_ref);
         }
     }
 }
@@ -653,14 +701,6 @@ Source* Manager::GetSource(const FormID some_formid) {
 
     if (do_not_register.contains(some_formid)) return nullptr;
 
-    // fallback for fake stages created later on
-    for (const auto& src : sources | std::views::values) {
-        if (!src->IsHealthy()) continue;
-        if (src->IsStage(some_formid)) {
-            return src.get();
-        }
-    }
-
     return nullptr;
 }
 
@@ -847,7 +887,6 @@ void Manager::AddItem(const RE::TESObjectREFR* addTo, const RE::TESObjectREFR* a
     }
 
     QueueManager::GetSingleton()->QueueAddRemoveItemTask(AddItemTask{to_id, from_id, item_id, count}, {});
-    
 }
 
 
@@ -1494,21 +1533,7 @@ void Manager::HandleCraftingExit() {
 
 void Manager::Update(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::TESForm* what, const Count count,
                      const RefID from_refid) {
-
-    if (!from && !to) {
-        return;
-    }
-
-    QueueManager::GetSingleton()->QueueUpdate(from, to, what, count, from_refid);
-    
-    /*ListenGuard lg(iBusy);
-    if (IsBusy()) {
-        QueueManager::GetSingleton()->QueueUpdate(from, to, what, count, from_refid);
-        return;
-    }
-
-    UpdateImpl(from, to, what, count, from_refid);*/
-
+    UpdateImpl(from, to, what, count, from_refid, true);
 }
 
 void Manager::SwapWithStage(RE::TESObjectREFR* wo_ref) {
