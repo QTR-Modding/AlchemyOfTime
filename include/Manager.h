@@ -6,6 +6,11 @@ class QueueManager;
 
 class Manager final : public Ticker, public SaveLoadData {
 
+    std::shared_mutex dirty_mtx_;
+    std::unordered_map<RefID, RE::ObjectRefHandle> dirty_refs_;
+
+    void MarkDirty_(RE::TESObjectREFR* r);
+
     struct UpdateCtx {
         RE::TESObjectREFR* from{};
         RE::TESObjectREFR* to{};
@@ -255,6 +260,8 @@ public:
     std::vector<RefInfo> GetRefStops();
 
     void IndexStage(FormID stage_formid, FormID source_formid);
+
+    void ProcessDirtyRefs_();
 };
 
 inline Manager* M = nullptr;

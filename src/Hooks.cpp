@@ -46,9 +46,7 @@ void Hooks::Install() {
     MenuHook<RE::FavoritesMenu>::InstallHook(RE::FavoritesMenu::VTABLE[0]);
     MenuHook<RE::InventoryMenu>::InstallHook(RE::InventoryMenu::VTABLE[0]);
 
-    #ifndef NDEBUG
     UpdateHook::Install();
-    #endif
 
     MoveItemHooks<RE::PlayerCharacter>::install();
     MoveItemHooks<RE::TESObjectREFR>::install(false);
@@ -65,6 +63,7 @@ void Hooks::Install() {
 
 void Hooks::UpdateHook::Update(RE::Actor* a_this, float a_delta) {
     Update_(a_this, a_delta);
+    M->ProcessDirtyRefs_();
 
     #ifndef NDEBUG
     DebugAPI_IMPL::DebugAPI::GetSingleton()->Update();

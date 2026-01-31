@@ -355,9 +355,19 @@ void Manager::UpdateImpl(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const R
         return;
     }
 
+    Source* src = nullptr;
+    auto loc = from ? from->GetFormID() : (from_refid ? from_refid : to ? to->GetFormID() : 0);
+    {
+        SRC_SHARED_GUARD;
+        src = GetSource(ctx.what->GetFormID());
+    }
+    if (!src) {
+        return;
+    }
+
     {
         SRC_UNIQUE_GUARD;
-        if (const auto src = GetSource(ctx.what->GetFormID())) {
+        if (src = GetSource(ctx.what->GetFormID()); src) {
             InitTransferIds_(ctx);
             ApplyTransferToSource_(*src, ctx);
             SplitWorldObjectStackIfNeeded_(*src, ctx);
@@ -365,6 +375,37 @@ void Manager::UpdateImpl(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const R
     }
 
     RefreshRefs_(ctx);
+}
+
+void Manager::MarkDirty_(RE::TESObjectREFR* r) {
+    if (!r) return;
+    if (std::shared_lock lk(dirty_mtx_); 
+        dirty_refs_.contains(r->GetFormID())) {
+        return;
+    }
+    const auto h = r->GetHandle();
+    if (!h) return;
+    std::unique_lock lk(dirty_mtx_);
+    dirty_refs_[r->GetFormID()] = h;
+}
+
+void Manager::ProcessDirtyRefs_() {
+    if (std::shared_lock lk(dirty_mtx_); 
+        dirty_refs_.empty()) {
+        return;
+    }
+    std::unordered_map<RefID, RE::ObjectRefHandle> local;
+    {
+        std::unique_lock lk(dirty_mtx_);
+        local.swap(dirty_refs_);
+    }
+
+    for (const auto& h : local | std::views::values) {
+        if (const auto ref = h.get().get()) {
+            SRC_UNIQUE_GUARD;
+            UpdateRef(ref);
+        }
+    }
 }
 
 void Manager::NormalizeWorldObjectCount_(UpdateCtx& ctx) {
@@ -471,15 +512,13 @@ void Manager::RefreshRefs_(const UpdateCtx& ctx) {
 
     if (ctx.to) {
         if (const auto a_ref = ctx.to->GetHandle().get().get()) {
-            SRC_UNIQUE_GUARD;
-            UpdateRef(a_ref);
+            MarkDirty_(a_ref);
         }
     }
 
     if (ctx.from && (ctx.from->HasContainer() || !ctx.to)) {
         if (const auto a_ref = ctx.from->GetHandle().get().get()) {
-            SRC_UNIQUE_GUARD;
-            UpdateRef(a_ref);
+            MarkDirty_(a_ref);
         }
     }
 }
