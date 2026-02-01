@@ -108,7 +108,7 @@ class Manager final : public Ticker, public SaveLoadData {
     // Creates and appends a new Source. [expects: sourceMutex_] (unique)
     [[nodiscard]] Source* MakeSource(FormID source_formid, const DefaultSettings* settings);
 
-    void IndexSourceStages(Source& source);
+    void IndexSourceStages(const Source& source);
 
     void AddLocationIndex(RefID location_id, FormID source_formid);
     void RemoveLocationIndex(RefID location_id, FormID source_formid);

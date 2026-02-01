@@ -815,13 +815,14 @@ void Manager::IndexStage(const FormID stage_formid, const FormID source_formid) 
     stage_to_sources[stage_formid].insert(source_formid);
 }
 
-void Manager::IndexSourceStages(Source& source) {
+void Manager::IndexSourceStages(const Source& source) {
     stage_to_sources[source.formid].insert(source.formid);
     StageNo stage_no = 0;
     while (source.IsStageNo(stage_no)) {
-        const auto& stage = source.GetStage(stage_no);
-        if (stage.formid) {
-            stage_to_sources[stage.formid].insert(source.formid);
+        if (const auto stage = source.TryGetStage(stage_no)) {
+            if (stage->formid) {
+                stage_to_sources[stage->formid].insert(source.formid);
+            }
         }
         ++stage_no;
     }
