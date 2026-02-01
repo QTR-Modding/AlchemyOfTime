@@ -77,6 +77,7 @@ public:
 
     PendingMap RequestPendingProcess(int n_pending);
     std::unordered_map<RefID, std::vector<AddRemoveItemTask>> RequestPendingMoveItem(int n_pending);
+    bool HasPendingMoveItemTasks();
 
     RE::BSEventNotifyControl ProcessEvent(const RE::TESLoadGameEvent* a_event,
                                           RE::BSTEventSource<RE::TESLoadGameEvent>* a_eventSource) override {

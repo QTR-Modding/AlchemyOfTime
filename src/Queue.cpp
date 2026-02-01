@@ -251,3 +251,8 @@ std::unordered_map<RefID, std::vector<AddRemoveItemTask>> QueueManager::RequestP
     }
     return result;
 }
+
+bool QueueManager::HasPendingMoveItemTasks() {
+    std::lock_guard lock(mutex_moveitem_);
+    return !pending_moveitem_.empty();
+}

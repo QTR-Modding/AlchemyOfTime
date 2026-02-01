@@ -1837,6 +1837,10 @@ void Manager::SendData() {
     Print();
     Clear();
 
+    if (QueueManager::GetSingleton()->HasPendingMoveItemTasks()) {
+        logger::critical("SendData: There are pending move item tasks!");
+    }
+
     for (SRC_UNIQUE_GUARD; auto& src : sources | std::views::values) {
         CleanUpSourceData(src.get());
     }
