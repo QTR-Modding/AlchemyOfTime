@@ -68,9 +68,10 @@ public:
         //player_ticker.Start();
     }
 
-    void QueueUpdate(const RE::TESObjectREFR* from, const RE::TESObjectREFR* to = nullptr,
+    // doesnt run on game thread. unsafe as is.
+    /*void QueueUpdate(const RE::TESObjectREFR* from, const RE::TESObjectREFR* to = nullptr,
                      const RE::TESForm* what = nullptr,
-                     Count count = 0, RefID from_refid = 0);
+                     Count count = 0, RefID from_refid = 0);*/
 
     void QueueAddRemoveItemTask(const AddItemTask& add_task, const RemoveItemTask& remove_task);
 

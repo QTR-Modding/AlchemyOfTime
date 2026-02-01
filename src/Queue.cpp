@@ -154,19 +154,19 @@ void QueueManager::RefreshUI() {
     });
 }
 
-void QueueManager::QueueUpdate(const RE::TESObjectREFR* from, const RE::TESObjectREFR* to, const RE::TESForm* what,
-                               const Count count, const RefID from_refid) {
-    {
-        auto from_id = from ? from->GetFormID() : 0;
-        auto to_id = to ? to->GetFormID() : 0;
-        const auto what_id = what ? what->GetFormID() : 0;
-        if (from_id == 0 && to_id == 0) {
-            return;
-        }
-        std::lock_guard lock(mutex_process_);
-        pending_process[{from_id, to_id}].push_back(Transfer{what_id, count, from_refid});
-    }
-}
+//void QueueManager::QueueUpdate(const RE::TESObjectREFR* from, const RE::TESObjectREFR* to, const RE::TESForm* what,
+//                               const Count count, const RefID from_refid) {
+//    {
+//        auto from_id = from ? from->GetFormID() : 0;
+//        auto to_id = to ? to->GetFormID() : 0;
+//        const auto what_id = what ? what->GetFormID() : 0;
+//        if (from_id == 0 && to_id == 0) {
+//            return;
+//        }
+//        std::lock_guard lock(mutex_process_);
+//        pending_process[{from_id, to_id}].push_back(Transfer{what_id, count, from_refid});
+//    }
+//}
 
 void QueueManager::QueueAddRemoveItemTask(const AddItemTask& add_task, const RemoveItemTask& remove_task) {
     {
