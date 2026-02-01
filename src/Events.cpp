@@ -38,7 +38,6 @@ RE::BSEventNotifyControl EventSink::ProcessEvent(const RE::TESActivateEvent* eve
             RE::BSEventNotifyControl::kContinue;
     if (event->objectActivated->IsActivationBlocked()) return RE::BSEventNotifyControl::kContinue;
 
-    if (!M->RefIsRegistered(event->objectActivated->GetFormID())) return RE::BSEventNotifyControl::kContinue;
     if (event->objectActivated->HasContainer()) return RE::BSEventNotifyControl::kContinue;
 
     M->SwapWithStage(event->objectActivated.get());

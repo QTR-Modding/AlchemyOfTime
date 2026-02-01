@@ -144,17 +144,17 @@ class Manager final : public Ticker, public SaveLoadData {
     std::set<float> GetUpdateTimes(const RE::TESObjectREFR* inventory_owner);
 
     // [expects: sourceMutex_] (unique)
-    bool UpdateInventory(RE::TESObjectREFR* ref, float t);
+    bool UpdateInventory(RE::TESObjectREFR* ref, float t, const InvMap& inv);
 
     // [expects: sourceMutex_] (unique)
     void UpdateInventory(RE::TESObjectREFR* ref);
 
     void UpdateQueuedWO(const RefInfo& ref_info, float curr_time);
-
     // [expects: sourceMutex_] (unique)
     void UpdateWO(RE::TESObjectREFR* ref);
     // [expects: sourceMutex_] (unique)
-    void SyncWithInventory(RE::TESObjectREFR* ref);
+    void SyncWithInventory(const RE::TESObjectREFR* ref, const InvMap& inv);
+
 
     // [expects: sourceMutex_] (unique)
     void UpdateRef(RE::TESObjectREFR* loc);
@@ -204,9 +204,6 @@ public:
     // [locks: queueMutex_]
     void ClearWOUpdateQueue();
 
-    // use it only for world objects! checks if there is a stage instance for the given refid
-    [[nodiscard]] bool RefIsRegistered(RefID refid);
-
     // Registers instances; may mutate sources. [expects: sourceMutex_] (unique)
     void Register(FormID some_formid, Count count, RefID location_refid,
                   Duration register_time = 0);
@@ -220,7 +217,7 @@ public:
     void Update(RE::TESObjectREFR* from, RE::TESObjectREFR* to = nullptr, const RE::TESForm* what = nullptr,
                 Count count = 0, RefID from_refid = 0);
 
-    // Swap based on stage instance. Requires sourceMutex_ held for pointer lifetime.
+    // Swap based on stage instance. Holds sourceMutex_ internally. (shared)
     void SwapWithStage(RE::TESObjectREFR* wo_ref);
 
     // Clears and resets all data. [locks: sourceMutex_] (unique) + [locks: queueMutex_]

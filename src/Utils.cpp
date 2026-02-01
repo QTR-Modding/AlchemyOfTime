@@ -429,7 +429,6 @@ void WorldObject::SwapObjects(RE::TESObjectREFR* a_from, RE::TESBoundObject* a_t
         return;
     }
     if (ref_base->GetFormID() == a_to->GetFormID()) {
-        logger::trace("Ref and base are the same.");
         return;
     }
     a_from->SetObjectReference(a_to);

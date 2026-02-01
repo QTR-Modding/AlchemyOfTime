@@ -63,16 +63,17 @@ struct Source {
 
     [[nodiscard]] bool IsDecayedItem(FormID _form_id) const;
 
-    FormID inline GetModulatorInInventory(RE::TESObjectREFR* inventory_owner, StageNo a_no) const;
-
     FormID inline GetModulatorInWorld(const RE::TESObjectREFR* wo, StageNo a_no) const;
 
-    inline FormID GetTransformerInInventory(RE::TESObjectREFR* inventory_owner, StageNo a_no) const;
-
     inline FormID GetTransformerInWorld(const RE::TESObjectREFR* wo, StageNo a_no) const;
+    
+    FormID GetModulatorInInventory(const InvMap& inv, FormID ownerBase, StageNo no) const;
+    FormID GetTransformerInInventory(const InvMap& inv, FormID ownerBase, StageNo no) const;
 
+    void SetDelayOfInstances(float time, RE::TESObjectREFR* owner, const InvMap& inv);
+    
     // always update before doing this
-    void UpdateTimeModulationInInventory(RE::TESObjectREFR* inventory_owner, float _time);
+    void UpdateTimeModulationInInventory(RE::TESObjectREFR* owner, float time, const InvMap& inv);
 
     void UpdateTimeModulationInWorld(RE::TESObjectREFR* wo, StageInstance& wo_inst, float _time) const;
 
@@ -169,8 +170,6 @@ private:
     [[nodiscard]] Stage GetFinalStage() const;
 
     [[nodiscard]] Stage GetTransformedStage(FormID key_formid) const;
-
-    void SetDelayOfInstances(float some_time, RE::TESObjectREFR* inventory_owner);
 
     void SetDelayOfInstance(StageInstance& instance, float curr_time, RE::TESObjectREFR* a_loc,
                             bool inventory_owner = true) const;

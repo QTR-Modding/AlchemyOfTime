@@ -81,7 +81,7 @@ bool QueueManager::ProcessPendingMoves(const int n_tasks) {
     }
 
     SKSE::GetTaskInterface()->AddTask([move_item_tasks = std::move(move_item_tasks)]() mutable {
-        ListenGuard lg(Hooks::listen_disable_depth);
+        //ListenGuard lg(Hooks::listen_disable_depth);
 
         for (const auto& [refid, tasks] : move_item_tasks) {
             if (refid == 0) continue;
