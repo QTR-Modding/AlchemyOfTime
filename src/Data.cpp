@@ -12,18 +12,18 @@ void Source::Init(const DefaultSettings* defaultsettings) {
         return;
     }
 
-    const RE::TESForm* form = FormReader::GetFormByID(formid, editorid);
-    if (const auto bound_ = GetBoundObject(); !form || !bound_) {
+    const auto* bound = GetBoundObject();
+    if (!bound) {
         logger::error("Form not found.");
         InitFailed();
         return;
     }
 
-    formid = form->GetFormID();
-    editorid = clib_util::editorID::get_editorID(form);
+    formid = bound->GetFormID();
+    editorid = clib_util::editorID::get_editorID(bound);
 
     if (!formid || editorid.empty()) {
-        logger::error("Editorid is empty.");
+        logger::error("EditorID is empty.");
         InitFailed();
         return;
     }
@@ -34,40 +34,37 @@ void Source::Init(const DefaultSettings* defaultsettings) {
         return;
     }
 
-    qFormType = Settings::GetQFormType(formid);
+    qFormType = Settings::GetQFormType(bound);
     if (qFormType.empty()) {
-        logger::error("Formtype is not one of the predefined types.");
+        logger::error("FormType is not one of the predefined types.");
         InitFailed();
         return;
     }
+
 
     // get settings
     settings = *defaultsettings;
     // put addons
-    if (const auto addon = Settings::GetAddOnSettings(form); addon && addon->IsHealthy()) {
+    if (const auto addon = Settings::GetAddOnSettings(bound); addon && addon->IsHealthy()) {
         settings.Add(*addon);
     }
 
-    if (!settings.CheckIntegrity()) {
-        logger::critical("Default settings integrity check failed.");
-        InitFailed();
-        return;
-    }
-
-    formtype = form->GetFormType();
+    formtype = bound->GetFormType();
 
     if (!stages.empty()) {
         logger::error("Stages shouldn't be already populated.");
         InitFailed();
         return;
     }
+
     // get stages
 
     // POPULATE THIS
     if (qFormType == "FOOD") {
         if (formtype == RE::FormType::AlchemyItem) GatherStages<RE::AlchemyItem>();
         else if (formtype == RE::FormType::Ingredient) GatherStages<RE::IngredientItem>();
-    } else if (qFormType == "INGR") GatherStages<RE::IngredientItem>();
+    } 
+    else if (qFormType == "INGR") GatherStages<RE::IngredientItem>();
     else if (qFormType == "MEDC" || qFormType == "POSN") GatherStages<RE::AlchemyItem>();
     else if (qFormType == "ARMO") GatherStages<RE::TESObjectARMO>();
     else if (qFormType == "WEAP") GatherStages<RE::TESObjectWEAP>();
@@ -88,11 +85,6 @@ void Source::Init(const DefaultSettings* defaultsettings) {
     // transformed stages
     for (const auto& key : settings.transformers | std::views::keys) {
         const auto temp_stage = GetTransformedStage(key);
-        if (!temp_stage.CheckIntegrity()) {
-            logger::critical("Transformed stage integrity check failed.");
-            InitFailed();
-            return;
-        }
         transformed_stages[key] = temp_stage;
     }
 
@@ -693,10 +685,10 @@ void Source::CleanUpData() {
 }
 
 void Source::CleanUpData(const RefID a_loc) {
-    if (!CheckIntegrity()) {
+    /*if (!CheckIntegrity()) {
         logger::critical("CheckIntegrity failed");
         InitFailed();
-    }
+    }*/
 
     if (init_failed) {
         logger::critical("CleanUpData: Initialisation failed.");
