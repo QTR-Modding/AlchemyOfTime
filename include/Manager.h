@@ -183,7 +183,7 @@ class Manager final : public Ticker, public SaveLoadData {
     static bool LocHasStage(Source* src, RefID loc, FormID stage_formid);
 
     // best-effort disambiguation: owner-ref first, then stage-only
-    Source* UpdateGetSource(const FormID stage_formid, const RefID owner_refid);
+    Source* UpdateGetSource(FormID stage_formid, RefID owner_refid);
 
     std::optional<float> GetNextUpdateTime(const RefInfo& a_info);
 

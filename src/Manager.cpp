@@ -606,7 +606,7 @@ void Manager::SplitWorldObjectStackIfNeeded_(Source& src, const UpdateCtx& ctx) 
         if (!new_ref) break;
 
         // Move by pointer to element at index 1 (safe: we won't keep it after the call)
-        if (!src.MoveInstance(ctx.to_refid, new_ref->GetFormID(), &v[1])) break;
+        if (!src.MoveInstanceAt(ctx.to_refid, new_ref->GetFormID(), 1)) break;
 
         UpdateLocationIndexForSource(src, ctx.to_refid);
         UpdateLocationIndexForSource(src, new_ref->GetFormID());
@@ -684,7 +684,7 @@ void Manager::UpdateLoop() {
         std::vector<RefID> ref_stops_due;
         ref_stops_due.reserve(ref_stops_copy.size());
         for (
-            QUE_SHARED_GUARD;
+            QUE_UNIQUE_GUARD;
             const auto& key : ref_stops_copy) {
             auto it = _ref_stops_.find(key.ref_id);
             if (it == _ref_stops_.end()) continue;
