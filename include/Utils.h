@@ -38,23 +38,11 @@ inline bool IsDynamicFormID(const FormID a_formID) { return a_formID >= 0xFF0000
 
 void FavoriteItem(const RE::TESBoundObject* item, RE::TESObjectREFR* inventory_owner);
 
-[[nodiscard]] bool IsFavorited(RE::TESBoundObject* item, RE::TESObjectREFR* inventory_owner);
-
-[[nodiscard]] bool IsFavorited(RE::FormID formid, RE::FormID refid);
-
-void FavoriteItem(FormID formid, FormID refid);
-
-[[nodiscard]] inline bool IsPlayerFavorited(RE::TESBoundObject* item) {
-    return IsFavorited(item, RE::PlayerCharacter::GetSingleton()->AsReference());
-}
+[[nodiscard]] bool IsFavorited(RE::TESBoundObject* item, const InvMap& inventory);
 
 void EquipItem(const RE::TESBoundObject* item, bool unequip = false);
 
-void EquipItem(FormID formid, bool unequip = false);
-
-[[nodiscard]] bool IsEquipped(RE::TESBoundObject* item);
-
-[[nodiscard]] bool IsEquipped(FormID formid);
+[[nodiscard]] bool IsEquipped(RE::TESBoundObject* item, const InvMap& inventory);
 
 // https://github.com/SteveTownsend/SmartHarvestSE/blob/f709333c4cedba061ad21b4d92c90a720e20d2b1/src/WorldState/LocationTracker.cpp#L756
 bool AreAdjacentCells(RE::TESObjectCELL* cellA, RE::TESObjectCELL* cellB);
@@ -165,7 +153,7 @@ namespace WorldObject {
 };
 
 namespace Inventory {
-    bool IsQuestItem(FormID formid, RE::TESObjectREFR* inv_owner);
+    bool IsQuestItem(FormID formid, const InvMap& a_inv);
 };
 
 namespace Menu {
@@ -316,9 +304,9 @@ struct FormTraits<RE::TESAmmo> {
     }
 };
 
+
 struct ListenGuard {
-    std::atomic_bool& flag;
-    bool prev;
-    explicit ListenGuard(std::atomic_bool& f) : flag(f), prev(f.exchange(false)) {}
-    ~ListenGuard() { flag.store(prev); }
+    std::atomic<int>& depth;
+    explicit ListenGuard(std::atomic<int>& d) : depth(d) { depth.fetch_add(1, std::memory_order_acq_rel); }
+    ~ListenGuard() { depth.fetch_sub(1, std::memory_order_acq_rel); }
 };

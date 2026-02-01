@@ -83,7 +83,7 @@ namespace {
         if (slope > 0.f) {
             // Forward
             if (src.IsStageNo(st.no + 1)) {
-                const auto ns = src.GetStage(st.no + 1);
+                const auto ns = src.TryGetStage(st.no + 1);
                 t.nextFormId = ns->formid;
                 t.hasNext = true;
                 t.label = std::format(L"{} {}",
@@ -100,7 +100,7 @@ namespace {
             // Backwards
             t.backwards = true;
             if (st.no > 0 && src.IsStageNo(st.no - 1)) {
-                const auto ps = src.GetStage(st.no - 1);
+                const auto ps = src.TryGetStage(st.no - 1);
                 t.nextFormId = ps->formid;
                 t.hasNext = true;
                 t.label = std::format(L"{} {}",

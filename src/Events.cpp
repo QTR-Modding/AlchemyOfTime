@@ -38,7 +38,6 @@ RE::BSEventNotifyControl EventSink::ProcessEvent(const RE::TESActivateEvent* eve
             RE::BSEventNotifyControl::kContinue;
     if (event->objectActivated->IsActivationBlocked()) return RE::BSEventNotifyControl::kContinue;
 
-    if (!M->RefIsRegistered(event->objectActivated->GetFormID())) return RE::BSEventNotifyControl::kContinue;
     if (event->objectActivated->HasContainer()) return RE::BSEventNotifyControl::kContinue;
 
     M->SwapWithStage(event->objectActivated.get());
@@ -53,7 +52,7 @@ RE::BSEventNotifyControl EventSink::ProcessEvent(const SKSE::CrosshairRefEvent* 
     if (!event->crosshairRef) return RE::BSEventNotifyControl::kContinue;
 
     if (!event->crosshairRef->HasContainer()) HandleWO(event->crosshairRef.get());
-    else if (M->RefIsRegistered(event->crosshairRef->GetFormID())) M->Update(event->crosshairRef.get());
+    else M->Update(event->crosshairRef.get());
 
     return RE::BSEventNotifyControl::kContinue;
 }

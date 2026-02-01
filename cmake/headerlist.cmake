@@ -14,4 +14,5 @@ set(headers ${headers}
 	include/Logger.h
 	include/Lorebox.h
 	include/CellScan.h
+	include/Queue.h
 )

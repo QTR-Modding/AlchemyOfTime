@@ -131,31 +131,12 @@ void FavoriteItem(const RE::TESBoundObject* item, RE::TESObjectREFR* inventory_o
 }
 
 // ReSharper disable once CppParameterMayBeConstPtrOrRef
-bool IsFavorited(RE::TESBoundObject* item, RE::TESObjectREFR* inventory_owner) {
-    if (!item) {
-        logger::warn("Item is null");
-        return false;
-    }
-    if (!inventory_owner) {
-        logger::warn("Inventory owner is null");
-        return false;
-    }
-    auto inventory = inventory_owner->GetInventory();
+bool IsFavorited(RE::TESBoundObject* item, const InvMap& inventory) {
     if (const auto it = inventory.find(item); it != inventory.end()) {
         if (it->second.first <= 0) logger::warn("Item count is 0");
         return it->second.second->IsFavorited();
     }
     return false;
-}
-
-bool IsFavorited(const RE::FormID formid, const RE::FormID refid) {
-    return IsFavorited(FormReader::GetFormByID<RE::TESBoundObject>(formid),
-                       FormReader::GetFormByID<RE::TESObjectREFR>(refid));
-}
-
-void FavoriteItem(const FormID formid, const FormID refid) {
-    FavoriteItem(FormReader::GetFormByID<RE::TESBoundObject>(formid),
-                 FormReader::GetFormByID<RE::TESObjectREFR>(refid));
 }
 
 void EquipItem(const RE::TESBoundObject* item, const bool unequip) {
@@ -200,28 +181,13 @@ void EquipItem(const RE::TESBoundObject* item, const bool unequip) {
     }
 }
 
-void EquipItem(const FormID formid, const bool unequip) {
-    EquipItem(FormReader::GetFormByID<RE::TESBoundObject>(formid), unequip);
-}
-
 // ReSharper disable once CppParameterMayBeConstPtrOrRef
-bool IsEquipped(RE::TESBoundObject* item) {
-    if (!item) {
-        logger::trace("Item is null");
-        return false;
-    }
-
-    const auto player_ref = RE::PlayerCharacter::GetSingleton();
-    auto inventory = player_ref->GetInventory();
+bool IsEquipped(RE::TESBoundObject* item, const InvMap& inventory) {
     if (const auto it = inventory.find(item); it != inventory.end()) {
         if (it->second.first <= 0) logger::warn("Item count is 0");
         return it->second.second->IsWorn();
     }
     return false;
-}
-
-bool IsEquipped(const FormID formid) {
-    return IsEquipped(FormReader::GetFormByID<RE::TESBoundObject>(formid));
 }
 
 bool AreAdjacentCells(RE::TESObjectCELL* cellA, RE::TESObjectCELL* cellB) {
@@ -429,7 +395,6 @@ void WorldObject::SwapObjects(RE::TESObjectREFR* a_from, RE::TESBoundObject* a_t
         return;
     }
     if (ref_base->GetFormID() == a_to->GetFormID()) {
-        logger::trace("Ref and base are the same.");
         return;
     }
     a_from->SetObjectReference(a_to);
@@ -664,10 +629,9 @@ RE::NiPoint3 Math::LinAlg::intersectLine(const std::array<RE::NiPoint3, 3>& vert
     return orthogonal_vertex;
 }
 
-bool Inventory::IsQuestItem(const FormID formid, RE::TESObjectREFR* inv_owner) {
+bool Inventory::IsQuestItem(const FormID formid, const InvMap& a_inv) {
     if (const auto item = FormReader::GetFormByID<RE::TESBoundObject>(formid)) {
-        const auto inventory = inv_owner->GetInventory();
-        if (const auto it = inventory.find(item); it != inventory.end()) {
+        if (const auto it = a_inv.find(item); it != a_inv.end()) {
             if (it->second.second->IsQuestObject()) return true;
         }
     }

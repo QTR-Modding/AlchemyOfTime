@@ -83,7 +83,7 @@ public:
 
     ~SpeedProfiler() {
         end_time = std::chrono::steady_clock::now();
-        std::chrono::duration<double> elapsed_seconds = end_time - start_time;
+        const std::chrono::duration<double> elapsed_seconds = end_time - start_time;
         logger::info("Elapsed time: {}", elapsed_seconds.count());
     }
 };

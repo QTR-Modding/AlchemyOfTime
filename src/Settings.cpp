@@ -11,6 +11,14 @@
 
 using QFormChecker = bool(*)(const RE::TESForm*);
 
+namespace {
+    std::shared_mutex g_settingsCacheMtx;
+    std::unordered_map<FormID, std::string> g_qformCache;
+    std::unordered_map<FormID, bool> g_excludeCache;
+    std::unordered_map<FormID, DefaultSettings*> g_customCache; // nullptr cached too
+    std::unordered_map<FormID, AddOnSettings*> g_addonCache; // nullptr cached too
+}
+
 static const std::unordered_map<std::string, QFormChecker> qformCheckers = {
     // POPULATE THIS
     {"FOOD", [](const auto form) { return IsFoodItem(form); }},
@@ -30,22 +38,138 @@ void Settings::SetCurrentTickInterval(const Ticker::Intervals interval) {
     ticker_speed = interval;
 }
 
+bool Settings::IsQFormType(const RE::TESForm* form, const std::string_view qformtype) {
+    if (!form || qformtype.empty()) return false;
+    const auto it = qformCheckers.find(std::string(qformtype));
+    return (it != qformCheckers.end()) ? it->second(form) : false;
+}
+
+std::string_view Settings::GetQFormType(const RE::TESForm* form) {
+    if (!form) return {};
+
+    for (const auto& q_ftype : QFORMS) {
+        auto it = qformCheckers.find(q_ftype);
+        if (it != qformCheckers.end() && it->second(form)) {
+            return q_ftype; // view to string stored in QFORMS
+        }
+    }
+    return {};
+}
+
+bool Settings::IsInExclude(const RE::TESForm* form, std::string_view type) {
+    if (!form) return false;
+
+    if (type.empty()) {
+        type = GetQFormType(form);
+        if (type.empty()) return false;
+    }
+
+    const auto exIt = exclude_list.find(std::string(type));
+    if (exIt == exclude_list.end()) {
+        logger::critical("Type not found in exclude list. formid: {}", form->GetFormID());
+        return false;
+    }
+
+    const auto& words = exIt->second;
+    const std::string name = form->GetName() ? form->GetName() : "";
+    const std::string editorid = clib_util::editorID::get_editorID(form);
+
+    if (!editorid.empty() && StringHelpers::includesWord(editorid, words)) return true;
+    if (StringHelpers::includesWord(name, words)) return true;
+    return false;
+}
+
+DefaultSettings* Settings::GetDefaultSetting(const std::string_view qformtype) {
+    if (qformtype.empty()) return nullptr;
+
+    const auto it = defaultsettings.find(std::string(qformtype));
+    if (it == defaultsettings.end()) return nullptr;
+    if (!it->second.IsHealthy()) return nullptr;
+    return &it->second;
+}
+
+AddOnSettings* Settings::GetAddOnSettings(const FormID form_id, const std::string_view qformtype) {
+    if (!form_id || qformtype.empty()) return nullptr;
+
+    const auto itType = addon_settings.find(std::string(qformtype));
+    if (itType == addon_settings.end()) return nullptr;
+
+    auto& m = itType->second;
+    const auto it = m.find(form_id);
+    if (it == m.end()) return nullptr;
+
+    if (!it->second.CheckIntegrity()) return nullptr;
+    return &it->second;
+}
+
+DefaultSettings* Settings::GetCustomSetting(const RE::TESForm* form, std::string_view qformtype) {
+    if (!form) return nullptr;
+    if (qformtype.empty()) qformtype = GetQFormType(form);
+    if (qformtype.empty()) return nullptr;
+
+    const auto itType = custom_settings.find(std::string(qformtype));
+    if (itType == custom_settings.end()) return nullptr;
+
+    const FormID form_id = form->GetFormID();
+
+    for (auto& [names, sttng] : itType->second) {
+        if (!sttng.IsHealthy()) continue;
+
+        for (auto& name : names) {
+            if (const FormID temp = FormReader::GetFormEditorIDFromString(name); temp > 0) {
+                if (const auto tempForm = FormReader::GetFormByID(temp, name);
+                    tempForm && tempForm->GetFormID() == form_id) {
+                    return &sttng;
+                }
+            }
+        }
+        if (StringHelpers::includesWord(form->GetName(), names)) return &sttng;
+    }
+
+    return nullptr;
+}
+
+
 bool Settings::IsQFormType(const FormID formid, const std::string& qformtype) {
-    const auto* form = FormReader::GetFormByID(formid);
+    const auto form = FormReader::GetFormByID(formid);
     if (!form) {
         logger::warn("IsQFormType: Form not found.");
         return false;
     }
-    const auto it = qformCheckers.find(qformtype);
-    return it != qformCheckers.end() ? it->second(form) : false;
+    return IsQFormType(form, qformtype);
 }
 
 std::string Settings::GetQFormType(const FormID formid) {
-    for (const auto& q_ftype : QFORMS) {
-        if (IsQFormType(formid, q_ftype)) return q_ftype;
+    if (!formid) return "";
+
+    {
+        std::shared_lock lk(g_settingsCacheMtx);
+        if (const auto it = g_qformCache.find(formid); it != g_qformCache.end()) {
+            return it->second;
+        }
     }
-    return "";
+
+    const auto* form = FormReader::GetFormByID(formid);
+    if (!form) {
+        logger::warn("GetQFormType: Form not found.");
+        std::unique_lock lk(g_settingsCacheMtx);
+        g_qformCache.emplace(formid, "");
+        return "";
+    }
+
+    std::string result;
+    for (const auto& q_ftype : QFORMS) {
+        if (IsQFormType(form, q_ftype)) {
+            result = q_ftype;
+            break;
+        }
+    }
+
+    std::unique_lock lk(g_settingsCacheMtx);
+    g_qformCache.emplace(formid, result);
+    return result;
 }
+
 
 bool Settings::IsSpecialQForm(RE::TESObjectREFR* ref) {
     const auto base = ref->GetBaseObject();
@@ -56,33 +180,45 @@ bool Settings::IsSpecialQForm(RE::TESObjectREFR* ref) {
 }
 
 bool Settings::IsInExclude(const FormID formid, std::string type) {
-    const auto form = FormReader::GetFormByID(formid);
+    if (!formid) return false;
+
+    if (type.empty()) type = GetQFormType(formid);
+    if (type.empty()) return false;
+
+    {
+        std::shared_lock lk(g_settingsCacheMtx);
+        if (const auto it = g_excludeCache.find(formid); it != g_excludeCache.end()) {
+            return it->second;
+        }
+    }
+
+    const auto* form = FormReader::GetFormByID(formid);
     if (!form) {
         logger::warn("Form not found.");
         return false;
     }
 
-    if (type.empty()) type = GetQFormType(formid);
-    if (type.empty()) {
-        return false;
-    }
     if (!exclude_list.contains(type)) {
-        logger::critical("Type not found in exclude list. for formid: {}", formid);
+        logger::critical("Type not found in exclude list. for formid: {:x}", formid);
         return false;
     }
 
-    const auto form_string = std::string(form->GetName());
+    const std::string form_editorid = clib_util::editorID::get_editorID(form);
+    const std::string_view form_name = form->GetName() ? std::string_view(form->GetName()) : std::string_view{};
 
-    if (const std::string form_editorid = clib_util::editorID::get_editorID(form);
-        !form_editorid.empty() && StringHelpers::includesWord(form_editorid, exclude_list[type])) {
-        return true;
+    bool excluded = false;
+
+    if (!form_editorid.empty() && StringHelpers::includesWord(form_editorid, exclude_list[type])) {
+        excluded = true;
+    } else if (!form_name.empty() && StringHelpers::includesWord(std::string(form_name), exclude_list[type])) {
+        excluded = true;
     }
 
-    /*const auto exlude_list = LoadExcludeList(postfix);*/
-    if (StringHelpers::includesWord(form_string, exclude_list[type])) {
-        return true;
+    {
+        std::unique_lock lk(g_settingsCacheMtx);
+        g_excludeCache[formid] = excluded;
     }
-    return false;
+    return excluded;
 }
 
 void Settings::AddToExclude(const std::string& entry_name, const std::string& type, const std::string& filename) {
@@ -140,38 +276,75 @@ DefaultSettings* Settings::GetDefaultSetting(const FormID form_id) {
 }
 
 DefaultSettings* Settings::GetCustomSetting(const RE::TESForm* form) {
-    const auto form_id = form->GetFormID();
+    if (!form) return nullptr;
+    const FormID form_id = form->GetFormID();
+
+    {
+        std::shared_lock lk(g_settingsCacheMtx);
+        if (const auto it = g_customCache.find(form_id); it != g_customCache.end()) {
+            return it->second; // may be nullptr
+        }
+    }
+
+    DefaultSettings* result = nullptr;
+
     const auto qform_type = GetQFormType(form_id);
     if (!qform_type.empty() && custom_settings.contains(qform_type)) {
         for (auto& customSetting = custom_settings[qform_type]; auto& [names, sttng] : customSetting) {
             if (!sttng.IsHealthy()) continue;
+
             for (auto& name : names) {
-                if (const FormID temp_cstm_formid = FormReader::GetFormEditorIDFromString(name);
-                    temp_cstm_formid > 0) {
+                if (const FormID temp_cstm_formid = FormReader::GetFormEditorIDFromString(name); temp_cstm_formid > 0) {
                     if (const auto temp_cstm_form = FormReader::GetFormByID(temp_cstm_formid, name);
                         temp_cstm_form && temp_cstm_form->GetFormID() == form_id) {
-                        return &sttng;
+                        result = &sttng;
+                        break;
                     }
                 }
             }
+            if (result) break;
+
             if (StringHelpers::includesWord(form->GetName(), names)) {
-                return &sttng;
+                result = &sttng;
+                break;
             }
         }
     }
-    return nullptr;
+
+    {
+        std::unique_lock lk(g_settingsCacheMtx);
+        g_customCache[form_id] = result;
+    }
+    return result;
 }
 
+
 AddOnSettings* Settings::GetAddOnSettings(const RE::TESForm* form) {
-    const auto form_id = form->GetFormID();
-    const auto qform_type = GetQFormType(form_id);
-    if (qform_type.empty()) return nullptr;
-    auto& temp = addon_settings[qform_type];
-    if (!temp.contains(form_id)) return nullptr;
-    if (auto& addon = temp.at(form_id); addon.CheckIntegrity()) {
-        return &addon;
+    if (!form) return nullptr;
+    const FormID form_id = form->GetFormID();
+
+    {
+        std::shared_lock lk(g_settingsCacheMtx);
+        if (const auto it = g_addonCache.find(form_id); it != g_addonCache.end()) {
+            return it->second; // may be nullptr
+        }
     }
-    return nullptr;
+
+    AddOnSettings* result = nullptr;
+    const auto qform_type = GetQFormType(form_id);
+    if (!qform_type.empty()) {
+        auto& temp = addon_settings[qform_type];
+        if (temp.contains(form_id)) {
+            auto& addon = temp.at(form_id);
+            if (addon.CheckIntegrity()) result = &addon;
+        }
+    }
+
+    {
+        std::unique_lock lk(g_settingsCacheMtx);
+        g_addonCache[form_id] = result;
+    }
+    return result;
 }
 
 void PresetParse::SaveSettings() {
@@ -212,13 +385,10 @@ std::vector<std::string> PresetParse::LoadExcludeList(const std::string& postfix
 {
     const auto folder_path = "Data/SKSE/Plugins/AlchemyOfTime/" + postfix + "/exclude";
 
-    // Create folder if it doesn't exist
     std::filesystem::create_directories(folder_path);
     std::unordered_set<std::string> strings;
 
-    // Iterate over files in the folder
     for (const auto& entry : std::filesystem::directory_iterator(folder_path)) {
-        // Check if the entry is a regular file and ends with ".txt"
         if (entry.is_regular_file() && entry.path().extension() == ".txt") {
             std::ifstream file(entry.path());
             std::string line;
@@ -888,6 +1058,15 @@ void PresetParse::LoadFormGroups() {
 
 void PresetParse::LoadSettingsParallel() {
     logger::info("Loading settings.");
+
+    {
+        std::unique_lock lk(g_settingsCacheMtx);
+        g_qformCache.clear();
+        g_excludeCache.clear();
+        g_customCache.clear();
+        g_addonCache.clear();
+    }
+
     try {
         LoadINISettings();
     } catch (const std::exception& ex) {

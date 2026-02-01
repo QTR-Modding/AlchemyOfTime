@@ -2,7 +2,56 @@
 #include "Data.h"
 #include "ClibUtilsQTR/Ticker.hpp"
 
+class QueueManager;
+
 class Manager final : public Ticker, public SaveLoadData {
+    std::shared_mutex dirty_mtx_;
+    std::unordered_map<RefID, RE::ObjectRefHandle> dirty_refs_;
+    std::atomic<int32_t> n_instances_{0};
+
+    void MarkDirty_(RE::TESObjectREFR* r);
+
+    struct UpdateCtx {
+        RE::TESObjectREFR* from;
+        RE::TESObjectREFR* to;
+        const RE::TESForm* what;
+        Count count;
+        RefID from_refid;
+        bool refreshRefs;
+
+        bool to_is_world_object;
+        bool is_player_owned;
+
+        FormID what_formid;
+        RefID to_refid;
+        FormID to_base_id;
+
+        Duration curr_time;
+
+        UpdateCtx(RE::TESObjectREFR* from,
+                  RE::TESObjectREFR* to, const RE::TESForm* what,
+                  Count count, RefID from_refid, bool refreshRefs);
+    };
+
+    static void RecalcCtx_(UpdateCtx& c);
+
+
+    static void NormalizeWorldObjectCount_(UpdateCtx& ctx);
+
+    // possibly locks: queueMutex_
+    void QueueDeleteIfFromIsWorldObject_(const UpdateCtx& ctx);
+
+    static void ApplyBarterMenuSemantics_(UpdateCtx& ctx);
+
+    static void ApplyAlchemyNullSkip_(UpdateCtx& ctx);
+
+    void ApplyTransferToSource_(Source& src, UpdateCtx& ctx, const InvMap& to_inv);
+
+    void SplitWorldObjectStackIfNeeded_(Source& src, const UpdateCtx& ctx);
+
+    void RefreshRefs_(const UpdateCtx& ctx);
+
+
     RE::TESObjectREFR* player_ref = RE::PlayerCharacter::GetSingleton()->As<RE::TESObjectREFR>();
 
     // form_id1: source formid, formid2: stage formid, pair: <number of stage form, initial source count>
@@ -42,24 +91,6 @@ class Manager final : public Ticker, public SaveLoadData {
 
     std::unordered_set<FormID> do_not_register;
 
-    struct TransferKey {
-        FormID what{0};
-        RefID from{0};
-        RefID to{0};
-
-        bool operator==(const TransferKey& o) const noexcept { return what == o.what && from == o.from && to == o.to; }
-    };
-
-    struct TransferKeyHash {
-        std::size_t operator()(const TransferKey& k) const noexcept;
-    };
-
-    // queueMutex_ guards pending_transfers_; pending_transfers_scheduled is the scheduling gate for that queue
-    std::unordered_map<TransferKey, Count, TransferKeyHash> pending_transfers_;
-    std::atomic<bool> pending_transfers_scheduled{false};
-
-    void FlushQueuedTransfers();
-
     static void PreDeleteRefStop(RefStop& a_ref_stop);
 
     // Ticker thread entry. [locks: queueMutex_]
@@ -70,13 +101,13 @@ class Manager final : public Ticker, public SaveLoadData {
 
     static void UpdateRefStop(const Source& src, const StageInstance& wo_inst, RefStop& a_ref_stop, float stop_t);
 
-    // [expects: sourceMutex_] (read-only traversal)
-    [[nodiscard]] unsigned int GetNInstances();
+    [[nodiscard]] uint32_t GetNInstances();
+    uint32_t GetNInstancesFast() const;
 
     // Creates and appends a new Source. [expects: sourceMutex_] (unique)
     [[nodiscard]] Source* MakeSource(FormID source_formid, const DefaultSettings* settings);
 
-    void IndexSourceStages(Source& source);
+    void IndexSourceStages(const Source& source);
 
     void AddLocationIndex(RefID location_id, FormID source_formid);
     void RemoveLocationIndex(RefID location_id, FormID source_formid);
@@ -107,13 +138,13 @@ class Manager final : public Ticker, public SaveLoadData {
     static void ApplyStageInWorld(RE::TESObjectREFR* wo_ref, const Stage& stage,
                                   RE::TESBoundObject* source_bound = nullptr);
 
-    [[nodiscard]] static bool ApplyEvolutionInInventory(RE::TESObjectREFR* inventory_owner,
+    [[nodiscard]] static bool ApplyEvolutionInInventory(const RefInfo& a_info,
                                                         Count update_count,
                                                         FormID old_item, FormID new_item);
 
-    static inline void RemoveItem(RE::TESObjectREFR* moveFrom, FormID item_id, Count count);
+    static void RemoveItem(const RefInfo& moveFromInfo, FormID item_id, Count count);
 
-    static void AddItem(RE::TESObjectREFR* addTo, RE::TESObjectREFR* addFrom, FormID item_id, Count count);
+    static void AddItem(const RefInfo& addToInfo, const RefInfo& addFromInfo, FormID item_id, Count count);
 
     void Init();
 
@@ -121,17 +152,17 @@ class Manager final : public Ticker, public SaveLoadData {
     std::set<float> GetUpdateTimes(const RE::TESObjectREFR* inventory_owner);
 
     // [expects: sourceMutex_] (unique)
-    bool UpdateInventory(RE::TESObjectREFR* ref, float t);
+    bool UpdateInventory(const RefInfo& a_info, float t, const InvMap& inv);
 
     // [expects: sourceMutex_] (unique)
-    void UpdateInventory(RE::TESObjectREFR* ref);
+    void UpdateInventory(const RefInfo& a_info, const InvMap& inv);
 
     void UpdateQueuedWO(const RefInfo& ref_info, float curr_time);
-
     // [expects: sourceMutex_] (unique)
     void UpdateWO(RE::TESObjectREFR* ref);
     // [expects: sourceMutex_] (unique)
-    void SyncWithInventory(RE::TESObjectREFR* ref);
+    void SyncWithInventory(const RefInfo& a_info, const InvMap& inv);
+
 
     // [expects: sourceMutex_] (unique)
     void UpdateRef(RE::TESObjectREFR* loc);
@@ -148,8 +179,17 @@ class Manager final : public Ticker, public SaveLoadData {
     [[nodiscard]] std::vector<ScanRequest> BuildCellScanRequests_(
         const std::vector<RefInfo>& refStopsCopy);
 
+    static bool LocHasStage(Source* src, RefID loc, FormID stage_formid);
+
+    // best-effort disambiguation: owner-ref first, then stage-only
+    Source* UpdateGetSource(FormID stage_formid, RefID owner_refid);
+
+    std::optional<float> GetNextUpdateTime(const RefInfo& a_info);
+
+protected:
     void UpdateImpl(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::TESForm* what, Count count,
-                    RefID from_refid, bool update_refs);
+                    RefID from_refid, bool refreshRefs);
+    friend QueueManager;
 
 public:
     explicit Manager(const std::chrono::milliseconds interval)
@@ -162,10 +202,6 @@ public:
         return &singleton;
     }
 
-    // Use Or Take Compatibility
-    std::atomic<bool> listen_equip = true;
-    std::atomic<bool> listen_container_change = true;
-
     std::atomic<bool> isUninstalled = false;
     std::atomic<bool> isLoading = false;
 
@@ -176,12 +212,11 @@ public:
     // [locks: queueMutex_]
     void ClearWOUpdateQueue();
 
-    // use it only for world objects! checks if there is a stage instance for the given refid
-    [[nodiscard]] bool RefIsRegistered(RefID refid);
-
     // Registers instances; may mutate sources. [expects: sourceMutex_] (unique)
-    void Register(FormID some_formid, Count count, RefID location_refid,
-                  Duration register_time = 0);
+    void Register(FormID some_formid, Count count, const RefInfo& ref_info,
+                  Duration register_time, const InvMap& a_inv);
+    // Registers instances; may mutate sources. [expects: sourceMutex_] (unique)
+    void Register(FormID some_formid, Count count, RefID location_refid, Duration register_time);
 
     // These read from sources under a shared_lock internally
     void HandleCraftingEnter(unsigned int bench_type);
@@ -192,7 +227,7 @@ public:
     void Update(RE::TESObjectREFR* from, RE::TESObjectREFR* to = nullptr, const RE::TESForm* what = nullptr,
                 Count count = 0, RefID from_refid = 0);
 
-    // Swap based on stage instance. Requires sourceMutex_ held for pointer lifetime.
+    // Swap based on stage instance. Holds sourceMutex_ internally. (shared)
     void SwapWithStage(RE::TESObjectREFR* wo_ref);
 
     // Clears and resets all data. [locks: sourceMutex_] (unique) + [locks: queueMutex_]
@@ -240,15 +275,9 @@ public:
 
     void IndexStage(FormID stage_formid, FormID source_formid);
 
-    void QueueTransfer(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::TESForm* what, Count count);
-};
+    void ProcessDirtyRefs_();
 
-inline std::size_t Manager::TransferKeyHash::operator()(const TransferKey& k) const noexcept {
-    // decent mix
-    std::size_t h = std::hash<FormID>{}(k.what);
-    h ^= (std::hash<RefID>{}(k.from) + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2));
-    h ^= (std::hash<RefID>{}(k.to) + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2));
-    return h;
-}
+    void InstanceCountUpdate(int32_t delta);
+};
 
 inline Manager* M = nullptr;

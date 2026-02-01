@@ -810,7 +810,7 @@ void UI::UpdateStages(const std::vector<Source>& sources) {
         StageNo max_stage_no = 0;
         std::set<Stage> temp_stages;
         while (source.IsStageNo(max_stage_no)) {
-            if (const auto* stage = source.GetStage(max_stage_no)) {
+            if (const auto* stage = source.TryGetStage(max_stage_no)) {
                 const auto* temp_form = RE::TESForm::LookupByID(stage->formid);
                 if (!temp_form) continue;
                 const GameObject item = {temp_form->GetName(), stage->formid};

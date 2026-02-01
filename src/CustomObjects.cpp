@@ -457,9 +457,11 @@ void RefStop::ApplyArtObject(RE::TESObjectREFR* a_ref, const float duration) {
         return;
     }
 
-    SKSE::GetTaskInterface()->AddTask([a_ref, a_art_obj, duration]() {
-        if (!a_ref || !a_art_obj) return;
-        a_ref->ApplyArtObject(a_art_obj, duration);
+    auto h = a_ref->GetHandle();
+    SKSE::GetTaskInterface()->AddTask([h, a_art_obj, duration]() {
+        const auto ref = h.get().get();
+        if (!ref || !a_art_obj) return;
+        ref->ApplyArtObject(a_art_obj, duration);
     });
 
     applied_art_objects.insert(art_object.id);
@@ -476,9 +478,12 @@ void RefStop::ApplyShader(RE::TESObjectREFR* a_ref, const float duration) {
         logger::error("Shader not found.");
         return;
     }
-    SKSE::GetTaskInterface()->AddTask([a_ref, eff_shader, duration]() {
-        if (!a_ref || !eff_shader) return;
-        a_ref->ApplyEffectShader(eff_shader, duration);
+
+    auto h = a_ref->GetHandle();
+    SKSE::GetTaskInterface()->AddTask([h, eff_shader, duration]() {
+        const auto ref = h.get().get();
+        if (!ref || !eff_shader) return;
+        ref->ApplyEffectShader(eff_shader, duration);
     });
     //shader_ref_eff = a_shader_ref_eff_ptr;
 
@@ -493,7 +498,7 @@ void RefStop::ApplySound(const float volume) {
         return RemoveSound();
     }
     const auto soundhelper = SoundHelper::GetSingleton();
-    soundhelper->Play(ref_info.ref_id, sound.id, volume);
+    soundhelper->Play(ref_info.GetRef(), sound.id, volume);
     sound.enabled = true;
 }
 
@@ -615,18 +620,20 @@ void RefStop::Update(const RefStop& other) {
 }
 
 void SoundHelper::DeleteHandle(const RefID refid) {
-    if (!handles.contains(refid)) return;
-    Stop(refid);
     std::unique_lock lock(mutex);
-    handles.erase(refid);
+    auto it = handles.find(refid);
+    if (it == handles.end()) return;
+    Stop(refid);
+    handles.erase(it);
 }
 
 void SoundHelper::Stop(const RefID refid) {
-    std::shared_lock lock(mutex);
-    if (!handles.contains(refid)) {
+    std::unique_lock lock(mutex);
+    auto it = handles.find(refid);
+    if (it == handles.end()) {
         return;
     }
-    RE::BSSoundHandle& handle = handles.at(refid);
+    RE::BSSoundHandle& handle = it->second;
     if (!handle.IsPlaying()) {
         return;
     }
@@ -634,14 +641,13 @@ void SoundHelper::Stop(const RefID refid) {
     //handle.Stop();
 }
 
-void SoundHelper::Play(const RefID refid, const FormID sound_id, const float volume) {
+void SoundHelper::Play(const RE::TESObjectREFR* ref, const FormID sound_id, const float volume) {
     if (!sound_id) return;
     const auto sound = RE::TESForm::LookupByID<RE::BGSSoundDescriptorForm>(sound_id);
     if (!sound) {
         logger::error("Sound not found.");
         return;
     }
-    const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(refid);
     if (!ref) {
         logger::error("Ref not found.");
         return;
@@ -651,17 +657,13 @@ void SoundHelper::Play(const RefID refid, const FormID sound_id, const float vol
         logger::warn("Ref has no 3D.");
         return;
     }
+    std::unique_lock lock(mutex);
+    auto& sound_handle = handles[ref->GetFormID()];
 
-    if (std::unique_lock lock(mutex); !handles.contains(refid)) {
-        handles[refid] = RE::BSSoundHandle();
-    }
-
-    std::shared_lock lock(mutex);
-
-    auto& sound_handle = handles.at(refid);
     if (sound_handle.IsPlaying()) {
         return;
     }
+
     RE::BSAudioManager::GetSingleton()->BuildSoundDataFromDescriptor(sound_handle, sound);
     sound_handle.SetObjectToFollow(ref_node);
     sound_handle.SetVolume(volume);

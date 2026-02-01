@@ -128,6 +128,16 @@ namespace Settings {
     inline std::unordered_map<std::string, std::vector<std::string>> exclude_list;
     inline std::map<std::string, std::unordered_map<FormID, AddOnSettings>> addon_settings;
 
+    // fast overloads (no FormReader lookups)
+    bool IsQFormType(const RE::TESForm* form, std::string_view qformtype);
+    std::string_view GetQFormType(const RE::TESForm* form);
+
+    bool IsInExclude(const RE::TESForm* form, std::string_view type);
+    DefaultSettings* GetDefaultSetting(std::string_view qformtype);
+    AddOnSettings* GetAddOnSettings(FormID form_id, std::string_view qformtype);
+    DefaultSettings* GetCustomSetting(const RE::TESForm* form, std::string_view qformtype);
+
+
     [[nodiscard]] bool IsQFormType(FormID formid, const std::string& qformtype);
 
     inline std::string GetQFormType(FormID formid);
