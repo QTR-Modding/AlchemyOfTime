@@ -1651,7 +1651,7 @@ void Manager::HandleCraftingEnter(const unsigned int bench_type) {
         return;
     }
 
-    Update(player_ref);
+    UpdateRef(player_ref);
     ListenGuard lg(Hooks::listen_disable_depth);
 
     const auto& q_form_types = Settings::qform_bench_map.at(bench_type);
