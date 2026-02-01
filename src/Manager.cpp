@@ -401,8 +401,8 @@ Source* Manager::UpdateGetSource(const FormID stage_formid, const RefID owner_re
     return GetSource(stage_formid);
 }
 
-std::optional<float> Manager::GetNextUpdateTime(const RE::TESObjectREFR* owner) {
-    const auto refid = owner->GetFormID();
+std::optional<float> Manager::GetNextUpdateTime(const RefInfo& a_info) {
+    const auto refid = a_info.ref_id;
     const auto lit = loc_to_sources.find(refid);
     if (lit == loc_to_sources.end()) return std::nullopt;
 
@@ -434,13 +434,13 @@ std::optional<float> Manager::GetNextUpdateTime(const RE::TESObjectREFR* owner) 
 
 void Manager::UpdateImpl(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::TESForm* what, const Count count,
                          const RefID from_refid, const bool refreshRefs) {
-    UpdateCtx ctx{.from = from, .to = to, .what = what, .count = count, .from_refid = from_refid,
-                  .refreshRefs = refreshRefs};
+    UpdateCtx ctx{from, to, what, count, from_refid, refreshRefs};
 
     NormalizeWorldObjectCount_(ctx);
     QueueDeleteIfFromIsWorldObject_(ctx);
     ApplyBarterMenuSemantics_(ctx);
     ApplyAlchemyNullSkip_(ctx);
+    RecalcCtx_(ctx);
 
     if (!ctx.what || ctx.count <= 0) {
         RefreshRefs_(ctx);
@@ -448,7 +448,9 @@ void Manager::UpdateImpl(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const R
     }
 
     Source* src;
-    const auto loc = from ? from->GetFormID() : (from_refid ? from_refid : to ? to->GetFormID() : 0);
+    const auto loc =
+        ctx.from ? ctx.from->GetFormID() : (ctx.from_refid ? ctx.from_refid : (ctx.to ? ctx.to->GetFormID() : 0));
+
     {
         SRC_SHARED_GUARD;
         src = UpdateGetSource(ctx.what->GetFormID(), loc);
@@ -460,8 +462,7 @@ void Manager::UpdateImpl(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const R
     {
         SRC_UNIQUE_GUARD;
         if (src = UpdateGetSource(ctx.what->GetFormID(), loc); src) {
-            InitTransferIds_(ctx);
-            ApplyTransferToSource_(*src, ctx);
+            ApplyTransferToSource_(*src, ctx, ctx.to && ctx.to->HasContainer() ? ctx.to->GetInventory() : InvMap{});
             SplitWorldObjectStackIfNeeded_(*src, ctx);
         }
     }
@@ -500,8 +501,35 @@ void Manager::ProcessDirtyRefs_() {
     }
 }
 
+void Manager::InstanceCountUpdate(const int32_t delta) { n_instances_.fetch_add(delta, std::memory_order_relaxed); }
+
+
+Manager::UpdateCtx::UpdateCtx(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::TESForm* what, const Count count,
+                              const RefID from_refid, const bool refreshRefs):
+    from(from), to(to), what(what), 
+    count(count), from_refid(from_refid), 
+    refreshRefs(refreshRefs) {
+    
+
+    to_is_world_object = to && !to->HasContainer();
+    is_player_owned = from && from->IsPlayerRef();
+    what_formid = what ? what->GetFormID() : 0;
+    to_refid = to ? to->GetFormID() : 0;
+    curr_time = RE::Calendar::GetSingleton()->GetHoursPassed();
+
+    to_base_id = to ? to->GetBaseObject()->GetFormID() : 0;
+}
+
+void Manager::RecalcCtx_(UpdateCtx& c) {
+    c.to_is_world_object = c.to && !c.to->HasContainer();
+    c.is_player_owned = c.from && c.from->IsPlayerRef();
+    c.what_formid = c.what ? c.what->GetFormID() : 0;
+    c.to_refid = c.to ? c.to->GetFormID() : 0;
+    c.to_base_id = c.to ? c.to->GetBaseObject()->GetFormID() : 0;
+    c.from_refid = c.from ? c.from->GetFormID() : c.from_refid;
+}
+
 void Manager::NormalizeWorldObjectCount_(UpdateCtx& ctx) {
-    ctx.to_is_world_object = ctx.to && !ctx.to->HasContainer();
     if (ctx.to_is_world_object) {
         ctx.count = ctx.to->extraList.GetCount();
     }
@@ -530,20 +558,13 @@ void Manager::ApplyAlchemyNullSkip_(UpdateCtx& ctx) {
     }
 }
 
-void Manager::InitTransferIds_(UpdateCtx& ctx) {
-    ctx.what_formid = ctx.what->GetFormID();
-    ctx.from_refid = ctx.from ? ctx.from->GetFormID() : ctx.from_refid;
-    ctx.to_refid = ctx.to ? ctx.to->GetFormID() : 0;
-    ctx.is_player_owned = ctx.from ? ctx.from->IsPlayerRef() : false;
-}
-
-void Manager::ApplyTransferToSource_(Source& src, UpdateCtx& ctx) {
+void Manager::ApplyTransferToSource_(Source& src, UpdateCtx& ctx, const InvMap& to_inv) {
     if (src.data.contains(ctx.from_refid)) {
         ctx.count = src.MoveInstances(ctx.from_refid, ctx.to_refid, ctx.what_formid, ctx.count, true);
     }
 
     if (ctx.count > 0) {
-        Register(ctx.what_formid, ctx.count, ctx.to_refid);
+        Register(ctx.what_formid, ctx.count, {ctx.to_refid, ctx.to_base_id}, ctx.curr_time, to_inv);
     }
 
     CleanUpSourceData(&src, ctx.from_refid);
@@ -558,37 +579,34 @@ void Manager::ApplyTransferToSource_(Source& src, UpdateCtx& ctx) {
 }
 
 void Manager::SplitWorldObjectStackIfNeeded_(Source& src, const UpdateCtx& ctx) {
-    if (!ctx.to_is_world_object) return;
-    if (!ctx.to_refid) return;
-    if (!src.data.contains(ctx.to_refid)) return;
+    if (!ctx.to_is_world_object || !ctx.to_refid) return;
 
-    bool handled_first = false;
+    const auto it = src.data.find(ctx.to_refid);
+    if (it == src.data.end()) return;
 
-    for (auto& st_inst : src.data.at(ctx.to_refid)) {
-        const auto temp_count = st_inst.count;
+    auto& v = it->second;
+    if (v.empty()) return;
 
-        if (!handled_first) {
-            if (ctx.to->extraList.GetCount() != temp_count) {
-                ctx.to->extraList.SetCount(static_cast<uint16_t>(temp_count));
-            }
-            if (ctx.is_player_owned) {
-                ctx.to->extraList.SetOwner(RE::TESForm::LookupByID(0x07));
-            }
-            handled_first = true;
+    // Ensure first stack matches v[0]
+    {
+        const auto c0 = v[0].count;
+        if (ctx.to->extraList.GetCount() != c0) ctx.to->extraList.SetCount(static_cast<uint16_t>(c0));
+        if (ctx.is_player_owned) ctx.to->extraList.SetOwner(RE::TESForm::LookupByID(0x07));
+    }
+
+    // Split remaining instances by repeatedly moving index 1
+    while (v.size() > 1) {
+        const auto inst_count = v[1].count;
+        if (inst_count <= 0) {
+            v.erase(v.begin() + 1);
             continue;
         }
 
-        const auto new_ref =
-            WorldObject::DropObjectIntoTheWorld(st_inst.GetBound(), temp_count, ctx.is_player_owned);
-        if (!new_ref) {
-            logger::error("Update: New ref is null.");
-            continue;
-        }
+        const auto new_ref = WorldObject::DropObjectIntoTheWorld(v[1].GetBound(), inst_count, ctx.is_player_owned);
+        if (!new_ref) break;
 
-        if (!src.MoveInstance(ctx.to_refid, new_ref->GetFormID(), &st_inst)) {
-            logger::error("Update: MoveInstance failed for form {} and loc {}.", ctx.what_formid, ctx.to_refid);
-            continue;
-        }
+        // Move by pointer to element at index 1 (safe: we won't keep it after the call)
+        if (!src.MoveInstance(ctx.to_refid, new_ref->GetFormID(), &v[1])) break;
 
         UpdateLocationIndexForSource(src, ctx.to_refid);
         UpdateLocationIndexForSource(src, new_ref->GetFormID());
@@ -752,15 +770,27 @@ void Manager::UpdateRefStop(const Source& src, const StageInstance& wo_inst, Ref
 }
 
 
-unsigned int Manager::GetNInstances() {
-    unsigned int n = 0;
+uint32_t Manager::GetNInstances() {
+    uint32_t n = 0;
     for (const auto& src : sources | std::views::values) {
         const auto& source = *src;
         for (const auto& loc : source.data | std::views::keys) {
-            n += static_cast<unsigned int>(source.data.at(loc).size());
+            n += static_cast<uint32_t>(source.data.at(loc).size());
         }
     }
     return n;
+}
+
+uint32_t Manager::GetNInstancesFast() const {
+    const int32_t v = n_instances_.load(std::memory_order_relaxed);
+    const auto result = v > 0 ? static_cast<uint32_t>(v) : 0;
+#ifndef NDEBUG
+    /*const uint32_t actual = M->GetNInstances();
+    if (result != actual) {
+        logger::critical("Instance count mismatch: cached={} actual={}", result, actual);
+    }*/
+#endif
+    return result;
 }
 
 Source* Manager::MakeSource(const FormID source_formid, const DefaultSettings* settings) {
@@ -868,7 +898,6 @@ Source* Manager::GetSourceByLocation(const RefID location_id) {
 
 Source* Manager::ForceGetSource(const FormID some_formid) {
     if (!some_formid) return nullptr;
-
     if (const auto src = GetSource(some_formid)) return src;
 
     const auto some_form = FormReader::GetFormByID(some_formid);
@@ -877,18 +906,27 @@ Source* Manager::ForceGetSource(const FormID some_formid) {
         return nullptr;
     }
 
-    if (const auto customSetting = Settings::GetCustomSetting(some_form)) {
-        return MakeSource(some_formid, customSetting);
+    const std::string_view qft = Settings::GetQFormType(some_form);
+    if (qft.empty()) return nullptr;
+
+    // exclude check once (no more FormReader lookups inside)
+    if (Settings::IsInExclude(some_form, qft)) return nullptr;
+
+    if (const auto custom = Settings::GetCustomSetting(some_form, qft)) {
+        return MakeSource(some_formid, custom);
     }
-    if (const auto defaultSetting = Settings::GetDefaultSetting(some_formid)) {
-        if (defaultSetting->durations.at(0) < Settings::critical_stage_dur || Settings::GetAddOnSettings(some_form)) {
-            return MakeSource(some_formid, defaultSetting);
+
+    if (const auto def = Settings::GetDefaultSetting(qft)) {
+        const bool hasAddon = (Settings::GetAddOnSettings(some_formid, qft) != nullptr);
+        if (def->durations.at(0) < Settings::critical_stage_dur || hasAddon) {
+            return MakeSource(some_formid, def);
         }
     }
 
     // stage item olarak dusunulduyse, custom a baslangic itemi olarak koymali
     return nullptr;
 }
+
 
 bool Manager::IsSource(const FormID some_formid) {
     if (!some_formid) return false;
@@ -944,12 +982,8 @@ void Manager::ApplyStageInWorld(RE::TESObjectREFR* wo_ref, const Stage& stage, R
     }
 }
 
-bool Manager::ApplyEvolutionInInventory(const RE::TESObjectREFR* inventory_owner,
+bool Manager::ApplyEvolutionInInventory(const RefInfo& a_info,
                                         Count update_count, const FormID old_item, const FormID new_item) {
-    if (!inventory_owner) {
-        logger::error("Inventory owner is null.");
-        return false;
-    }
     if (!old_item || !new_item) {
         logger::error("Item is null.");
         return false;
@@ -962,16 +996,17 @@ bool Manager::ApplyEvolutionInInventory(const RE::TESObjectREFR* inventory_owner
         return false;
     }
 
+    const auto refid = a_info.ref_id;
     QueueManager::GetSingleton()->QueueAddRemoveItemTask(
-        AddItemTask{inventory_owner->GetFormID(), 0, new_item, update_count},
-        RemoveItemTask{inventory_owner->GetFormID(), old_item, update_count});
+        AddItemTask{refid, 0, new_item, update_count},
+        RemoveItemTask{refid, old_item, update_count});
 
     return true;
 }
 
 
-void Manager::RemoveItem(const RE::TESObjectREFR* moveFrom, const FormID item_id, const Count count) {
-    if (!moveFrom) {
+void Manager::RemoveItem(const RefInfo& moveFromInfo, const FormID item_id, const Count count) {
+    if (!moveFromInfo.ref_id) {
         logger::warn("RemoveItem: moveFrom is null.");
         return;
     }
@@ -983,39 +1018,21 @@ void Manager::RemoveItem(const RE::TESObjectREFR* moveFrom, const FormID item_id
         logger::warn("RemoveItem: item_id is null.");
         return;
     }
-    if (!moveFrom->HasContainer()) {
-        logger::warn("RemoveItem: moveFrom does not have a container.");
-        return;
-    }
-
-    QueueManager::GetSingleton()->QueueAddRemoveItemTask({}, RemoveItemTask{moveFrom->GetFormID(), item_id, count});
+    QueueManager::GetSingleton()->QueueAddRemoveItemTask({}, RemoveItemTask{moveFromInfo.ref_id, item_id, count});
 }
 
-void Manager::AddItem(const RE::TESObjectREFR* addTo, const RE::TESObjectREFR* addFrom, const FormID item_id,
+void Manager::AddItem(const RefInfo& addToInfo, const RefInfo& addFromInfo, const FormID item_id,
                       const Count count) {
-    if (!addTo) {
-        logger::critical("add to is null!");
-        return;
-    }
     if (count <= 0) {
         logger::error("Count is 0 or less.");
         return;
     }
-
-    const FormID to_id = addTo->GetFormID();
-    FormID from_id = 0;
-    if (addFrom) {
-        from_id = addFrom->GetFormID();
-        if (to_id == from_id) {
-            logger::warn("Add to and add from are the same.");
-            return;
-        }
-        if (!addFrom->HasContainer()) {
-            logger::warn("Add from does not have a container.");
-            return;
-        }
+    const auto to_id = addToInfo.ref_id;
+    if (!to_id) {
+        logger::error("AddItem: to_id is null.");
+        return;
     }
-
+    const auto from_id = addFromInfo.ref_id;
     QueueManager::GetSingleton()->QueueAddRemoveItemTask(AddItemTask{to_id, from_id, item_id, count}, {});
 }
 
@@ -1065,9 +1082,9 @@ std::set<float> Manager::GetUpdateTimes(const RE::TESObjectREFR* inventory_owner
     return queued_updates;
 }
 
-bool Manager::UpdateInventory(RE::TESObjectREFR* ref, float t, const InvMap& inv) {
+bool Manager::UpdateInventory(const RefInfo& a_info, const float t, const InvMap& inv) {
     bool update_took_place = false;
-    const auto refid = ref->GetFormID();
+    const auto refid = a_info.ref_id;
 
     std::vector<FormID> candidate_sources;
     const auto it0 = loc_to_sources.find(refid);
@@ -1103,9 +1120,9 @@ bool Manager::UpdateInventory(RE::TESObjectREFR* ref, float t, const InvMap& inv
         CleanUpSourceData(&source, refid);
 
         for (const auto& update : updates) {
-            if (ApplyEvolutionInInventory(ref, update.count, update.oldstage->formid, update.newstage->formid) &&
+            if (ApplyEvolutionInInventory(a_info, update.count, update.oldstage->formid, update.newstage->formid) &&
                 source.IsDecayedItem(update.newstage->formid)) {
-                Register(update.newstage->formid, update.count, refid, t);
+                Register(update.newstage->formid, update.count, a_info, t, inv);
             }
         }
     }
@@ -1135,7 +1152,7 @@ bool Manager::UpdateInventory(RE::TESObjectREFR* ref, float t, const InvMap& inv
                 RemoveLocationIndex(refid, src_formid);
                 continue;
             }
-            sit->second->UpdateTimeModulationInInventory(ref, t, inv);
+            sit->second->UpdateTimeModulationInInventory(a_info, t, inv);
         }
     } else {
         std::vector<FormID> mod_sources;
@@ -1148,128 +1165,142 @@ bool Manager::UpdateInventory(RE::TESObjectREFR* ref, float t, const InvMap& inv
                 RemoveLocationIndex(refid, src_formid);
                 continue;
             }
-            sit->second->UpdateTimeModulationInInventory(ref, t, inv);
+            sit->second->UpdateTimeModulationInInventory(a_info, t, inv);
         }
     }
 
     return update_took_place;
 }
 
-void Manager::UpdateInventory(RE::TESObjectREFR* ref) {
+void Manager::UpdateInventory(const RefInfo& a_info, const InvMap& inv) {
 
-    const auto a_inv = ref->GetInventory();
-
-    SyncWithInventory(ref, a_inv);
+    SyncWithInventory(a_info, inv);
 
     const auto curr = RE::Calendar::GetSingleton()->GetHoursPassed();
     for (;;) {
-        auto next = GetNextUpdateTime(ref);
+        auto next = GetNextUpdateTime(a_info);
         if (!next) break;
         const float t = *next + 0.000028f;
         if (t >= curr) break;
-        if (!UpdateInventory(ref, t, a_inv)) break;
+        if (!UpdateInventory(a_info, t, inv)) break;
     }
 
-    UpdateInventory(ref, curr, a_inv);
+    UpdateInventory(a_info, curr, inv);
 }
 
-void Manager::SyncWithInventory(const RE::TESObjectREFR* ref, const InvMap& inv) {
-    
-    const auto loc_refid = ref->GetFormID();
-    const bool needHandling = locs_to_be_handled.contains(loc_refid);
+void Manager::SyncWithInventory(const RefInfo& a_info, const InvMap& inv) {
+    const RefID loc = a_info.ref_id;
+    const bool needHandling = locs_to_be_handled.contains(loc);
+    const float now = RE::Calendar::GetSingleton()->GetHoursPassed();
 
-    struct Bucket {
-        Count total = 0;
-        std::vector<StageInstance*> insts;
-        bool seen = false;
-    };
+    // Inventory formids for O(1) membership checks
+    std::unordered_set<FormID> inv_fids;
+    inv_fids.reserve(inv.size());
+    for (const auto& bound : inv | std::views::keys) {
+        inv_fids.insert(bound->GetFormID());
+    }
 
-    std::unordered_map<FormID, Bucket> reg;
-    reg.reserve(inv.size());
+    // Registry totals per stage formid, and whether ANY fake exists for that formid at this loc
+    std::unordered_map<FormID, Count> reg_total;
+    std::unordered_map<FormID, bool> reg_has_fake;
+    reg_total.reserve(inv.size());
 
-    // build registry view for this location
-    if (const auto lit = loc_to_sources.find(loc_refid); lit != loc_to_sources.end()) {
-        for (const auto src_formid : lit->second) {
-            const auto sit = sources.find(src_formid);
+    if (auto lit = loc_to_sources.find(loc); lit != loc_to_sources.end()) {
+        for (FormID sid : lit->second) {
+            auto sit = sources.find(sid);
             if (sit == sources.end()) continue;
+            auto& src = *sit->second;
 
-            auto& source = *sit->second;
-            const auto dit = source.data.find(loc_refid);
-            if (dit == source.data.end()) continue;
+            auto dit = src.data.find(loc);
+            if (dit == src.data.end()) continue;
 
-            for (auto& st_inst : dit->second) {
-                if (!st_inst.xtra.is_decayed && st_inst.count > 0) {
-                    auto& b = reg[st_inst.xtra.form_id];
-                    b.total += st_inst.count;
-                    b.insts.push_back(&st_inst);
-                }
+            for (auto& inst : dit->second) {
+                if (inst.xtra.is_decayed || inst.count <= 0) continue;
+                reg_total[inst.xtra.form_id] += inst.count;
+                if (inst.xtra.is_fake) reg_has_fake[inst.xtra.form_id] = true;
             }
         }
     }
 
     if (needHandling) {
-        for (const auto& [bound, entry] : inv) {
+        for (auto& [bound, entry] : inv) {
             if (bound->IsDynamicForm()) {
                 const auto name = bound->GetName();
                 if (!name || std::strlen(name) == 0) {
                     QueueManager::GetSingleton()->QueueAddRemoveItemTask(
-                        {}, RemoveItemTask(loc_refid, bound->GetFormID(), std::max(1, entry.first))
-                    );
+                        {}, RemoveItemTask(loc, bound->GetFormID(), std::max(1, entry.first)));
                 }
             }
         }
     }
 
-    const auto current_time = RE::Calendar::GetSingleton()->GetHoursPassed();
+    // how much we need to remove from registry for each formid (when we are NOT "adding back" due to fake)
+    std::unordered_map<FormID, Count> remove_from_reg;
+    remove_from_reg.reserve(inv.size());
 
     // reconcile inventory -> registry
-    for (const auto& [bound, entry] : inv) {
-        const auto formid = bound->GetFormID();
-        const auto inventory_count = entry.first;
+    for (auto& [bound, entry] : inv) {
+        const FormID fid = bound->GetFormID();
+        const Count invCount = entry.first;
 
-        auto it = reg.find(formid);
-        if (it == reg.end()) {
-            if (inventory_count > 0) {
-                Register(formid, inventory_count, loc_refid, current_time);
-            }
+        auto rt = reg_total.find(fid);
+        if (rt == reg_total.end()) {
+            if (invCount > 0) Register(fid, invCount, a_info, now, inv);
             continue;
         }
 
-        auto& b = it->second;
-        b.seen = true;
-
-        if (auto diff = b.total - inventory_count; diff < 0) {
-            Register(formid, -diff, loc_refid, current_time);
-        } else if (diff > 0) {
-            for (auto* inst : b.insts) {
-                if (inst->xtra.is_fake && needHandling) {
-                    AddItem(ref, nullptr, formid, diff);
-                    break;
-                }
-                if (diff <= inst->count) {
-                    inst->count -= diff;
-                    break;
-                }
-                diff -= inst->count;
-                inst->count = 0;
-            }
-        }
-    }
-
-    // leftover registry entries not present in inventory
-    for (auto& [formid, b] : reg) {
-        if (b.seen) continue;
-        for (auto* inst : b.insts) {
-            if (inst->xtra.is_fake && needHandling) {
-                AddItem(ref, nullptr, formid, inst->count);
+        const Count regCount = rt->second;
+        if (regCount < invCount) {
+            Register(fid, invCount - regCount, a_info, now, inv);
+        } else if (regCount > invCount) {
+            const Count diff = regCount - invCount;
+            if (needHandling && reg_has_fake[fid]) {
+                AddItem(a_info, {0, 0}, fid, diff);  // fix inventory, keep registry
             } else {
-                inst->count = 0;
+                remove_from_reg[fid] = diff;  // later decrement instances in one pass
             }
         }
     }
 
-    locs_to_be_handled.erase(loc_refid);
+    // single pass over instances to apply:
+    //  - leftover registry entries not in inventory
+    //  - remove_from_reg decrements
+    if (auto lit = loc_to_sources.find(loc); lit != loc_to_sources.end()) {
+        for (FormID sid : lit->second) {
+            auto sit = sources.find(sid);
+            if (sit == sources.end()) continue;
+            auto& src = *sit->second;
+
+            auto dit = src.data.find(loc);
+            if (dit == src.data.end()) continue;
+
+            for (auto& inst : dit->second) {
+                if (inst.xtra.is_decayed || inst.count <= 0) continue;
+
+                const FormID fid = inst.xtra.form_id;
+
+                if (!inv_fids.contains(fid)) {
+                    // registry item not present in inventory
+                    if (needHandling && inst.xtra.is_fake)
+                        AddItem(a_info, {0, 0}, fid, inst.count);
+                    else
+                        inst.count = 0;
+                    continue;
+                }
+
+                if (auto it = remove_from_reg.find(fid); it != remove_from_reg.end() && it->second > 0) {
+                    const Count take = std::min<Count>(inst.count, it->second);
+                    inst.count -= take;
+                    it->second -= take;
+                    if (it->second == 0) remove_from_reg.erase(it);
+                }
+            }
+        }
+    }
+
+    locs_to_be_handled.erase(loc);
 }
+
 
 void Manager::UpdateQueuedWO(const RefInfo& ref_info, const float curr_time) {
     // Called from UpdateLoop task.
@@ -1409,7 +1440,7 @@ void Manager::UpdateWO(RE::TESObjectREFR* ref) {
     }
 
     if (!source) {
-        Register(ref->GetBaseObject()->GetFormID(), ref->extraList.GetCount(), refid);
+        Register(ref->GetBaseObject()->GetFormID(), ref->extraList.GetCount(), refid, curr_time);
         return;
     }
 
@@ -1429,7 +1460,7 @@ void Manager::UpdateWO(RE::TESObjectREFR* ref) {
     const auto it = source->data.find(refid);
     if (it == source->data.end() || it->second.empty()) {
         logger::error("UpdateWO: RefID {:x} not found in source data.", refid);
-        Register(ref->GetBaseObject()->GetFormID(), ref->extraList.GetCount(), refid);
+        Register(ref->GetBaseObject()->GetFormID(), ref->extraList.GetCount(), refid, curr_time);
         return;
     }
     auto& wo_inst = it->second.front();
@@ -1446,8 +1477,13 @@ void Manager::UpdateWO(RE::TESObjectREFR* ref) {
 
 void Manager::UpdateRef(RE::TESObjectREFR* loc) {
     if (loc->HasContainer()) {
-        UpdateInventory(loc);
-    } else UpdateWO(loc);
+        const auto base = loc->GetBaseObject();
+        const RefInfo info(loc->GetFormID(), base ? base->GetFormID() : 0);
+        const auto inv = loc->GetInventory();
+        UpdateInventory(info, inv);
+    } else {
+        UpdateWO(loc);
+    }
 }
 
 RefStop* Manager::GetRefStop(const RefID refid) {
@@ -1471,6 +1507,7 @@ bool Manager::DeRegisterRef(const RefID refid) {
     for (auto& src : sources | std::views::values) {
         auto& source = *src;
         if (auto it = source.data.find(refid); it != source.data.end()) {
+            M->InstanceCountUpdate(-static_cast<int>(it->second.size()));
             source.data.erase(it);
             RemoveLocationIndex(refid, source.formid);
             found = true;
@@ -1488,7 +1525,7 @@ void Manager::ClearWOUpdateQueue() {
 }
 
 void Manager::Register(const FormID some_formid, const Count count, const RefID location_refid,
-                       Duration register_time) {
+                       const Duration register_time) {
     if (do_not_register.contains(some_formid)) {
         return;
     }
@@ -1509,15 +1546,11 @@ void Manager::Register(const FormID some_formid, const Count count, const RefID 
         logger::warn("Location ref is null. FormID: {:x}", some_formid);
         return;
     }
-    if (Inventory::IsQuestItem(some_formid, ref)) {
-        return;
-    }
     if (!Settings::IsItem(some_formid, "", true)) {
-        //logger::warn("Formid is an item.");
         return;
     }
 
-    if (GetNInstances() > _instance_limit) {
+    if (GetNInstancesFast() > _instance_limit) {
         logger::warn("Instance limit reached.");
         MsgBoxesNotifs::InGame::CustomMsg(
             std::format("The mod is tracking over {} instances. It is advised to check your memory usage and "
@@ -1525,10 +1558,8 @@ void Manager::Register(const FormID some_formid, const Count count, const RefID 
                         _instance_limit));
     }
 
-    if (register_time < EPSILON) register_time = RE::Calendar::GetSingleton()->GetHoursPassed();
-
     // make new registry
-    Source* const src = ForceGetSource(some_formid); // also saves it to sources if it was created new
+    Source* const src = ForceGetSource(some_formid);  // also saves it to sources if it was created new
     if (!src) {
         do_not_register.insert(some_formid);
         return;
@@ -1541,26 +1572,70 @@ void Manager::Register(const FormID some_formid, const Count count, const RefID 
 
     const auto stage_no = src->formid == some_formid ? 0 : src->GetStageNo(some_formid);
 
-    if (ref->HasContainer()) {
-        if (!src->InitInsertInstanceInventory(stage_no, count, ref, register_time)) {
-            logger::error("Register: InsertNewInstance failed 1.");
-        } else {
-            UpdateLocationIndexForSource(*src, location_refid);
-        }
+    if (const auto inserted_instance = src->InitInsertInstanceWO(stage_no, count, location_refid, register_time);
+        !inserted_instance) {
+        logger::error("Register: InsertNewInstance failed 2.");
     } else {
-        if (const auto inserted_instance = src->InitInsertInstanceWO(stage_no, count, location_refid, register_time);
-            !inserted_instance) {
-            logger::error("Register: InsertNewInstance failed 2.");
-        } else {
-            const auto bound = src->IsFakeStage(stage_no) ? src->GetBoundObject() : nullptr;
-            ApplyStageInWorld(ref, src->GetStage(stage_no), bound);
-            // add to the queue
-            const auto hitting_time = src->GetNextUpdateTime(inserted_instance);
-            RefStop a_ref_stop(location_refid);
-            UpdateRefStop(*src, *inserted_instance, a_ref_stop, hitting_time);
-            QueueWOUpdate(a_ref_stop);
-            UpdateLocationIndexForSource(*src, location_refid);
-        }
+        const auto bound = src->IsFakeStage(stage_no) ? src->GetBoundObject() : nullptr;
+        ApplyStageInWorld(ref, src->GetStage(stage_no), bound);
+        // add to the queue
+        const auto hitting_time = src->GetNextUpdateTime(inserted_instance);
+        RefStop a_ref_stop(location_refid);
+        UpdateRefStop(*src, *inserted_instance, a_ref_stop, hitting_time);
+        QueueWOUpdate(a_ref_stop);
+        UpdateLocationIndexForSource(*src, location_refid);
+    }
+}
+
+void Manager::Register(const FormID some_formid, const Count count, const RefInfo& ref_info, const Duration register_time, const InvMap& a_inv) {
+    if (do_not_register.contains(some_formid)) {
+        return;
+    }
+    if (!some_formid) {
+        logger::warn("FormID is null.");
+        return;
+    }
+    if (!count) {
+        logger::warn("Count is 0.");
+        return;
+    }
+    const auto location_refid = ref_info.ref_id;
+    if (!location_refid) {
+        return;
+    }
+    if (Inventory::IsQuestItem(some_formid, a_inv)) {
+        return;
+    }
+    if (!Settings::IsItem(some_formid, "", true)) {
+        return;
+    }
+
+    if (GetNInstancesFast() > _instance_limit) {
+        logger::warn("Instance limit reached.");
+        MsgBoxesNotifs::InGame::CustomMsg(
+            std::format("The mod is tracking over {} instances. It is advised to check your memory usage and "
+                        "skse co-save sizes.",
+                        _instance_limit));
+    }
+
+    // make new registry
+    Source* const src = ForceGetSource(some_formid);  // also saves it to sources if it was created new
+    if (!src) {
+        do_not_register.insert(some_formid);
+        return;
+    }
+    if (!src->IsStage(some_formid)) {
+        logger::critical("Register: some_formid is not a stage.");
+        do_not_register.insert(some_formid);
+        return;
+    }
+
+    const auto stage_no = src->formid == some_formid ? 0 : src->GetStageNo(some_formid);
+
+    if (!src->InitInsertInstanceInventory(stage_no, count, ref_info, register_time, a_inv)) {
+        logger::error("Register: InsertNewInstance failed 1.");
+    } else {
+        UpdateLocationIndexForSource(*src, location_refid);
     }
 }
 
@@ -1601,7 +1676,7 @@ void Manager::HandleCraftingEnter(const unsigned int bench_type) {
             }
 
             if (st_inst.count <= 0 || st_inst.xtra.is_decayed) continue;
-            if (Inventory::IsQuestItem(stage_formid, player_ref)) continue;
+            if (Inventory::IsQuestItem(stage_formid, player_inventory)) continue;
             if (stage_formid != src.formid && !st_inst.xtra.crafting_allowed) continue;
 
             if (const Types::FormFormID temp = {src.formid, stage_formid}; !handle_crafting_instances.contains(temp)) {
@@ -1733,6 +1808,8 @@ void Manager::Reset() {
     Clear();
     isUninstalled.store(false);
 
+    n_instances_.store(0, std::memory_order_relaxed);
+
     logger::info("Manager reset.");
 }
 
@@ -1808,7 +1885,9 @@ void Manager::HandleLoc(RE::TESObjectREFR* loc_ref) {
         }
     }
 
-    SyncWithInventory(loc_ref, loc_inventory_temp);
+    const auto loc_base = loc_ref->GetObjectReference()->GetFormID();
+    SyncWithInventory(RefInfo(loc_refid, loc_base), loc_inventory_temp);
+    Update(loc_ref);
     locs_to_be_handled.erase(loc_refid);
 }
 
@@ -1828,7 +1907,7 @@ StageInstance* Manager::RegisterAtReceiveData(const FormID source_formid, const 
         return nullptr;
     }
 
-    if (GetNInstances() > _instance_limit) {
+    if (GetNInstancesFast() > _instance_limit) {
         logger::warn("Instance limit reached.");
         MsgBoxesNotifs::InGame::CustomMsg(
             std::format("The mod is tracking over {} instances. Maybe it is not bad to check your memory usage and "
@@ -1909,7 +1988,6 @@ void Manager::ReceiveData() {
 
     /////////////////////////////////
 
-    int n_instances = 0;
 
     for (const auto& [lhs, rhs] : m_Data) {
         const auto& [form_id, editor_id] = lhs.first;
@@ -1944,7 +2022,6 @@ void Manager::ReceiveData() {
                 logger::warn("ReceiveData: could not insert instance: FormID: {:x}, loc: {:x}", source_formid, loc);
                 continue;
             }
-            n_instances++;
         }
     }
 
@@ -1972,7 +2049,7 @@ void Manager::ReceiveData() {
     locs_to_be_handled.erase(player_refid);
     Print();
 
-    logger::info("--------Data received. Number of instances: {}---------", n_instances);
+    logger::info("--------Data received. Number of instances: {}---------", GetNInstancesFast());
 }
 
 void Manager::Print() {

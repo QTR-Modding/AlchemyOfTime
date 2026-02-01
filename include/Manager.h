@@ -8,23 +8,34 @@ class Manager final : public Ticker, public SaveLoadData {
 
     std::shared_mutex dirty_mtx_;
     std::unordered_map<RefID, RE::ObjectRefHandle> dirty_refs_;
+    std::atomic<int32_t> n_instances_{0};
 
     void MarkDirty_(RE::TESObjectREFR* r);
 
     struct UpdateCtx {
-        RE::TESObjectREFR* from{};
-        RE::TESObjectREFR* to{};
-        const RE::TESForm* what{};
-        Count count{};
-        RefID from_refid{};
-        bool refreshRefs{};
+        RE::TESObjectREFR* from;
+        RE::TESObjectREFR* to;
+        const RE::TESForm* what;
+        Count count;
+        RefID from_refid;
+        bool refreshRefs;
 
-        bool to_is_world_object{false};
-        bool is_player_owned{false};
+        bool to_is_world_object;
+        bool is_player_owned;
 
-        FormID what_formid{0};
-        RefID to_refid{0};
+        FormID what_formid;
+        RefID to_refid;
+        FormID to_base_id;
+
+        Duration curr_time;
+
+        UpdateCtx(RE::TESObjectREFR* from, 
+            RE::TESObjectREFR* to, const RE::TESForm* what, 
+            Count count, RefID from_refid, bool refreshRefs);
     };
+
+    static void RecalcCtx_(UpdateCtx& c);
+
 
     static void NormalizeWorldObjectCount_(UpdateCtx& ctx);
 
@@ -35,9 +46,7 @@ class Manager final : public Ticker, public SaveLoadData {
 
     static void ApplyAlchemyNullSkip_(UpdateCtx& ctx);
 
-    static void InitTransferIds_(UpdateCtx& ctx);
-
-    void ApplyTransferToSource_(Source& src, UpdateCtx& ctx);
+    void ApplyTransferToSource_(Source& src, UpdateCtx& ctx, const InvMap& to_inv);
 
     void SplitWorldObjectStackIfNeeded_(Source& src, const UpdateCtx& ctx);
 
@@ -93,8 +102,8 @@ class Manager final : public Ticker, public SaveLoadData {
 
     static void UpdateRefStop(const Source& src, const StageInstance& wo_inst, RefStop& a_ref_stop, float stop_t);
 
-    // [expects: sourceMutex_] (read-only traversal)
-    [[nodiscard]] unsigned int GetNInstances();
+    [[nodiscard]] uint32_t GetNInstances();
+    uint32_t GetNInstancesFast() const;
 
     // Creates and appends a new Source. [expects: sourceMutex_] (unique)
     [[nodiscard]] Source* MakeSource(FormID source_formid, const DefaultSettings* settings);
@@ -130,13 +139,13 @@ class Manager final : public Ticker, public SaveLoadData {
     static void ApplyStageInWorld(RE::TESObjectREFR* wo_ref, const Stage& stage,
                                   RE::TESBoundObject* source_bound = nullptr);
 
-    [[nodiscard]] static bool ApplyEvolutionInInventory(const RE::TESObjectREFR* inventory_owner,
+    [[nodiscard]] static bool ApplyEvolutionInInventory(const RefInfo& a_info,
                                                         Count update_count,
                                                         FormID old_item, FormID new_item);
 
-    static void RemoveItem(const RE::TESObjectREFR* moveFrom, FormID item_id, Count count);
+    static void RemoveItem(const RefInfo& moveFromInfo, FormID item_id, Count count);
 
-    static void AddItem(const RE::TESObjectREFR* addTo, const RE::TESObjectREFR* addFrom, FormID item_id, Count count);
+    static void AddItem(const RefInfo& addToInfo, const RefInfo& addFromInfo, FormID item_id, Count count);
 
     void Init();
 
@@ -144,16 +153,16 @@ class Manager final : public Ticker, public SaveLoadData {
     std::set<float> GetUpdateTimes(const RE::TESObjectREFR* inventory_owner);
 
     // [expects: sourceMutex_] (unique)
-    bool UpdateInventory(RE::TESObjectREFR* ref, float t, const InvMap& inv);
+    bool UpdateInventory(const RefInfo& a_info, float t, const InvMap& inv);
 
     // [expects: sourceMutex_] (unique)
-    void UpdateInventory(RE::TESObjectREFR* ref);
+    void UpdateInventory(const RefInfo& a_info, const InvMap& inv);
 
     void UpdateQueuedWO(const RefInfo& ref_info, float curr_time);
     // [expects: sourceMutex_] (unique)
     void UpdateWO(RE::TESObjectREFR* ref);
     // [expects: sourceMutex_] (unique)
-    void SyncWithInventory(const RE::TESObjectREFR* ref, const InvMap& inv);
+    void SyncWithInventory(const RefInfo& a_info, const InvMap& inv);
 
 
     // [expects: sourceMutex_] (unique)
@@ -176,7 +185,7 @@ class Manager final : public Ticker, public SaveLoadData {
     // best-effort disambiguation: owner-ref first, then stage-only
     Source* UpdateGetSource(const FormID stage_formid, const RefID owner_refid);
 
-    std::optional<float> GetNextUpdateTime(const RE::TESObjectREFR* owner);
+    std::optional<float> GetNextUpdateTime(const RefInfo& a_info);
 
 protected:
     void UpdateImpl(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::TESForm* what, Count count,
@@ -205,8 +214,10 @@ public:
     void ClearWOUpdateQueue();
 
     // Registers instances; may mutate sources. [expects: sourceMutex_] (unique)
-    void Register(FormID some_formid, Count count, RefID location_refid,
-                  Duration register_time = 0);
+    void Register(FormID some_formid, Count count, const RefInfo& ref_info,
+                  Duration register_time, const InvMap& a_inv);
+    // Registers instances; may mutate sources. [expects: sourceMutex_] (unique)
+    void Register(FormID some_formid, Count count, RefID location_refid, Duration register_time);
 
     // These read from sources under a shared_lock internally
     void HandleCraftingEnter(unsigned int bench_type);
@@ -266,6 +277,8 @@ public:
     void IndexStage(FormID stage_formid, FormID source_formid);
 
     void ProcessDirtyRefs_();
+
+    void InstanceCountUpdate(int32_t delta);
 };
 
 inline Manager* M = nullptr;

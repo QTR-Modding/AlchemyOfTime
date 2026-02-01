@@ -165,7 +165,7 @@ namespace WorldObject {
 };
 
 namespace Inventory {
-    bool IsQuestItem(FormID formid, RE::TESObjectREFR* inv_owner);
+    bool IsQuestItem(FormID formid, const InvMap& a_inv);
 };
 
 namespace Menu {

@@ -663,10 +663,9 @@ RE::NiPoint3 Math::LinAlg::intersectLine(const std::array<RE::NiPoint3, 3>& vert
     return orthogonal_vertex;
 }
 
-bool Inventory::IsQuestItem(const FormID formid, RE::TESObjectREFR* inv_owner) {
+bool Inventory::IsQuestItem(const FormID formid, const InvMap& a_inv) {
     if (const auto item = FormReader::GetFormByID<RE::TESBoundObject>(formid)) {
-        const auto inventory = inv_owner->GetInventory();
-        if (const auto it = inventory.find(item); it != inventory.end()) {
+        if (const auto it = a_inv.find(item); it != a_inv.end()) {
             if (it->second.second->IsQuestObject()) return true;
         }
     }

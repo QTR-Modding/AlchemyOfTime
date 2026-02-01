@@ -289,14 +289,21 @@ struct RefStopFeatures {
 };
 
 struct RefInfo {
-    RefID ref_id = 0;
-    mutable RE::ObjectRefHandle ref_handle;
+    RefID ref_id=0;
+    FormID base_id=0;
+    mutable RE::ObjectRefHandle ref_handle{};
 
-    explicit RefInfo(const RefID a_ref_id) {
-        ref_id = a_ref_id;
-        if (const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(ref_id)) {
+    explicit RefInfo(const RefID id) : ref_id(id) {
+        if (auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(ref_id)) {
             ref_handle = ref->GetHandle();
+            if (auto* base = ref->GetBaseObject()) {
+                base_id = base->GetFormID();
+            }
         }
+    }
+
+    RefInfo(const RefID a_ref_id, const FormID a_base_id)
+        : ref_id(a_ref_id), base_id(a_base_id) {
     }
 
     RE::TESObjectREFR* GetRef() const {

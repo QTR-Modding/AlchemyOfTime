@@ -208,15 +208,23 @@ const Stage& Source::GetStage(const StageNo no) {
     return empty_stage;
 }
 
-const Stage* Source::GetStage(const StageNo no) const {
+const Stage* Source::TryGetStage(const StageNo no) const {
     if (stages.contains(no)) return &stages.at(no);
     return nullptr;
 }
 
 Duration Source::GetStageDuration(const StageNo no) const {
-    if (!stages.contains(no)) return 0;
-    return stages.at(no).duration;
+    if (const auto it = stages.find(no); it != stages.end()) {
+        return it->second.duration;
+    }
+    if (fake_stages.contains(no)) {
+        if (settings.durations.contains(no)) {
+            return settings.durations.at(no);
+        }
+    }
+    return 0;
 }
+
 
 std::string Source::GetStageName(const StageNo no) const {
     if (stages.contains(no)) return stages.at(no).name;
@@ -272,6 +280,8 @@ StageInstance* Source::InsertNewInstance(const StageInstance& stage_instance, co
     emplaced_instance.xtra.editor_id = clib_util::editorID::get_editorID(stages[n].GetBound());
     emplaced_instance.xtra.crafting_allowed = stages[n].crafting_allowed;
     if (IsFakeStage(n)) emplaced_instance.xtra.is_fake = true;*/
+    
+    M->InstanceCountUpdate(1);
 
     return &data.at(loc).back();
 }
@@ -294,25 +304,15 @@ StageInstance* Source::InitInsertInstanceWO(StageNo n, const Count c, const RefI
     return InsertNewInstance(new_instance, l);
 }
 
-bool Source::InitInsertInstanceInventory(const StageNo n, const Count c, RE::TESObjectREFR* inventory_owner,
-                                         const Duration t_0) {
-    if (!inventory_owner) {
-        logger::error("Inventory owner is null.");
-        return false;
-    }
-    const RefID inventory_owner_refid = inventory_owner->GetFormID();
-    if (!inventory_owner->HasContainer() && inventory_owner_refid != player_refid) {
-        logger::error("Inventory owner is not a container.");
-        return false;
-    }
-
+bool Source::InitInsertInstanceInventory(const StageNo n, const Count c, const RefInfo& a_info,
+                                         const Duration t_0, const InvMap& inv) {
     // isme takilma
-    if (!InitInsertInstanceWO(n, c, inventory_owner_refid, t_0)) {
+    if (!InitInsertInstanceWO(n, c, a_info.ref_id, t_0)) {
         logger::error("InitInsertInstance failed.");
         return false;
     }
 
-    SetDelayOfInstance(data[inventory_owner_refid].back(), t_0, inventory_owner);
+    SetDelayOfInstance(data[a_info.ref_id].back(), t_0, a_info.base_id, inv);
     return true;
 }
 
@@ -337,6 +337,7 @@ bool Source::MoveInstance(const RefID from_ref, const RefID to_ref, const StageI
 
     // Add the instance to the to_ref key vector
     if (to_ref > 0) data[to_ref].push_back(new_instance);
+    else M->InstanceCountUpdate(-1);
 
     return true;
 }
@@ -486,7 +487,7 @@ inline FormID Source::GetTransformerInWorld(const RE::TESObjectREFR* wo, const S
 }
 
 void Source::UpdateTimeModulationInWorld(RE::TESObjectREFR* wo, StageInstance& wo_inst, const float _time) const {
-    SetDelayOfInstance(wo_inst, _time, wo, false);
+    SetDelayOfInstance(wo_inst, _time, wo);
 }
 
 float Source::GetNextUpdateTime(const StageInstance* st_inst) {
@@ -518,7 +519,7 @@ float Source::GetNextUpdateTime(const StageInstance* st_inst) {
         return st_inst->GetTransformHittingTime(trnsfrm_duration);
     }
 
-    const auto schranke = delay_slope > 0 ? GetStage(st_inst->no).duration : 0.f;
+    const auto schranke = delay_slope > 0 ? GetStageDuration(st_inst->no) : 0.f;
 
     return st_inst->GetHittingTime(schranke);
 }
@@ -553,11 +554,11 @@ FormID Source::GetTransformerInInventory(const InvMap& inv, const FormID ownerBa
     return 0;
 }
 
-void Source::SetDelayOfInstances(const float t, RE::TESObjectREFR* owner, const InvMap& inv) {
-    const auto loc = owner->GetFormID();
+void Source::SetDelayOfInstances(const float t, const RefInfo& a_info, const InvMap& inv) {
+    const auto loc = a_info.ref_id;
     if (!data.contains(loc)) return;
 
-    const auto ownerBase = owner->GetBaseObject()->GetFormID();
+    const auto ownerBase = a_info.base_id;
 
     for (auto& inst : data.at(loc)) {
         if (inst.count <= 0) continue;
@@ -567,20 +568,19 @@ void Source::SetDelayOfInstances(const float t, RE::TESObjectREFR* owner, const 
             continue;
         }
 
-        if (auto tr = GetTransformerInInventory(inv, ownerBase, inst.no))
+        if (const auto tr = GetTransformerInInventory(inv, ownerBase, inst.no))
             SetDelayOfInstance(inst, t, tr);
-        else if (auto dl = GetModulatorInInventory(inv, ownerBase, inst.no))
+        else if (const auto dl = GetModulatorInInventory(inv, ownerBase, inst.no))
             SetDelayOfInstance(inst, t, dl);
         else
             inst.RemoveTimeMod(t);
     }
 }
 
-void Source::UpdateTimeModulationInInventory(RE::TESObjectREFR* owner, const float t, const InvMap& inv) {
-    if (!owner || !owner->HasContainer()) return;
-    if (!data.contains(owner->GetFormID())) return;
-    if (data.at(owner->GetFormID()).empty()) return;
-    SetDelayOfInstances(t, owner, inv);
+void Source::UpdateTimeModulationInInventory(const RefInfo& a_info, const float t, const InvMap& inv) {
+    if (!data.contains(a_info.ref_id)) return;
+    if (data.at(a_info.ref_id).empty()) return;
+    SetDelayOfInstances(t, a_info, inv);
 }
 
 
@@ -613,7 +613,7 @@ float Source::GetNextUpdateTime(const StageInstance* st_inst) const {
         return st_inst->GetTransformHittingTime(trnsfrm_duration);
     }
 
-    const auto schranke = delay_slope > 0 ? GetStage(st_inst->no)->duration : 0.f;
+    const auto schranke = delay_slope > 0 ? GetStageDuration(st_inst->no) : 0.f;
 
     return st_inst->GetHittingTime(schranke);
 }
@@ -632,6 +632,8 @@ void Source::CleanUpData() {
         logger::info("No data found for source {}", editorid);
         return;
     }
+
+    uint32_t removed = 0;
 
     const auto curr_time = RE::Calendar::GetSingleton()->GetHoursPassed();
     for (auto& instances : data | std::views::values) {
@@ -653,6 +655,7 @@ void Source::CleanUpData() {
                 it->start_time > curr_time ||
                 (it->xtra.is_decayed || !IsStageNo(it->no))) {
                 it = instances.erase(it);
+                ++removed;
                 continue;
             }
 
@@ -670,6 +673,7 @@ void Source::CleanUpData() {
 
             if (curr_time - GetDecayTime(*it) > static_cast<float>(Settings::nForgettingTime)) {
                 it = instances.erase(it);
+                ++removed;
                 continue;
             }
             ++it;
@@ -677,8 +681,14 @@ void Source::CleanUpData() {
     }
 
     for (auto it = data.begin(); it != data.end();) {
-        if (it->second.empty()) it = data.erase(it);
+        if (it->second.empty()) {
+            it = data.erase(it);
+        }
         else ++it;
+    }
+
+    if (removed) {
+        M->InstanceCountUpdate(-static_cast<int32_t>(removed));
     }
 }
 
@@ -693,7 +703,6 @@ void Source::CleanUpData(const RefID a_loc) {
         return;
     }
     if (data.empty()) {
-        logger::info("No data found for source {}", editorid);
         return;
     }
 
@@ -706,6 +715,9 @@ void Source::CleanUpData(const RefID a_loc) {
     if (instances.empty()) {
         return;
     }
+
+    uint32_t removed = 0;
+
     if (instances.size() > 1) {
         for (auto it = instances.begin(); it + 1 != instances.end(); ++it) {
             for (auto it2 = it + 1; it2 != instances.end(); it2 = ++it2) {
@@ -721,6 +733,7 @@ void Source::CleanUpData(const RefID a_loc) {
     for (auto it = instances.begin(); it != instances.end();) {
         if (it->count <= 0 || it->start_time > curr_time || (it->xtra.is_decayed || !IsStageNo(it->no))) {
             it = instances.erase(it);
+            ++removed;
             continue;
         }
 
@@ -738,6 +751,7 @@ void Source::CleanUpData(const RefID a_loc) {
 
         if (curr_time - GetDecayTime(*it) > static_cast<float>(Settings::nForgettingTime)) {
             it = instances.erase(it);
+            ++removed;
             continue;
         }
         ++it;
@@ -745,6 +759,10 @@ void Source::CleanUpData(const RefID a_loc) {
 
     if (instances.empty()) {
         data.erase(it_instances);
+    }
+
+    if (removed) {
+        M->InstanceCountUpdate(-static_cast<int32_t>(removed));
     }
 }
 
@@ -904,23 +922,38 @@ Stage Source::GetTransformedStage(const FormID key_formid) const {
     return trnsf_st;
 }
 
-void Source::SetDelayOfInstance(StageInstance& instance, const float curr_time, RE::TESObjectREFR* a_loc,
-                                const bool inventory_owner) const {
+void Source::SetDelayOfInstance(StageInstance& instance, const float curr_time, const FormID inv_owner_base,
+                                const InvMap& a_inv) const {
     if (instance.count <= 0) return;
-    auto a_loc_base = a_loc->GetBaseObject()->GetFormID();
-    if (ShouldFreezeEvolution(a_loc_base)) {
+    if (ShouldFreezeEvolution(inv_owner_base)) {
         instance.RemoveTimeMod(curr_time);
-        instance.SetDelay(curr_time, 0, 0); // freeze
+        instance.SetDelay(curr_time, 0, 0);  // freeze
         return;
     }
 
-    InvMap a_inv = inventory_owner ? a_loc->GetInventory() : InvMap{};
-
-    if (const auto transformer_best = inventory_owner ? GetTransformerInInventory(a_inv, a_loc_base,  instance.no)
-                                          : GetTransformerInWorld(a_loc, instance.no)) {
+    if (const auto transformer_best =
+            GetTransformerInInventory(a_inv, inv_owner_base, instance.no)) {
         SetDelayOfInstance(instance, curr_time, transformer_best);
-    } else if (const auto delayer_best = inventory_owner ? GetModulatorInInventory(a_inv, a_loc_base,instance.no)
-                                             : GetModulatorInWorld(a_loc, instance.no)) {
+    } else if (const auto delayer_best =
+                   GetModulatorInInventory(a_inv, inv_owner_base, instance.no)) {
+        SetDelayOfInstance(instance, curr_time, delayer_best);
+    } else {
+        instance.RemoveTimeMod(curr_time);
+    }
+}
+
+void Source::SetDelayOfInstance(StageInstance& instance, const float curr_time, RE::TESObjectREFR* a_loc) const {
+    if (instance.count <= 0) return;
+    const auto a_loc_base = a_loc->GetBaseObject()->GetFormID();
+    if (ShouldFreezeEvolution(a_loc_base)) {
+        instance.RemoveTimeMod(curr_time);
+        instance.SetDelay(curr_time, 0, 0);  // freeze
+        return;
+    }
+
+    if (const auto transformer_best = GetTransformerInWorld(a_loc, instance.no)) {
+        SetDelayOfInstance(instance, curr_time, transformer_best);
+    } else if (const auto delayer_best = GetModulatorInWorld(a_loc, instance.no)) {
         SetDelayOfInstance(instance, curr_time, delayer_best);
     } else {
         instance.RemoveTimeMod(curr_time);
@@ -1150,38 +1183,6 @@ StageNo Source::GetLastStageNo() {
     return *stage_numbers.rbegin();
 }
 
-FormID Source::SearchNearbyModulators(const RE::TESObjectREFR* a_obj, const std::vector<FormID>& candidates) {
-    const auto cell = a_obj->GetParentCell();
-    if (!cell) {
-        logger::error("WO and Player cell are null.");
-        return 0;
-    }
-    FormID result = 0;
-    const auto candidates_set = std::unordered_set(candidates.begin(), candidates.end());
-    if (cell->IsInteriorCell()) {
-        SearchModulatorInCell(result, a_obj, cell, candidates_set, Settings::search_radius);
-        return result;
-    }
-    SearchModulatorInCell(result, a_obj, cell, candidates_set, Settings::search_radius);
-    if (result) return result;
-
-    // now search in the adjacent cells
-    for (const auto& worldCell : cell->GetRuntimeData().worldSpace->cellMap) {
-        if (!worldCell.second) continue;
-        if (worldCell.second->IsInteriorCell()) continue;
-        if (!AreAdjacentCells(cell, worldCell.second)) continue;
-        SearchModulatorInCell(result, a_obj, worldCell.second, candidates_set, Settings::search_radius);
-        if (result) return result;
-    }
-
-    // now search in skycell
-    if (const auto worldspace = a_obj->GetWorldspace()) {
-        if (const auto skycell = worldspace->GetSkyCell()) {
-            SearchModulatorInCell(result, a_obj, skycell, candidates_set, Settings::search_radius);
-        }
-    }
-    return result;
-}
 
 namespace {
     RE::bhkRigidBody* GetRigidBody(const RE::TESObjectREFR* a_refr) {
@@ -1249,29 +1250,6 @@ namespace {
     }
 };
 
-void Source::SearchModulatorInCell(FormID& result, const RE::TESObjectREFR* a_origin,
-                                   const RE::TESObjectCELL* a_cell, const std::unordered_set<FormID>& modulators,
-                                   const float range) {
-    auto callback = [&a_origin,&result, &modulators](const RE::TESObjectREFR* ref)-> RE::BSContainer::ForEachResult {
-        if (!ref || ref->IsDisabled() || ref->IsDeleted() || ref->IsMarkedForDeletion())
-            return
-                RE::BSContainer::ForEachResult::kContinue;
-        const auto a_base = ref->GetObjectReference();
-        if (const auto form_id = a_base->GetFormID();
-            modulators.contains(form_id) && SearchModulatorInCell_Sub(a_origin, ref)) {
-            result = form_id;
-            return RE::BSContainer::ForEachResult::kStop;
-        }
-        return RE::BSContainer::ForEachResult::kContinue;
-    };
-
-    if (range > 0) {
-        a_cell->ForEachReferenceInRange(WorldObject::GetPosition(a_origin), range, callback);
-    } else {
-        a_cell->ForEachReference(callback);
-    }
-}
-
 FormID Source::SearchNearbyModulatorsCached(const RE::TESObjectREFR* a_obj, const std::vector<FormID>& candidates) {
     if (!a_obj || candidates.empty()) {
         return 0;
@@ -1314,7 +1292,6 @@ FormID Source::SearchNearbyModulatorsCached(const RE::TESObjectREFR* a_obj, cons
                 continue;
             }
 
-            // Reuse your existing strict proximity test (OBB / collision aware).
             if (SearchModulatorInCell_Sub(a_obj, ref)) {
                 bestD2 = d2;
                 found = true;
