@@ -58,6 +58,7 @@ struct Source {
                                                    const InvMap& inv);
 
     [[nodiscard]] bool MoveInstance(RefID from_ref, RefID to_ref, const StageInstance* st_inst);
+    [[nodiscard]] bool MoveInstanceAt(RefID from_ref, RefID to_ref, size_t index);
 
     Count MoveInstances(RefID from_ref, RefID to_ref, FormID instance_formid, Count count, bool older_first);
 

@@ -309,27 +309,55 @@ bool Source::InitInsertInstanceInventory(const StageNo n, const Count c, const R
 }
 
 bool Source::MoveInstance(const RefID from_ref, const RefID to_ref, const StageInstance* st_inst) {
-    // Check if the from_ref exists in the data map
-    if (!data.contains(from_ref)) {
+    if (!st_inst) {
         return false;
     }
 
-    // Get the vector of instances from the from_ref key
+    auto mit = data.find(from_ref);
+    if (mit == data.end()) {
+        return false;
+    }
+
+    auto& from_instances = mit->second;
+    if (from_instances.empty()) {
+        return false;
+    }
+
+    // Ensure st_inst points into from_instances
+    const StageInstance* base = from_instances.data();
+    const StageInstance* end = base + from_instances.size();
+    if (st_inst < base || st_inst >= end) {
+        return false;
+    }
+
+    const size_t idx = static_cast<size_t>(st_inst - base);
+
+    StageInstance moved = from_instances[idx];
+    from_instances.erase(from_instances.begin() + idx);
+
+    if (to_ref > 0) {
+        data[to_ref].push_back(std::move(moved));
+    } else {
+        M->InstanceCountUpdate(-1);
+    }
+
+    return true;
+}
+
+bool Source::MoveInstanceAt(const RefID from_ref, const RefID to_ref, const size_t index) {
+    if (!data.contains(from_ref)) return false;
+
     auto& from_instances = data.at(from_ref);
-    const StageInstance new_instance(*st_inst);
+    if (index >= from_instances.size()) return false;
 
-    // Find the instance in the from_instances vector
-    const auto it = std::ranges::find(from_instances, *st_inst);
-    if (it == from_instances.end()) {
-        return false;
+    StageInstance moved = from_instances[index];
+    from_instances.erase(from_instances.begin() + static_cast<std::ptrdiff_t>(index));
+
+    if (to_ref > 0) {
+        data[to_ref].push_back(std::move(moved));
+    } else {
+        M->InstanceCountUpdate(-1);
     }
-
-    // Remove the instance from the from_instances vector
-    from_instances.erase(it);
-
-    // Add the instance to the to_ref key vector
-    if (to_ref > 0) data[to_ref].push_back(new_instance);
-    else M->InstanceCountUpdate(-1);
 
     return true;
 }
@@ -712,7 +740,7 @@ void Source::CleanUpData(const RefID a_loc) {
 
     if (instances.size() > 1) {
         for (auto it = instances.begin(); it + 1 != instances.end(); ++it) {
-            for (auto it2 = it + 1; it2 != instances.end(); it2 = ++it2) {
+            for (auto it2 = it + 1; it2 != instances.end(); ++it2) {
                 if (it == it2) continue;
                 if (it2->count <= 0) continue;
                 if (it->AlmostSameExceptCount(*it2, curr_time)) {
