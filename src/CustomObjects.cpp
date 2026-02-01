@@ -498,7 +498,7 @@ void RefStop::ApplySound(const float volume) {
         return RemoveSound();
     }
     const auto soundhelper = SoundHelper::GetSingleton();
-    soundhelper->Play(ref_info.ref_id, sound.id, volume);
+    soundhelper->Play(ref_info.GetRef(), sound.id, volume);
     sound.enabled = true;
 }
 
@@ -620,18 +620,20 @@ void RefStop::Update(const RefStop& other) {
 }
 
 void SoundHelper::DeleteHandle(const RefID refid) {
-    if (!handles.contains(refid)) return;
-    Stop(refid);
     std::unique_lock lock(mutex);
-    handles.erase(refid);
+    auto it = handles.find(refid);
+    if (it == handles.end()) return;
+    Stop(refid);
+    handles.erase(it);
 }
 
 void SoundHelper::Stop(const RefID refid) {
-    std::shared_lock lock(mutex);
-    if (!handles.contains(refid)) {
+    std::unique_lock lock(mutex);
+    auto it = handles.find(refid);
+    if (it == handles.end()) {
         return;
     }
-    RE::BSSoundHandle& handle = handles.at(refid);
+    RE::BSSoundHandle& handle = it->second;
     if (!handle.IsPlaying()) {
         return;
     }
@@ -639,14 +641,13 @@ void SoundHelper::Stop(const RefID refid) {
     //handle.Stop();
 }
 
-void SoundHelper::Play(const RefID refid, const FormID sound_id, const float volume) {
+void SoundHelper::Play(const RE::TESObjectREFR* ref, const FormID sound_id, const float volume) {
     if (!sound_id) return;
     const auto sound = RE::TESForm::LookupByID<RE::BGSSoundDescriptorForm>(sound_id);
     if (!sound) {
         logger::error("Sound not found.");
         return;
     }
-    const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(refid);
     if (!ref) {
         logger::error("Ref not found.");
         return;
@@ -656,17 +657,13 @@ void SoundHelper::Play(const RefID refid, const FormID sound_id, const float vol
         logger::warn("Ref has no 3D.");
         return;
     }
-
-    if (std::unique_lock lock(mutex); !handles.contains(refid)) {
-        handles[refid] = RE::BSSoundHandle();
-    }
-
-    std::shared_lock lock(mutex);
-
-    auto& sound_handle = handles.at(refid);
+    std::unique_lock lock(mutex);
+    auto& sound_handle = handles[ref->GetFormID()];
+    
     if (sound_handle.IsPlaying()) {
         return;
     }
+
     RE::BSAudioManager::GetSingleton()->BuildSoundDataFromDescriptor(sound_handle, sound);
     sound_handle.SetObjectToFollow(ref_node);
     sound_handle.SetVolume(volume);

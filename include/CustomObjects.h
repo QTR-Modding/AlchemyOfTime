@@ -257,7 +257,7 @@ public:
 
 
     void Stop(RefID refid);
-    void Play(RefID refid, FormID sound_id, float volume);
+    void Play(const RE::TESObjectREFR* ref, FormID sound_id, float volume);
 };
 
 struct RefStopFeature {
