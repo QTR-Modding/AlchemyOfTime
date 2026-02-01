@@ -1688,16 +1688,21 @@ void Manager::HandleCraftingEnter(const unsigned int bench_type) {
                 handle_crafting_instances.at(temp).first += st_inst.count;
             }
 
+            const auto stage_bound = RE::TESForm::LookupByID<RE::TESBoundObject>(stage_formid);
+            if (!stage_bound) {
+                logger::error("HandleCraftingEnter: Stage bound object not found for FormID {:x}", stage_formid);
+                continue;
+            }
             if (auto it = faves_list.find(stage_formid); it == faves_list.end()) {
-                faves_list[stage_formid] = IsFavorited(stage_formid, player_refid);
+                faves_list[stage_formid] = IsFavorited(stage_bound, player_inventory);
             } else if (!it->second) {
-                it->second = IsFavorited(stage_formid, player_refid);
+                it->second = IsFavorited(stage_bound, player_inventory);
             }
 
             if (auto it = equipped_list.find(stage_formid); it == equipped_list.end()) {
-                equipped_list[stage_formid] = IsEquipped(stage_formid);
+                equipped_list[stage_formid] = IsEquipped(stage_bound, player_inventory);
             } else if (!it->second) {
-                it->second = IsEquipped(stage_formid);
+                it->second = IsEquipped(stage_bound, player_inventory);
             }
         }
     }
@@ -1744,14 +1749,22 @@ void Manager::HandleCraftingExit() {
 
             if (const auto revert = std::min(st_count, actual_count_src); revert > 0) {
                 const auto src_bound = RE::TESForm::LookupByID<RE::TESBoundObject>(src_formid);
+                if (!src_bound) {
+                    logger::error("HandleCraftingExit: Source bound object not found for FormID {:x}", src_formid);
+                    continue;
+                }
                 player_ref->RemoveItem(src_bound, revert, RE::ITEM_REMOVE_REASON::kRemove, nullptr, nullptr);
                 const auto st_bound = RE::TESForm::LookupByID<RE::TESBoundObject>(st_formid);
+                if (!st_bound) {
+                    logger::error("HandleCraftingExit: Stage bound object not found for FormID {:x}", st_formid);
+                    continue;
+                }
                 player_ref->AddObjectToContainer(st_bound, nullptr, revert, nullptr);
                 if (auto it = faves_list.find(st_formid); it != faves_list.end() && it->second) {
-                    FavoriteItem(st_formid, player_refid);
+                    FavoriteItem(st_bound, player_ref);
                 }
                 if (auto it = equipped_list.find(st_formid); it != equipped_list.end() && it->second) {
-                    EquipItem(st_formid, false);
+                    EquipItem(st_bound, false);
                 }
                 actual_counts.at(src_formid) -= revert;
             }
@@ -1828,6 +1841,7 @@ void Manager::SendData() {
         CleanUpSourceData(src.get());
     }
 
+    const auto player_inv = player_ref->GetInventory();
     int n_instances = 0;
     SRC_SHARED_GUARD;
     for (const auto& src : sources | std::views::values) {
@@ -1844,8 +1858,8 @@ void Manager::SendData() {
             for (const auto& st_inst : instances) {
                 auto plain = st_inst.GetPlain();
                 if (plain.is_fake && loc == 20) {
-                    plain.is_faved = IsPlayerFavorited(st_inst.GetBound());
-                    plain.is_equipped = IsEquipped(st_inst.GetBound());
+                    plain.is_faved = IsFavorited(st_inst.GetBound(), player_inv);
+                    plain.is_equipped = IsEquipped(st_inst.GetBound(), player_inv);
                 }
                 rhs.push_back(plain);
                 n_instances++;
