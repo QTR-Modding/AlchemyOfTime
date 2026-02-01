@@ -41,7 +41,6 @@ void Source::Init(const DefaultSettings* defaultsettings) {
         return;
     }
 
-
     // get settings
     settings = *defaultsettings;
     // put addons
@@ -63,8 +62,7 @@ void Source::Init(const DefaultSettings* defaultsettings) {
     if (qFormType == "FOOD") {
         if (formtype == RE::FormType::AlchemyItem) GatherStages<RE::AlchemyItem>();
         else if (formtype == RE::FormType::Ingredient) GatherStages<RE::IngredientItem>();
-    } 
-    else if (qFormType == "INGR") GatherStages<RE::IngredientItem>();
+    } else if (qFormType == "INGR") GatherStages<RE::IngredientItem>();
     else if (qFormType == "MEDC" || qFormType == "POSN") GatherStages<RE::AlchemyItem>();
     else if (qFormType == "ARMO") GatherStages<RE::TESObjectARMO>();
     else if (qFormType == "WEAP") GatherStages<RE::TESObjectWEAP>();
@@ -272,7 +270,7 @@ StageInstance* Source::InsertNewInstance(const StageInstance& stage_instance, co
     emplaced_instance.xtra.editor_id = clib_util::editorID::get_editorID(stages[n].GetBound());
     emplaced_instance.xtra.crafting_allowed = stages[n].crafting_allowed;
     if (IsFakeStage(n)) emplaced_instance.xtra.is_fake = true;*/
-    
+
     M->InstanceCountUpdate(1);
 
     return &data.at(loc).back();
@@ -703,8 +701,7 @@ void Source::CleanUpData() {
     for (auto it = data.begin(); it != data.end();) {
         if (it->second.empty()) {
             it = data.erase(it);
-        }
-        else ++it;
+        } else ++it;
     }
 
     if (removed) {
@@ -947,15 +944,15 @@ void Source::SetDelayOfInstance(StageInstance& instance, const float curr_time, 
     if (instance.count <= 0) return;
     if (ShouldFreezeEvolution(inv_owner_base)) {
         instance.RemoveTimeMod(curr_time);
-        instance.SetDelay(curr_time, 0, 0);  // freeze
+        instance.SetDelay(curr_time, 0, 0); // freeze
         return;
     }
 
     if (const auto transformer_best =
-            GetTransformerInInventory(a_inv, inv_owner_base, instance.no)) {
+        GetTransformerInInventory(a_inv, inv_owner_base, instance.no)) {
         SetDelayOfInstance(instance, curr_time, transformer_best);
     } else if (const auto delayer_best =
-                   GetModulatorInInventory(a_inv, inv_owner_base, instance.no)) {
+        GetModulatorInInventory(a_inv, inv_owner_base, instance.no)) {
         SetDelayOfInstance(instance, curr_time, delayer_best);
     } else {
         instance.RemoveTimeMod(curr_time);
@@ -967,7 +964,7 @@ void Source::SetDelayOfInstance(StageInstance& instance, const float curr_time, 
     const auto a_loc_base = a_loc->GetBaseObject()->GetFormID();
     if (ShouldFreezeEvolution(a_loc_base)) {
         instance.RemoveTimeMod(curr_time);
-        instance.SetDelay(curr_time, 0, 0);  // freeze
+        instance.SetDelay(curr_time, 0, 0); // freeze
         return;
     }
 

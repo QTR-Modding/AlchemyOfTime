@@ -5,7 +5,6 @@
 class QueueManager;
 
 class Manager final : public Ticker, public SaveLoadData {
-
     std::shared_mutex dirty_mtx_;
     std::unordered_map<RefID, RE::ObjectRefHandle> dirty_refs_;
     std::atomic<int32_t> n_instances_{0};
@@ -29,9 +28,9 @@ class Manager final : public Ticker, public SaveLoadData {
 
         Duration curr_time;
 
-        UpdateCtx(RE::TESObjectREFR* from, 
-            RE::TESObjectREFR* to, const RE::TESForm* what, 
-            Count count, RefID from_refid, bool refreshRefs);
+        UpdateCtx(RE::TESObjectREFR* from,
+                  RE::TESObjectREFR* to, const RE::TESForm* what,
+                  Count count, RefID from_refid, bool refreshRefs);
     };
 
     static void RecalcCtx_(UpdateCtx& c);

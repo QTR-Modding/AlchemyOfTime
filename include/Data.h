@@ -67,7 +67,7 @@ struct Source {
     FormID inline GetModulatorInWorld(const RE::TESObjectREFR* wo, StageNo a_no) const;
     inline FormID GetTransformerInWorld(const RE::TESObjectREFR* wo, StageNo a_no) const;
     void UpdateTimeModulationInWorld(RE::TESObjectREFR* wo, StageInstance& wo_inst, float _time) const;
-    
+
     // always update before doing this
     void UpdateTimeModulationInInventory(const RefInfo& a_info, float time, const InvMap& inv);
     FormID GetModulatorInInventory(const InvMap& inv, FormID ownerBase, StageNo no) const;

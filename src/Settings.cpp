@@ -15,8 +15,8 @@ namespace {
     std::shared_mutex g_settingsCacheMtx;
     std::unordered_map<FormID, std::string> g_qformCache;
     std::unordered_map<FormID, bool> g_excludeCache;
-    std::unordered_map<FormID, DefaultSettings*> g_customCache;  // nullptr cached too
-    std::unordered_map<FormID, AddOnSettings*> g_addonCache;     // nullptr cached too
+    std::unordered_map<FormID, DefaultSettings*> g_customCache; // nullptr cached too
+    std::unordered_map<FormID, AddOnSettings*> g_addonCache; // nullptr cached too
 }
 
 static const std::unordered_map<std::string, QFormChecker> qformCheckers = {
@@ -50,7 +50,7 @@ std::string_view Settings::GetQFormType(const RE::TESForm* form) {
     for (const auto& q_ftype : QFORMS) {
         auto it = qformCheckers.find(q_ftype);
         if (it != qformCheckers.end() && it->second(form)) {
-            return q_ftype;  // view to string stored in QFORMS
+            return q_ftype; // view to string stored in QFORMS
         }
     }
     return {};
@@ -282,7 +282,7 @@ DefaultSettings* Settings::GetCustomSetting(const RE::TESForm* form) {
     {
         std::shared_lock lk(g_settingsCacheMtx);
         if (const auto it = g_customCache.find(form_id); it != g_customCache.end()) {
-            return it->second;  // may be nullptr
+            return it->second; // may be nullptr
         }
     }
 
@@ -326,7 +326,7 @@ AddOnSettings* Settings::GetAddOnSettings(const RE::TESForm* form) {
     {
         std::shared_lock lk(g_settingsCacheMtx);
         if (const auto it = g_addonCache.find(form_id); it != g_addonCache.end()) {
-            return it->second;  // may be nullptr
+            return it->second; // may be nullptr
         }
     }
 
@@ -1066,7 +1066,6 @@ void PresetParse::LoadSettingsParallel() {
         g_customCache.clear();
         g_addonCache.clear();
     }
-
 
     try {
         LoadINISettings();

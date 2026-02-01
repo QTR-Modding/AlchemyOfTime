@@ -659,7 +659,7 @@ void SoundHelper::Play(const RE::TESObjectREFR* ref, const FormID sound_id, cons
     }
     std::unique_lock lock(mutex);
     auto& sound_handle = handles[ref->GetFormID()];
-    
+
     if (sound_handle.IsPlaying()) {
         return;
     }
