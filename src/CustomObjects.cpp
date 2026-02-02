@@ -499,7 +499,7 @@ void RefStop::ApplySound(const float volume) {
     }
     if (features.sound.enabled) return;
     const auto soundhelper = SoundHelper::GetSingleton();
-    sound.enabled |= soundhelper->Play(ref_info.GetRef(), sound.id, volume);
+    sound.enabled = soundhelper->Play(ref_info.GetRef(), sound.id, volume);
 }
 
 RE::BSSoundHandle& RefStop::GetSoundHandle() const {
