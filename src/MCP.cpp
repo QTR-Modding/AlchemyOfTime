@@ -19,6 +19,7 @@ void HelpMarker(const char* desc) {
 }
 
 void __stdcall UI::RenderSettings() {
+    
     for (const auto& [section_name, section_settings] : Settings::INI_settings) {
         if (ImGuiMCP::CollapsingHeader(section_name.c_str(), ImGuiMCP::ImGuiTreeNodeFlags_DefaultOpen)) {
             if (ImGuiMCP::BeginTable("table_settings", 2, table_flags)) {
@@ -73,6 +74,24 @@ void __stdcall UI::RenderSettings() {
     }
     ImGuiMCP::SameLine();
     HelpMarker("Limits how many objects are updated each tick.");
+
+    ImGuiMCP::Text("Update Frequency");
+    ImGuiMCP::SetNextItemWidth(180.f);
+    const auto ticker_speed_str = Settings::Ticker::to_string(Settings::ticker_speed);
+    if (ImGuiMCP::BeginCombo("##combo_ticker_speed", ticker_speed_str.c_str())) {
+        for (int i = 0; i < Settings::Ticker::enum_size; ++i) {
+            const auto speed = static_cast<Settings::Ticker::Intervals>(i);
+            const auto speed_str = Settings::Ticker::to_string(speed);
+            if (ImGuiMCP::Selectable(speed_str.c_str(), Settings::ticker_speed == speed)) {
+                Settings::SetCurrentTickInterval(speed);
+                M->UpdateInterval(std::chrono::milliseconds(Settings::Ticker::GetInterval(Settings::ticker_speed)));
+                PresetParse::SaveSettings();
+            }
+        }
+        ImGuiMCP::EndCombo();
+    }
+    ImGuiMCP::SameLine();
+    HelpMarker("Checks the world more often for updates resulting in less laggy item evolutions.");
 
     #ifndef NDEBUG
     ImGuiMCP::Checkbox("DrawDebug", &draw_debug);
@@ -424,24 +443,6 @@ void __stdcall UI::RenderUpdateQ() {
 
     RefreshButton();
     ImGuiMCP::Text("Update Queue: %s", M->IsTickerActive() ? "Active" : "Paused");
-    // need a combo box to select the ticker speed
-    ImGuiMCP::SetNextItemWidth(180.f);
-    const auto ticker_speed_str = Settings::Ticker::to_string(Settings::ticker_speed);
-    if (ImGuiMCP::BeginCombo("##combo_ticker_speed", ticker_speed_str.c_str())) {
-        for (int i = 0; i < Settings::Ticker::enum_size; ++i) {
-            const auto speed = static_cast<Settings::Ticker::Intervals>(i);
-            const auto speed_str = Settings::Ticker::to_string(speed);
-            if (ImGuiMCP::Selectable(speed_str.c_str(), Settings::ticker_speed == speed)) {
-                Settings::SetCurrentTickInterval(speed);
-                M->UpdateInterval(std::chrono::milliseconds(Settings::Ticker::GetInterval(Settings::ticker_speed)));
-                PresetParse::SaveSettings();
-            }
-        }
-        ImGuiMCP::EndCombo();
-    }
-    ImGuiMCP::SameLine();
-    HelpMarker(
-        "Choosing faster options reduces the time between updates, making the evolution of items out in the world more responsive. It will take time when switching from slower settings.");
 
     if (Settings::world_objects_evolve.load()) {
         ImGuiMCP::TextColored(ImGuiMCP::ImVec4(0, 1, 0, 1), "World Objects Evolve: Enabled");
