@@ -151,8 +151,6 @@ namespace Utils {
     };
 
     namespace DynamicForm {
-        void copyBookAppearence(RE::TESForm* source, RE::TESForm* target);
-
         template <class T>
         static void copyComponent(RE::TESForm* from, RE::TESForm* to) {
             auto fromT = from->As<T>();
@@ -163,14 +161,6 @@ namespace Utils {
                 toT->CopyComponent(fromT);
             }
         }
-
-        void copyFormArmorModel(RE::TESForm* source, RE::TESForm* target);
-
-        void copyFormObjectWeaponModel(RE::TESForm* source, RE::TESForm* target);
-
-        void copyMagicEffect(RE::TESForm* source, RE::TESForm* target);
-
-        void copyAppearence(RE::TESForm* source, RE::TESForm* target);
     };
 }
 
