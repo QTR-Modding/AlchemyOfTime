@@ -16,18 +16,18 @@ RE::UI_MESSAGE_RESULTS Hooks::MenuHook<MenuType>::ProcessMessage_Hook(RE::UIMess
         const auto msg_type = static_cast<int>(a_message.type.get());
         if (msg_type == 1) {
             if (menuname == RE::FavoritesMenu::MENU_NAME) {
-                M->Update(RE::PlayerCharacter::GetSingleton());
+                M->UpdateNow(RE::PlayerCharacter::GetSingleton());
             } else if (menuname == RE::InventoryMenu::MENU_NAME) {
-                M->Update(RE::PlayerCharacter::GetSingleton());
+                M->UpdateNow(RE::PlayerCharacter::GetSingleton());
             } else if (menuname == RE::BarterMenu::MENU_NAME) {
-                M->Update(RE::PlayerCharacter::GetSingleton());
+                M->UpdateNow(RE::PlayerCharacter::GetSingleton());
                 //if (const auto vendor_chest = Menu::GetVendorChestFromMenu()) {
                 //    M->Update(vendor_chest);
                 //} else logger ::error("Could not get vendor chest.");
             } else if (menuname == RE::ContainerMenu::MENU_NAME) {
                 if (const auto container = Utils::Menu::GetContainerFromMenu()) {
-                    M->Update(RE::PlayerCharacter::GetSingleton());
-                    M->Update(container);
+                    M->UpdateNow(RE::PlayerCharacter::GetSingleton());
+                    M->UpdateNow(container);
                 } else logger::error("Could not get container.");
             }
 

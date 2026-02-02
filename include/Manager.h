@@ -227,6 +227,8 @@ public:
     void Update(RE::TESObjectREFR* from, RE::TESObjectREFR* to = nullptr, const RE::TESForm* what = nullptr,
                 Count count = 0, RefID from_refid = 0);
 
+    void UpdateNow(RE::TESObjectREFR* a_ref);
+
     // Swap based on stage instance. Holds sourceMutex_ internally. (shared)
     void SwapWithStage(RE::TESObjectREFR* wo_ref);
 

@@ -1798,6 +1798,11 @@ void Manager::Update(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::T
     UpdateImpl(from, to, what, count, from_refid, true);
 }
 
+void Manager::UpdateNow(RE::TESObjectREFR* a_ref) {
+    SRC_UNIQUE_GUARD;
+    return UpdateRef(a_ref);
+}
+
 void Manager::SwapWithStage(RE::TESObjectREFR* wo_ref) {
     if (!wo_ref) {
         logger::critical("Ref is null.");
