@@ -532,7 +532,7 @@ RE::StandardItemData* Utils::Menu::GetSelectedItemDataInMenu(std::string& a_menu
         }
         if (ui->IsMenuOpen(RE::BarterMenu::MENU_NAME)) {
             a_menuOut = RE::BarterMenu::MENU_NAME;
-            return Utils::Menu::GetSelectedItemData<RE::BarterMenu>();
+            return GetSelectedItemData<RE::BarterMenu>();
         }
     }
     return nullptr;
