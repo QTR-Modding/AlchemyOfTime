@@ -466,7 +466,7 @@ std::wstring Lorebox::BuildFrozenLore(const std::wstring& currentStageName) {
 }
 
 const wchar_t* Lorebox::OnDynamicTranslationRequest(std::string_view) {
-    const auto item_data = Menu::GetSelectedItemDataInMenu();
+    const auto item_data = Utils::Menu::GetSelectedItemDataInMenu();
     if (!item_data) {
         return return_str.c_str();
     }
@@ -475,7 +475,7 @@ const wchar_t* Lorebox::OnDynamicTranslationRequest(std::string_view) {
     if (!item) {
         return return_str.c_str();
     }
-    const auto owner = Menu::GetOwnerOfItem(item_data);
+    const auto owner = Utils::Menu::GetOwnerOfItem(item_data);
     if (!owner) {
         return return_str.c_str();
         //if (RE::UI::GetSingleton()->IsMenuOpen(RE::BarterMenu::MENU_NAME)) {

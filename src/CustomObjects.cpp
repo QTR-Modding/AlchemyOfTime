@@ -441,7 +441,7 @@ void RefStop::ApplyTint(const RE::TESObjectREFR* a_obj) {
     if (tint_color.enabled) return;
     if (const auto a_3D = a_obj->Get3D()) {
         RE::NiColorA color;
-        hexToRGBA(tint_color.id, color);
+        Utils::hexToRGBA(tint_color.id, color);
         a_3D->TintScenegraph(color);
         tint_color.enabled = true;
     }

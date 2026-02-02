@@ -159,7 +159,7 @@ void CellScanner::ScanCells_(const std::unordered_set<RE::TESObjectCELL*>& cells
 
             Entry e;
             e.refid = ref->GetFormID();
-            e.pos = WorldObject::GetPosition(ref);
+            e.pos = Utils::WorldObject::GetPosition(ref);
             outCache.byBase[baseID].push_back(e);
 
             return RE::BSContainer::ForEachResult::kContinue;

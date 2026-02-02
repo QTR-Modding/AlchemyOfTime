@@ -19,7 +19,6 @@ void HelpMarker(const char* desc) {
 }
 
 void __stdcall UI::RenderSettings() {
-    
     for (const auto& [section_name, section_settings] : Settings::INI_settings) {
         if (ImGuiMCP::CollapsingHeader(section_name.c_str(), ImGuiMCP::ImGuiTreeNodeFlags_DefaultOpen)) {
             if (ImGuiMCP::BeginTable("table_settings", 2, table_flags)) {
@@ -63,8 +62,8 @@ void __stdcall UI::RenderSettings() {
     ImGuiMCP::SetNextItemWidth(320.f);
     int max_dirty_updates = static_cast<int>(Settings::max_dirty_updates.load());
     if (ImGuiMCP::SliderInt("Max Updates Per Tick", &max_dirty_updates,
-                            static_cast<int>(Settings::max_dirty_updates_min),
-                            static_cast<int>(Settings::max_dirty_updates_max))) {
+                            Settings::max_dirty_updates_min,
+                            Settings::max_dirty_updates_max)) {
         const auto clamped = std::clamp<size_t>(
             static_cast<size_t>(max_dirty_updates),
             Settings::max_dirty_updates_min,
@@ -165,7 +164,7 @@ void __stdcall UI::RenderLoreBox() {
         col_separator = cvt(Lorebox::color_separator.load());
         // copy current symbols to buffers, encoding non-ASCII as \uXXXX so they show up in MCP UI
         auto w2esc_to_buf = [](const std::wstring& ws, char* dst, const size_t cap) {
-            const std::string s = String::EncodeEscapesToAscii(ws);
+            const std::string s = Utils::String::EncodeEscapesToAscii(ws);
             if (cap) { strncpy_s(dst, cap, s.c_str(), _TRUNCATE); }
         };
         w2esc_to_buf(Lorebox::separator_symbol, sep_symbol, sizeof(sep_symbol));
@@ -340,9 +339,9 @@ void __stdcall UI::RenderLoreBox() {
             Lorebox::color_separator.store(fromCol(col_separator));
 
             // update symbols: decode backslash escapes into wide
-            Lorebox::separator_symbol = String::DecodeEscapesFromAscii(sep_symbol);
-            Lorebox::arrow_right = String::DecodeEscapesFromAscii(arrow_right_buf);
-            Lorebox::arrow_left = String::DecodeEscapesFromAscii(arrow_left_buf);
+            Lorebox::separator_symbol = Utils::String::DecodeEscapesFromAscii(sep_symbol);
+            Lorebox::arrow_right = Utils::String::DecodeEscapesFromAscii(arrow_right_buf);
+            Lorebox::arrow_left = Utils::String::DecodeEscapesFromAscii(arrow_left_buf);
         }
     }
 }
@@ -665,7 +664,7 @@ void UI::Register() {
     filter = new ImGuiMCP::ImGuiTextFilter();
     filter2 = new ImGuiMCP::ImGuiTextFilter();
 
-    SKSEMenuFramework::SetSection(mod_name);
+    SKSEMenuFramework::SetSection(Utils::mod_name);
     SKSEMenuFramework::AddSectionItem("Settings", RenderSettings);
     SKSEMenuFramework::AddSectionItem("Status", RenderStatus);
     SKSEMenuFramework::AddSectionItem("Inspect", RenderInspect);

@@ -1277,7 +1277,7 @@ FormID Source::SearchNearbyModulatorsCached(const RE::TESObjectREFR* a_obj, cons
         return 0;
     }
 
-    const auto originPos = WorldObject::GetPosition(a_obj);
+    const auto originPos = Utils::WorldObject::GetPosition(a_obj);
 
     const float r = Settings::search_radius;
     const float r2 = (r > 0.0f) ? (r * r) : std::numeric_limits<float>::infinity();

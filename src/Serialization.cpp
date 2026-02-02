@@ -1,5 +1,4 @@
 #include "Serialization.h"
-
 #include "DynamicFormTracker.h"
 #include "Manager.h"
 
@@ -226,7 +225,7 @@ void LoadCallback(SKSE::SerializationInterface* serializationInterface) {
 
     unsigned int cosave_found = 0;
     while (serializationInterface->GetNextRecordInfo(type, version, length)) {
-        auto temp = DecodeTypeCode(type);
+        auto temp = Utils::DecodeTypeCode(type);
 
         if (version == Settings::kSerializationVersion - 1) {
             logger::info("Older version of Alchemy of Time detected.");

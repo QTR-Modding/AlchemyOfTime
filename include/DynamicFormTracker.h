@@ -86,7 +86,7 @@ class DynamicFormTracker : public DFSaveLoadData {
     }
 
     static void ReviveDynamicForm(RE::TESForm* fake, RE::TESForm* base, const FormID setFormID = 0) {
-        using namespace DynamicForm;
+        using namespace Utils::DynamicForm;
         fake->Copy(base);
         const auto weaponBaseForm = base->As<RE::TESObjectWEAP>();
 

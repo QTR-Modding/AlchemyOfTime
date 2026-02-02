@@ -6,7 +6,7 @@
 void EventSink::HandleWO(RE::TESObjectREFR* ref) {
     if (!ref) return;
     if (!Settings::IsItem(ref)) return;
-    if (!Settings::placed_objects_evolve.load() && WorldObject::IsPlacedObject(ref)) return;
+    if (!Settings::placed_objects_evolve.load() && Utils::WorldObject::IsPlacedObject(ref)) return;
 
     M->Update(ref);
 }

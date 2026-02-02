@@ -143,14 +143,13 @@ bool QueueManager::ProcessPendingMoves(const int n_tasks) {
         }
     });
 
-
     return true;
 }
 
 void QueueManager::RefreshUI() {
     SKSE::GetTaskInterface()->AddUITask([] {
         RE::SendUIMessage::SendInventoryUpdateMessage(RE::PlayerCharacter::GetSingleton(), nullptr);
-        Menu::UpdateItemList();
+        Utils::Menu::UpdateItemList();
     });
 }
 
@@ -173,7 +172,8 @@ void QueueManager::QueueAddRemoveItemTask(const AddItemTask& add_task, const Rem
         const auto add_id = add_task.to;
         const auto remove_id = remove_task.from;
         if (add_id != remove_id && add_id != 0 && remove_id != 0) {
-            logger::warn("QueueAddRemoveItemTask: add_task.to and remove_task.from are different and non-zero; dropping task");
+            logger::warn(
+                "QueueAddRemoveItemTask: add_task.to and remove_task.from are different and non-zero; dropping task");
             return;
         }
         const RefID owner = (add_id != 0) ? add_id : (remove_id != 0) ? remove_id : 0;

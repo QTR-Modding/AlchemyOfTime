@@ -11,7 +11,7 @@ namespace Settings {
 
     inline bool failed_to_load = false;
     constexpr auto INI_path = L"Data/SKSE/Plugins/AlchemyOfTime.ini";
-    const std::string json_path = std::format("Data/SKSE/Plugins/{}/Settings.json", mod_name);
+    const std::string json_path = std::format("Data/SKSE/Plugins/{}/Settings.json", Utils::mod_name);
     // POPULATE THIS
     const std::map<const char*, bool> moduleskeyvals = {{"FOOD", false},
                                                         {"INGR", false},

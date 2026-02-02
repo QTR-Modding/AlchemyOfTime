@@ -25,7 +25,7 @@ RE::UI_MESSAGE_RESULTS Hooks::MenuHook<MenuType>::ProcessMessage_Hook(RE::UIMess
                 //    M->Update(vendor_chest);
                 //} else logger ::error("Could not get vendor chest.");
             } else if (menuname == RE::ContainerMenu::MENU_NAME) {
-                if (const auto container = Menu::GetContainerFromMenu()) {
+                if (const auto container = Utils::Menu::GetContainerFromMenu()) {
                     M->Update(RE::PlayerCharacter::GetSingleton());
                     M->Update(container);
                 } else logger::error("Could not get container.");

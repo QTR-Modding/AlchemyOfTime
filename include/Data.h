@@ -135,7 +135,7 @@ private:
             pMGEFFdurations.push_back(0);
             pMGEFFmagnitudes.push_back(0);
         }
-        OverrideMGEFFs(_effects, MGEFFs, pMGEFFdurations, pMGEFFmagnitudes);
+        Utils::OverrideMGEFFs(_effects, MGEFFs, pMGEFFdurations, pMGEFFmagnitudes);
     }
 
     // also adds keywords

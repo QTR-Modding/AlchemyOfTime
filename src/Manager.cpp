@@ -518,13 +518,12 @@ void Manager::ProcessDirtyRefs_() {
 void Manager::InstanceCountUpdate(const int32_t delta) { n_instances_.fetch_add(delta, std::memory_order_relaxed); }
 
 
-Manager::UpdateCtx::UpdateCtx(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::TESForm* what, const Count count,
-                              const RefID from_refid, const bool refreshRefs):
-    from(from), to(to), what(what), 
-    count(count), from_refid(from_refid), 
+Manager::UpdateCtx::UpdateCtx(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::TESForm* what,
+                              const Count count,
+                              const RefID from_refid, const bool refreshRefs) :
+    from(from), to(to), what(what),
+    count(count), from_refid(from_refid),
     refreshRefs(refreshRefs) {
-    
-
     to_is_world_object = to && !to->HasContainer();
     is_player_owned = from && from->IsPlayerRef();
     what_formid = what ? what->GetFormID() : 0;
@@ -616,7 +615,8 @@ void Manager::SplitWorldObjectStackIfNeeded_(Source& src, const UpdateCtx& ctx) 
             continue;
         }
 
-        const auto new_ref = WorldObject::DropObjectIntoTheWorld(v[1].GetBound(), inst_count, ctx.is_player_owned);
+        const auto new_ref = Utils::WorldObject::DropObjectIntoTheWorld(v[1].GetBound(), inst_count,
+                                                                        ctx.is_player_owned);
         if (!new_ref) break;
 
         // Move by pointer to element at index 1 (safe: we won't keep it after the call)
@@ -662,7 +662,7 @@ void Manager::UpdateLoop() {
         for (auto it = _ref_stops_.begin(); it != _ref_stops_.end();) {
             if (const auto ref = it->second.GetRef();
                 queue_delete_.contains(it->first) ||
-                ref && !Settings::placed_objects_evolve.load() && WorldObject::IsPlacedObject(ref)) {
+                ref && !Settings::placed_objects_evolve.load() && Utils::WorldObject::IsPlacedObject(ref)) {
                 PreDeleteRefStop(it->second);
                 it = _ref_stops_.erase(it);
             } else ++it;
@@ -798,18 +798,18 @@ uint32_t Manager::GetNInstances() {
 uint32_t Manager::GetNInstancesFast() const {
     const int32_t v = n_instances_.load(std::memory_order_relaxed);
     const auto result = v > 0 ? static_cast<uint32_t>(v) : 0;
-#ifndef NDEBUG
+    #ifndef NDEBUG
     /*const uint32_t actual = M->GetNInstances();
     if (result != actual) {
         logger::critical("Instance count mismatch: cached={} actual={}", result, actual);
     }*/
-#endif
+    #endif
     return result;
 }
 
 Source* Manager::MakeSource(const FormID source_formid, const DefaultSettings* settings) {
     if (!source_formid) return nullptr;
-    if (IsDynamicFormID(source_formid)) return nullptr;
+    if (Utils::IsDynamicFormID(source_formid)) return nullptr;
     // Source new_source(source_formid, "", empty_mgeff, settings);
     auto new_source = std::make_unique<Source>(source_formid, "", settings);
     if (!new_source->IsHealthy()) return nullptr;
@@ -989,10 +989,10 @@ inline void Manager::ApplyStageInWorld_Fake(RE::TESObjectREFR* wo_ref, const cha
 
 void Manager::ApplyStageInWorld(RE::TESObjectREFR* wo_ref, const Stage& stage, RE::TESBoundObject* source_bound) {
     if (!source_bound) {
-        WorldObject::SwapObjects(wo_ref, stage.GetBound());
+        Utils::WorldObject::SwapObjects(wo_ref, stage.GetBound());
         wo_ref->extraList.RemoveByType(RE::ExtraDataType::kTextDisplayData);
     } else {
-        WorldObject::SwapObjects(wo_ref, source_bound);
+        Utils::WorldObject::SwapObjects(wo_ref, source_bound);
         ApplyStageInWorld_Fake(wo_ref, stage.GetExtraText());
     }
 }
@@ -1188,7 +1188,6 @@ bool Manager::UpdateInventory(const RefInfo& a_info, const float t, const InvMap
 }
 
 void Manager::UpdateInventory(const RefInfo& a_info, const InvMap& inv) {
-
     SyncWithInventory(a_info, inv);
 
     const auto curr = RE::Calendar::GetSingleton()->GetHoursPassed();
@@ -1270,9 +1269,9 @@ void Manager::SyncWithInventory(const RefInfo& a_info, const InvMap& inv) {
         } else if (regCount > invCount) {
             const Count diff = regCount - invCount;
             if (needHandling && reg_has_fake[fid]) {
-                AddItem(a_info, {0, 0}, fid, diff);  // fix inventory, keep registry
+                AddItem(a_info, {0, 0}, fid, diff); // fix inventory, keep registry
             } else {
-                remove_from_reg[fid] = diff;  // later decrement instances in one pass
+                remove_from_reg[fid] = diff; // later decrement instances in one pass
             }
         }
     }
@@ -1567,14 +1566,14 @@ void Manager::Register(const FormID some_formid, const Count count, const RefID 
 
     if (GetNInstancesFast() > _instance_limit) {
         logger::warn("Instance limit reached.");
-        MsgBoxesNotifs::InGame::CustomMsg(
+        Utils::MsgBoxesNotifs::InGame::CustomMsg(
             std::format("The mod is tracking over {} instances. It is advised to check your memory usage and "
                         "skse co-save sizes.",
                         _instance_limit));
     }
 
     // make new registry
-    Source* const src = ForceGetSource(some_formid);  // also saves it to sources if it was created new
+    Source* const src = ForceGetSource(some_formid); // also saves it to sources if it was created new
     if (!src) {
         do_not_register.insert(some_formid);
         return;
@@ -1602,7 +1601,8 @@ void Manager::Register(const FormID some_formid, const Count count, const RefID 
     }
 }
 
-void Manager::Register(const FormID some_formid, const Count count, const RefInfo& ref_info, const Duration register_time, const InvMap& a_inv) {
+void Manager::Register(const FormID some_formid, const Count count, const RefInfo& ref_info,
+                       const Duration register_time, const InvMap& a_inv) {
     if (do_not_register.contains(some_formid)) {
         return;
     }
@@ -1618,7 +1618,7 @@ void Manager::Register(const FormID some_formid, const Count count, const RefInf
     if (!location_refid) {
         return;
     }
-    if (Inventory::IsQuestItem(some_formid, a_inv)) {
+    if (Utils::Inventory::IsQuestItem(some_formid, a_inv)) {
         return;
     }
     if (!Settings::IsItem(some_formid, "", true)) {
@@ -1627,14 +1627,14 @@ void Manager::Register(const FormID some_formid, const Count count, const RefInf
 
     if (GetNInstancesFast() > _instance_limit) {
         logger::warn("Instance limit reached.");
-        MsgBoxesNotifs::InGame::CustomMsg(
+        Utils::MsgBoxesNotifs::InGame::CustomMsg(
             std::format("The mod is tracking over {} instances. It is advised to check your memory usage and "
                         "skse co-save sizes.",
                         _instance_limit));
     }
 
     // make new registry
-    Source* const src = ForceGetSource(some_formid);  // also saves it to sources if it was created new
+    Source* const src = ForceGetSource(some_formid); // also saves it to sources if it was created new
     if (!src) {
         do_not_register.insert(some_formid);
         return;
@@ -1691,10 +1691,11 @@ void Manager::HandleCraftingEnter(const unsigned int bench_type) {
             }
 
             if (st_inst.count <= 0 || st_inst.xtra.is_decayed) continue;
-            if (Inventory::IsQuestItem(stage_formid, player_inventory)) continue;
+            if (Utils::Inventory::IsQuestItem(stage_formid, player_inventory)) continue;
             if (stage_formid != src.formid && !st_inst.xtra.crafting_allowed) continue;
 
-            if (const Types::FormFormID temp = {src.formid, stage_formid}; !handle_crafting_instances.contains(temp)) {
+            if (const Utils::Types::FormFormID temp = {src.formid, stage_formid}; !handle_crafting_instances.
+                contains(temp)) {
                 const auto it = player_inventory.find(src.GetBoundObject());
                 const auto count_src = it != player_inventory.end() ? it->second.first : 0;
                 handle_crafting_instances[temp] = {st_inst.count, count_src};
@@ -1708,15 +1709,15 @@ void Manager::HandleCraftingEnter(const unsigned int bench_type) {
                 continue;
             }
             if (auto it = faves_list.find(stage_formid); it == faves_list.end()) {
-                faves_list[stage_formid] = IsFavorited(stage_bound, player_inventory);
+                faves_list[stage_formid] = Utils::IsFavorited(stage_bound, player_inventory);
             } else if (!it->second) {
-                it->second = IsFavorited(stage_bound, player_inventory);
+                it->second = Utils::IsFavorited(stage_bound, player_inventory);
             }
 
             if (auto it = equipped_list.find(stage_formid); it == equipped_list.end()) {
-                equipped_list[stage_formid] = IsEquipped(stage_bound, player_inventory);
+                equipped_list[stage_formid] = Utils::IsEquipped(stage_bound, player_inventory);
             } else if (!it->second) {
-                it->second = IsEquipped(stage_bound, player_inventory);
+                it->second = Utils::IsEquipped(stage_bound, player_inventory);
             }
         }
     }
@@ -1775,10 +1776,10 @@ void Manager::HandleCraftingExit() {
                 }
                 player_ref->AddObjectToContainer(st_bound, nullptr, revert, nullptr);
                 if (auto it = faves_list.find(st_formid); it != faves_list.end() && it->second) {
-                    FavoriteItem(st_bound, player_ref);
+                    Utils::FavoriteItem(st_bound, player_ref);
                 }
                 if (auto it = equipped_list.find(st_formid); it != equipped_list.end() && it->second) {
-                    EquipItem(st_bound, false);
+                    Utils::EquipItem(st_bound, false);
                 }
                 actual_counts.at(src_formid) -= revert;
             }
@@ -1813,7 +1814,7 @@ void Manager::SwapWithStage(RE::TESObjectREFR* wo_ref) {
         }
     }
 
-    WorldObject::SwapObjects(wo_ref, toSwap, false);
+    Utils::WorldObject::SwapObjects(wo_ref, toSwap, false);
 }
 
 void Manager::Reset() {
@@ -1876,8 +1877,8 @@ void Manager::SendData() {
             for (const auto& st_inst : instances) {
                 auto plain = st_inst.GetPlain();
                 if (plain.is_fake && loc == 20) {
-                    plain.is_faved = IsFavorited(st_inst.GetBound(), player_inv);
-                    plain.is_equipped = IsEquipped(st_inst.GetBound(), player_inv);
+                    plain.is_faved = Utils::IsFavorited(st_inst.GetBound(), player_inv);
+                    plain.is_equipped = Utils::IsEquipped(st_inst.GetBound(), player_inv);
                 }
                 rhs.push_back(plain);
                 n_instances++;
@@ -1910,11 +1911,11 @@ void Manager::HandleLoc(RE::TESObjectREFR* loc_ref) {
 
     const auto loc_inventory_temp = loc_ref->GetInventory();
     for (const auto& [bound, entry] : loc_inventory_temp) {
-        if (bound && IsDynamicFormID(bound->GetFormID()) && std::strlen(bound->GetName()) == 0) {
+        if (bound && bound->IsDynamicForm() && std::strlen(bound->GetName()) == 0) {
             QueueManager::GetSingleton()->QueueAddRemoveItemTask(
-                {}, 
+                {},
                 RemoveItemTask(loc_refid, bound->GetFormID(), std::max(1, entry.first))
-            );
+                );
         }
     }
 
@@ -1942,7 +1943,7 @@ StageInstance* Manager::RegisterAtReceiveData(const FormID source_formid, const 
 
     if (GetNInstancesFast() > _instance_limit) {
         logger::warn("Instance limit reached.");
-        MsgBoxesNotifs::InGame::CustomMsg(
+        Utils::MsgBoxesNotifs::InGame::CustomMsg(
             std::format("The mod is tracking over {} instances. Maybe it is not bad to check your memory usage and "
                         "skse co-save sizes.",
                         _instance_limit));
@@ -2000,7 +2001,7 @@ void Manager::ReceiveData() {
     if (should_reset) {
         logger::info("ReceiveData: User wants to reset.");
         Reset();
-        MsgBoxesNotifs::InGame::CustomMsg(
+        Utils::MsgBoxesNotifs::InGame::CustomMsg(
             "The mod has been reset. Please save and close the game. Do not forget to set bReset back to false in "
             "the INI before loading your save.");
         return;
@@ -2020,7 +2021,6 @@ void Manager::ReceiveData() {
     DFT->ApplyMissingActiveEffects();
 
     /////////////////////////////////
-
 
     for (const auto& [lhs, rhs] : m_Data) {
         const auto& [form_id, editor_id] = lhs.first;
@@ -2053,7 +2053,6 @@ void Manager::ReceiveData() {
             if (const auto inserted_instance = RegisterAtReceiveData(source_formid, loc, st_plain);
                 !inserted_instance) {
                 logger::warn("ReceiveData: could not insert instance: FormID: {:x}, loc: {:x}", source_formid, loc);
-                continue;
             }
         }
     }
@@ -2064,7 +2063,7 @@ void Manager::ReceiveData() {
     }
     if (DFT->GetNDeleted() > 0) {
         logger::warn("ReceiveData: Deleted forms exist. User is required to restart.");
-        MsgBoxesNotifs::InGame::CustomMsg(
+        Utils::MsgBoxesNotifs::InGame::CustomMsg(
             "It seems the configuration has changed from your previous session"
             " that requires you to restart the game."
             "DO NOT IGNORE THIS:"
@@ -2177,7 +2176,7 @@ void Manager::HandleDynamicWO(RE::TESObjectREFR* ref) {
         if (!bound->IsDynamicForm()) return;
         const auto src = GetSourceByLocation(ref->GetFormID());
         if (!src) return;
-        WorldObject::SwapObjects(ref, src->GetBoundObject(), false);
+        Utils::WorldObject::SwapObjects(ref, src->GetBoundObject(), false);
     }
 }
 

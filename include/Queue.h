@@ -39,8 +39,10 @@ class QueueManager : public REX::Singleton<QueueManager>, public RE::BSTEventSin
     };
 
     using Key = std::pair<RefID, RefID>;
-    
-    struct KeyHash {std::size_t operator()(const Key& k) const noexcept;};
+
+    struct KeyHash {
+        std::size_t operator()(const Key& k) const noexcept;
+    };
 
     using PendingMap = std::unordered_map<Key, std::deque<Transfer>, KeyHash>;
     using WorkItem = std::pair<Key, Transfer>;
@@ -50,9 +52,9 @@ class QueueManager : public REX::Singleton<QueueManager>, public RE::BSTEventSin
     std::mutex mutex_moveitem_;
     std::unordered_map<RefID, std::deque<AddRemoveItemTask>> pending_moveitem_;
 
-    static void ProcessAddItemTask(RE::TESObjectREFR* owner,const AddItemTask& task);
+    static void ProcessAddItemTask(RE::TESObjectREFR* owner, const AddItemTask& task);
     static Count ProcessRemoveItemTask(RE::TESObjectREFR* owner, const RemoveItemTask& task,
-                                      RE::TESObjectREFR::InventoryItemMap& inventory);
+                                       RE::TESObjectREFR::InventoryItemMap& inventory);
 
     bool ProcessPendingMoves(int n_tasks);
     void ProcessPendingProcess(int n_tasks);
@@ -60,7 +62,6 @@ class QueueManager : public REX::Singleton<QueueManager>, public RE::BSTEventSin
     static void RefreshUI();
 
 public:
-
     void Start() {
         if (!ticker.isRunning()) {
             ticker.Start();

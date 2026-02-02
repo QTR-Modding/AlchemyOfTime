@@ -98,7 +98,7 @@ struct StageInstance {
     Count count;
     //RefID location;  // RefID of the container where the fake food is stored or the real food itself when it is
     // out in the world
-    Types::FormEditorIDX xtra;
+    Utils::Types::FormEditorIDX xtra;
 
     //StageInstance() : start_time(0), no(0), count(0), location(0) {}
     StageInstance(const float st, const StageNo n, const Count c)
