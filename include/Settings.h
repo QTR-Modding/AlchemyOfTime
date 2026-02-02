@@ -90,13 +90,13 @@ namespace Settings {
         }
 
         inline std::map<Intervals, int> intervals = {
-            {kSlower, 10000},
-            {kSlow, 5000},
-            {kNormal, 3000},
-            {kFast, 1000},
-            {kFaster, 500},
-            {kVeryFast, 250},
-            {kExtreme, 100}
+            {kSlower, 5000},
+            {kSlow, 2500},
+            {kNormal, 1500},
+            {kFast, 500},
+            {kFaster, 250},
+            {kVeryFast, 125},
+            {kExtreme, 50}
         };
 
         inline int GetInterval(const Intervals e) { return intervals.at(e); }
