@@ -497,9 +497,9 @@ void RefStop::ApplySound(const float volume) {
     if (!sound.id) {
         return RemoveSound();
     }
+    if (features.sound.enabled) return;
     const auto soundhelper = SoundHelper::GetSingleton();
-    soundhelper->Play(ref_info.GetRef(), sound.id, volume);
-    sound.enabled = true;
+    sound.enabled |= soundhelper->Play(ref_info.GetRef(), sound.id, volume);
 }
 
 RE::BSSoundHandle& RefStop::GetSoundHandle() const {
@@ -621,7 +621,7 @@ void RefStop::Update(const RefStop& other) {
 
 void SoundHelper::DeleteHandle(const RefID refid) {
     std::unique_lock lock(mutex);
-    auto it = handles.find(refid);
+    const auto it = handles.find(refid);
     if (it == handles.end()) return;
     Stop(refid);
     handles.erase(it);
@@ -629,7 +629,7 @@ void SoundHelper::DeleteHandle(const RefID refid) {
 
 void SoundHelper::Stop(const RefID refid) {
     std::unique_lock lock(mutex);
-    auto it = handles.find(refid);
+    const auto it = handles.find(refid);
     if (it == handles.end()) {
         return;
     }
@@ -641,27 +641,27 @@ void SoundHelper::Stop(const RefID refid) {
     //handle.Stop();
 }
 
-void SoundHelper::Play(const RE::TESObjectREFR* ref, const FormID sound_id, const float volume) {
-    if (!sound_id) return;
+bool SoundHelper::Play(const RE::TESObjectREFR* ref, const FormID sound_id, const float volume) {
+    if (!sound_id) return false;
     const auto sound = RE::TESForm::LookupByID<RE::BGSSoundDescriptorForm>(sound_id);
     if (!sound) {
         logger::error("Sound not found.");
-        return;
+        return false;
     }
     if (!ref) {
         logger::error("Ref not found.");
-        return;
+        return false;
     }
     const auto ref_node = ref->Get3D();
     if (!ref_node) {
         logger::warn("Ref has no 3D.");
-        return;
+        return false;
     }
     std::unique_lock lock(mutex);
     auto& sound_handle = handles[ref->GetFormID()];
 
     if (sound_handle.IsPlaying()) {
-        return;
+        return false;
     }
 
     RE::BSAudioManager::GetSingleton()->BuildSoundDataFromDescriptor(sound_handle, sound);
@@ -671,5 +671,8 @@ void SoundHelper::Play(const RE::TESObjectREFR* ref, const FormID sound_id, cons
         logger::error("SoundHandle not valid.");
     } else {
         sound_handle.FadeInPlay(1000);
+        return true;
     }
+
+    return false;
 }
