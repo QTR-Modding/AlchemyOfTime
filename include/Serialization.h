@@ -2,7 +2,7 @@
 #include "Settings.h"
 #include "CLibUtilsQTR/Serialization.hpp"
 
-using SaveDataLHS = std::pair<Types::FormEditorID, RefID>;
+using SaveDataLHS = std::pair<Utils::Types::FormEditorID, RefID>;
 using SaveDataRHS = std::vector<StageInstancePlain>;
 
 struct DFSaveData {

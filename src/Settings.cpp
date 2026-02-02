@@ -21,10 +21,10 @@ namespace {
 
 static const std::unordered_map<std::string, QFormChecker> qformCheckers = {
     // POPULATE THIS
-    {"FOOD", [](const auto form) { return IsFoodItem(form); }},
+    {"FOOD", [](const auto form) { return Utils::IsFoodItem(form); }},
     {"INGR", [](const auto form) { return form->Is(RE::IngredientItem::FORMTYPE); }},
-    {"MEDC", [](const auto form) { return IsMedicineItem(form); }},
-    {"POSN", [](const auto form) { return IsPoisonItem(form); }},
+    {"MEDC", [](const auto form) { return Utils::IsMedicineItem(form); }},
+    {"POSN", [](const auto form) { return Utils::IsPoisonItem(form); }},
     {"ARMO", [](const auto form) { return form->Is(RE::TESObjectARMO::FORMTYPE); }},
     {"WEAP", [](const auto form) { return form->Is(RE::TESObjectWEAP::FORMTYPE); }},
     {"SCRL", [](const auto form) { return form->Is(RE::ScrollItem::FORMTYPE); }},
@@ -355,10 +355,10 @@ void PresetParse::SaveSettings() {
     Document::AllocatorType& allocator = doc.GetAllocator();
 
     Value version(kObjectType);
-    version.AddMember("major", plugin_version.major(), allocator);
-    version.AddMember("minor", plugin_version.minor(), allocator);
-    version.AddMember("patch", plugin_version.patch(), allocator);
-    version.AddMember("build", plugin_version.build(), allocator);
+    version.AddMember("major", Utils::plugin_version.major(), allocator);
+    version.AddMember("minor", Utils::plugin_version.minor(), allocator);
+    version.AddMember("patch", Utils::plugin_version.patch(), allocator);
+    version.AddMember("build", Utils::plugin_version.build(), allocator);
 
     doc.AddMember("plugin_version", version, allocator);
     doc.AddMember("ticker", Settings::Ticker::to_json(allocator), allocator);
@@ -418,7 +418,7 @@ namespace {
         logger::info("Parsing file: {}", filename);
         // Create a temporary result for this file
         CustomSettings fileResult;
-        if (FileIsEmpty(filename)) {
+        if (Utils::FileIsEmpty(filename)) {
             logger::info("File is empty: {}", filename);
             return;
         }
@@ -499,7 +499,7 @@ namespace {
 
         std::unordered_map<FormID, AddOnSettings> fileResult;
 
-        if (FileIsEmpty(filename)) {
+        if (Utils::FileIsEmpty(filename)) {
             logger::info("File is empty: {}", filename);
             return;
         }
@@ -891,7 +891,7 @@ DefaultSettings PresetParse::parseDefaults(const std::string& _type) {
         return {};
     }
 
-    if (FileIsEmpty(filename)) {
+    if (Utils::FileIsEmpty(filename)) {
         logger::info("File is empty: {}", filename);
         return {};
     }
@@ -937,7 +937,7 @@ void PresetParse::LoadINISettings() {
         Settings::nMaxInstances = 200000;
     } else Settings::nMaxInstances = 1000 * ini.GetLongValue("Other Settings", "nMaxInstancesInThousands", 200);
 
-    Settings::nMaxInstances = std::min(Settings::nMaxInstances, 2000000);
+    Settings::nMaxInstances = std::min(Settings::nMaxInstances, 200000);
 
     if (!ini.KeyExists("Other Settings", "nTimeToForgetInDays")) {
         ini.SetLongValue("Other Settings", "nTimeToForgetInDays", 90);
@@ -986,13 +986,13 @@ void PresetParse::LoadINISettings() {
 
     // Symbols (allow raw ASCII, HTML entities, or backslash-escapes)
     if (const char* sep = ini.GetValue("LoreBox", "SeparatorSymbol", nullptr)) {
-        if (const auto ws = String::DecodeEscapesFromAscii(sep); !ws.empty()) Lorebox::separator_symbol = ws;
+        if (const auto ws = Utils::String::DecodeEscapesFromAscii(sep); !ws.empty()) Lorebox::separator_symbol = ws;
     }
     if (const char* ar = ini.GetValue("LoreBox", "ArrowRight", nullptr)) {
-        if (const auto ws = String::DecodeEscapesFromAscii(ar); !ws.empty()) Lorebox::arrow_right = ws;
+        if (const auto ws = Utils::String::DecodeEscapesFromAscii(ar); !ws.empty()) Lorebox::arrow_right = ws;
     }
     if (const char* al = ini.GetValue("LoreBox", "ArrowLeft", nullptr)) {
-        if (const auto ws = String::DecodeEscapesFromAscii(al); !ws.empty()) Lorebox::arrow_left = ws;
+        if (const auto ws = Utils::String::DecodeEscapesFromAscii(al); !ws.empty()) Lorebox::arrow_left = ws;
     }
 
     // Ensure keys exist with defaults if they were missing
@@ -1015,14 +1015,14 @@ void PresetParse::LoadINISettings() {
     // Write symbol defaults only if missing; preserve user's raw codes/entities (use escaped ASCII)
     if (!ini.KeyExists("LoreBox", "SeparatorSymbol"))
         ini.SetValue("LoreBox", "SeparatorSymbol",
-                     String::EncodeEscapesToAscii(
+                     Utils::String::EncodeEscapesToAscii(
                          Lorebox::separator_symbol).c_str());
     if (!ini.KeyExists("LoreBox", "ArrowRight"))
         ini.SetValue("LoreBox", "ArrowRight",
-                     String::EncodeEscapesToAscii(Lorebox::arrow_right).c_str());
+                     Utils::String::EncodeEscapesToAscii(Lorebox::arrow_right).c_str());
     if (!ini.KeyExists("LoreBox", "ArrowLeft"))
         ini.SetValue("LoreBox", "ArrowLeft",
-                     String::EncodeEscapesToAscii(Lorebox::arrow_left).c_str());
+                     Utils::String::EncodeEscapesToAscii(Lorebox::arrow_left).c_str());
 
     ini.SaveFile(Settings::INI_path);
 }
@@ -1053,14 +1053,14 @@ void PresetParse::LoadJSONSettings() {
     }
     Settings::SetCurrentTickInterval(Settings::Ticker::from_string(ticker["speed"].GetString()));
     if (doc.HasMember("max_dirty_updates") && doc["max_dirty_updates"].IsUint64()) {
-        const auto value = static_cast<size_t>(doc["max_dirty_updates"].GetUint64());
+        const auto value = doc["max_dirty_updates"].GetUint64();
         Settings::max_dirty_updates.store(
             std::clamp<size_t>(value, Settings::max_dirty_updates_min, Settings::max_dirty_updates_max));
     }
 }
 
 void PresetParse::LoadFormGroups() {
-    const auto folder_path = std::format("Data/SKSE/Plugins/{}", mod_name) + "/formGroups";
+    const auto folder_path = std::format("Data/SKSE/Plugins/{}", Utils::mod_name) + "/formGroups";
     PresetHelpers::TXT_Helpers::GatherForms(folder_path);
 }
 

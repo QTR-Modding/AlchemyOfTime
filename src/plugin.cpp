@@ -11,16 +11,16 @@ namespace {
     void OnMessage(SKSE::MessagingInterface::Message* message) {
         if (message->type == SKSE::MessagingInterface::kDataLoaded) {
             // 0) Check Po3's Tweaks
-            if (!IsPo3Installed()) {
+            if (!Utils::IsPo3Installed()) {
                 logger::error("Po3 is not installed.");
-                MsgBoxesNotifs::Windows::Po3ErrMsg();
+                Utils::MsgBoxesNotifs::Windows::Po3ErrMsg();
                 return;
             }
 
             // 1) Keyword
             if (!Lorebox::Load_KW_AoT()) {
                 logger::error("Failed to load keyword.");
-                MsgBoxesNotifs::InGame::CustomMsg("Failed to load settings. Check log for details.");
+                Utils::MsgBoxesNotifs::InGame::CustomMsg("Failed to load settings. Check log for details.");
                 return;
             }
 
@@ -31,7 +31,7 @@ namespace {
             }
             if (Settings::failed_to_load) {
                 logger::critical("Failed to load settings.");
-                MsgBoxesNotifs::InGame::CustomMsg("Failed to load settings. Check log for details.");
+                Utils::MsgBoxesNotifs::InGame::CustomMsg("Failed to load settings. Check log for details.");
                 return;
             }
 

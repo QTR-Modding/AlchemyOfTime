@@ -4,7 +4,7 @@
 #include "CLibUtilsQTR/DrawDebug.hpp"
 #include "MCP.h"
 
-std::string DecodeTypeCode(const std::uint32_t typeCode) {
+std::string Utils::DecodeTypeCode(const std::uint32_t typeCode) {
     char buf[4];
     buf[3] = static_cast<char>(typeCode);
     buf[2] = static_cast<char>(typeCode >> 8);
@@ -13,7 +13,7 @@ std::string DecodeTypeCode(const std::uint32_t typeCode) {
     return std::string(buf, buf + 4);
 }
 
-bool FileIsEmpty(const std::string& filename) {
+bool Utils::FileIsEmpty(const std::string& filename) {
     std::ifstream file(filename);
     if (!file.is_open()) {
         return false; // File could not be opened, treat as not empty or handle error
@@ -29,7 +29,7 @@ bool FileIsEmpty(const std::string& filename) {
     return true; // Only whitespace characters or file is empty
 }
 
-void hexToRGBA(const uint32_t color_code, RE::NiColorA& nicolora) {
+void Utils::hexToRGBA(const uint32_t color_code, RE::NiColorA& nicolora) {
     if (color_code > 0xFFFFFF) {
         // 8-digit hex (RRGGBBAA)
         nicolora.red = static_cast<float>(color_code >> 24 & 0xFF); // Bits 24-31
@@ -49,7 +49,7 @@ void hexToRGBA(const uint32_t color_code, RE::NiColorA& nicolora) {
     nicolora.blue /= 255.0f;
 }
 
-bool IsFoodItem(const RE::TESForm* form) {
+bool Utils::IsFoodItem(const RE::TESForm* form) {
     if (form->Is(RE::AlchemyItem::FORMTYPE)) {
         const RE::AlchemyItem* form_as_ = form->As<RE::AlchemyItem>();
         if (!form_as_) return false;
@@ -62,7 +62,7 @@ bool IsFoodItem(const RE::TESForm* form) {
     return true;
 }
 
-bool IsPoisonItem(const RE::TESForm* form) {
+bool Utils::IsPoisonItem(const RE::TESForm* form) {
     if (form->Is(RE::AlchemyItem::FORMTYPE)) {
         const RE::AlchemyItem* form_as_ = form->As<RE::AlchemyItem>();
         if (!form_as_) return false;
@@ -71,7 +71,7 @@ bool IsPoisonItem(const RE::TESForm* form) {
     return true;
 }
 
-bool IsMedicineItem(const RE::TESForm* form) {
+bool Utils::IsMedicineItem(const RE::TESForm* form) {
     if (form->Is(RE::AlchemyItem::FORMTYPE)) {
         const RE::AlchemyItem* form_as_ = form->As<RE::AlchemyItem>();
         if (!form_as_) return false;
@@ -80,7 +80,7 @@ bool IsMedicineItem(const RE::TESForm* form) {
     return true;
 }
 
-void OverrideMGEFFs(RE::BSTArray<RE::Effect*>& effect_array, const std::vector<FormID>& new_effects,
+void Utils::OverrideMGEFFs(RE::BSTArray<RE::Effect*>& effect_array, const std::vector<FormID>& new_effects,
                     const std::vector<uint32_t>& durations, const std::vector<float>& magnitudes) {
     size_t some_index = 0;
     for (auto* effect : effect_array) {
@@ -96,7 +96,7 @@ void OverrideMGEFFs(RE::BSTArray<RE::Effect*>& effect_array, const std::vector<F
     }
 }
 
-void FavoriteItem(const RE::TESBoundObject* item, RE::TESObjectREFR* inventory_owner) {
+void Utils::FavoriteItem(const RE::TESBoundObject* item, RE::TESObjectREFR* inventory_owner) {
     if (!item) return;
     if (!inventory_owner) return;
     const auto inventory_changes = inventory_owner->GetInventoryChanges();
@@ -112,7 +112,7 @@ void FavoriteItem(const RE::TESBoundObject* item, RE::TESObjectREFR* inventory_o
             continue;
         }
         const auto formid = object->GetFormID();
-        if (!formid) logger::critical("Formid is null");
+        if (!formid) logger::critical("FormID is null");
         if (formid == item->GetFormID()) {
             const auto xLists = (*it)->extraLists;
             bool no_extra_ = false;
@@ -131,7 +131,7 @@ void FavoriteItem(const RE::TESBoundObject* item, RE::TESObjectREFR* inventory_o
 }
 
 // ReSharper disable once CppParameterMayBeConstPtrOrRef
-bool IsFavorited(RE::TESBoundObject* item, const InvMap& inventory) {
+bool Utils::IsFavorited(RE::TESBoundObject* item, const InvMap& inventory) {
     if (const auto it = inventory.find(item); it != inventory.end()) {
         if (it->second.first <= 0) logger::warn("Item count is 0");
         return it->second.second->IsFavorited();
@@ -139,7 +139,7 @@ bool IsFavorited(RE::TESBoundObject* item, const InvMap& inventory) {
     return false;
 }
 
-void EquipItem(const RE::TESBoundObject* item, const bool unequip) {
+void Utils::EquipItem(const RE::TESBoundObject* item, const bool unequip) {
     logger::trace("EquipItem");
 
     if (!item) {
@@ -182,7 +182,7 @@ void EquipItem(const RE::TESBoundObject* item, const bool unequip) {
 }
 
 // ReSharper disable once CppParameterMayBeConstPtrOrRef
-bool IsEquipped(RE::TESBoundObject* item, const InvMap& inventory) {
+bool Utils::IsEquipped(RE::TESBoundObject* item, const InvMap& inventory) {
     if (const auto it = inventory.find(item); it != inventory.end()) {
         if (it->second.first <= 0) logger::warn("Item count is 0");
         return it->second.second->IsWorn();
@@ -190,7 +190,7 @@ bool IsEquipped(RE::TESBoundObject* item, const InvMap& inventory) {
     return false;
 }
 
-bool AreAdjacentCells(RE::TESObjectCELL* cellA, RE::TESObjectCELL* cellB) {
+bool Utils::AreAdjacentCells(RE::TESObjectCELL* cellA, RE::TESObjectCELL* cellB) {
     const auto checkCoordinatesA(cellA->GetCoordinates());
     if (!checkCoordinatesA) {
         logger::error("Coordinates of cellA is null.");
@@ -207,7 +207,7 @@ bool AreAdjacentCells(RE::TESObjectCELL* cellA, RE::TESObjectCELL* cellB) {
     return false;
 }
 
-std::string String::EncodeEscapesToAscii(const std::wstring& ws) {
+std::string Utils::String::EncodeEscapesToAscii(const std::wstring& ws) {
     std::string out;
     for (const auto& wc : ws) {
         switch (wc) {
@@ -237,7 +237,7 @@ std::string String::EncodeEscapesToAscii(const std::wstring& ws) {
     return out;
 }
 
-std::wstring String::DecodeEscapesFromAscii(const char* s) {
+std::wstring Utils::String::DecodeEscapesFromAscii(const char* s) {
     auto hexVal = [](const char ch) -> int {
         if (ch >= '0' && ch <= '9') return ch - '0';
         if (ch >= 'a' && ch <= 'f') return 10 + (ch - 'a');
@@ -305,7 +305,7 @@ std::wstring String::DecodeEscapesFromAscii(const char* s) {
     return out;
 }
 
-bool Types::FormEditorID::operator<(const FormEditorID& other) const {
+bool Utils::Types::FormEditorID::operator<(const FormEditorID& other) const {
     // Compare form_id first
     if (form_id < other.form_id) {
         return true;
@@ -318,45 +318,18 @@ bool Types::FormEditorID::operator<(const FormEditorID& other) const {
     return false;
 }
 
-bool Types::FormEditorIDX::operator==(const FormEditorIDX& other) const {
+bool Utils::Types::FormEditorIDX::operator==(const FormEditorIDX& other) const {
     return form_id == other.form_id;
 }
 
-int16_t WorldObject::GetObjectCount(RE::TESObjectREFR* ref) {
-    if (!ref) {
-        logger::error("Ref is null.");
-        return 0;
-    }
-    if (ref->extraList.HasType(RE::ExtraDataType::kCount)) {
-        const RE::ExtraCount* xCount = ref->extraList.GetByType<RE::ExtraCount>();
-        return xCount->count;
-    }
-    return 0;
-}
-
-void WorldObject::SetObjectCount(RE::TESObjectREFR* ref, const Count count) {
-    if (!ref) {
-        logger::error("Ref is null.");
-        return;
-    }
-    int max_try = 1;
-    while (ref->extraList.HasType(RE::ExtraDataType::kCount) && max_try) {
-        ref->extraList.RemoveByType(RE::ExtraDataType::kCount);
-        max_try--;
-    }
-    // ref->extraList.SetCount(static_cast<uint16_t>(count));
-    const auto xCount = new RE::ExtraCount(static_cast<int16_t>(count));
-    ref->extraList.Add(xCount);
-}
-
-RE::TESObjectREFR* WorldObject::DropObjectIntoTheWorld(RE::TESBoundObject* obj, const Count count,
-                                                       const bool player_owned) {
+RE::TESObjectREFR* Utils::WorldObject::DropObjectIntoTheWorld(RE::TESBoundObject* obj, const Count count,
+                                                              const bool player_owned) {
     const auto player_ch = RE::PlayerCharacter::GetSingleton();
 
     constexpr auto multiplier = 100.0f;
     constexpr float q_pi = std::numbers::pi_v<float>;
     auto orji_vec = RE::NiPoint3{multiplier, 0.f, player_ch->GetHeight()};
-    Math::LinAlg::R3::rotateZ(orji_vec, q_pi / 4.f - player_ch->GetAngleZ());
+    Math::rotateZ(orji_vec, q_pi / 4.f - player_ch->GetAngleZ());
     const auto drop_pos = player_ch->GetPosition() + orji_vec;
     const auto player_cell = player_ch->GetParentCell();
     const auto player_ws = player_ch->GetWorldspace();
@@ -379,7 +352,7 @@ RE::TESObjectREFR* WorldObject::DropObjectIntoTheWorld(RE::TESBoundObject* obj, 
     return newPropRef;
 }
 
-void WorldObject::SwapObjects(RE::TESObjectREFR* a_from, RE::TESBoundObject* a_to, const bool apply_havok) {
+void Utils::WorldObject::SwapObjects(RE::TESObjectREFR* a_from, RE::TESBoundObject* a_to, const bool apply_havok) {
     logger::trace("SwapObjects");
     if (!a_from) {
         logger::error("Ref is null.");
@@ -408,40 +381,7 @@ void WorldObject::SwapObjects(RE::TESObjectREFR* a_from, RE::TESBoundObject* a_t
     });
 }
 
-RE::TESObjectREFR* WorldObject::TryToGetRefInCell(const FormID baseid, const Count count, const float radius) {
-    const auto player = RE::PlayerCharacter::GetSingleton();
-    const auto player_cell = player->GetParentCell();
-    if (!player_cell) {
-        logger::error("Player cell is null.");
-        return nullptr;
-    }
-    const auto player_pos = player->GetPosition();
-    auto& runtimeData = player_cell->GetRuntimeData();
-    RE::BSSpinLockGuard locker(runtimeData.spinLock);
-    for (const auto& ref : runtimeData.references) {
-        if (!ref) continue;
-        const auto ref_base = ref->GetBaseObject();
-        if (!ref_base) continue;
-        const auto ref_baseid = ref_base->GetFormID();
-        const auto ref_id = ref->GetFormID();
-        const auto ref_pos = ref->GetPosition();
-        if (ref_baseid == baseid && ref->extraList.GetCount() == count) {
-            // get radius and check if ref is in radius
-            if (ref_id < 4278190080) {
-                logger::trace("Ref is a placed reference. Continuing search.");
-                continue;
-            }
-            logger::trace("Ref found in cell: {} with id {}", ref_base->GetName(), ref_id);
-            if (radius > 0.f) {
-                if (player_pos.GetDistance(ref_pos) < radius) return ref.get();
-                logger::trace("Ref is not in radius");
-            } else return ref.get();
-        }
-    }
-    return nullptr;
-}
-
-bool WorldObject::IsPlacedObject(RE::TESObjectREFR* ref) {
+bool Utils::WorldObject::IsPlacedObject(RE::TESObjectREFR* ref) {
     if (ref->extraList.HasType(RE::ExtraDataType::kStartingPosition)) {
         if (const auto starting_pos = ref->extraList.GetByType<RE::ExtraStartingPosition>(); starting_pos->location) {
             /*logger::trace("has location.");
@@ -456,7 +396,7 @@ bool WorldObject::IsPlacedObject(RE::TESObjectREFR* ref) {
     return false;
 }
 
-RE::bhkRigidBody* WorldObject::GetRigidBody(const RE::TESObjectREFR* refr) {
+RE::bhkRigidBody* Utils::WorldObject::GetRigidBody(const RE::TESObjectREFR* refr) {
     const auto object3D = refr->GetCurrent3D();
     if (!object3D) {
         return nullptr;
@@ -467,7 +407,7 @@ RE::bhkRigidBody* WorldObject::GetRigidBody(const RE::TESObjectREFR* refr) {
     return nullptr;
 }
 
-RE::NiPoint3 WorldObject::GetPosition(const RE::TESObjectREFR* obj) {
+RE::NiPoint3 Utils::WorldObject::GetPosition(const RE::TESObjectREFR* obj) {
     // Prefer accurate mesh world translate when available
     if (const auto mesh = obj->GetCurrent3D()) {
         return mesh->world.translate;
@@ -485,151 +425,14 @@ RE::NiPoint3 WorldObject::GetPosition(const RE::TESObjectREFR* obj) {
     return newPosition;
 }
 
-
-float Math::Round(const float value, const int n) {
-    const float factor = std::powf(10.0f, static_cast<float>(n));
-    return std::round(value * factor) / factor;
-}
-
-
-float Math::Ceil(const float value, const int n) {
-    const float factor = std::powf(10.0f, static_cast<float>(n));
-    return std::ceil(value * factor) / factor;
-}
-
-void Math::LinAlg::R3::rotateX(RE::NiPoint3& v, const float angle) {
-    const float y = v.y * cos(angle) - v.z * sin(angle);
-    const float z = v.y * sin(angle) + v.z * cos(angle);
-    v.y = y;
-    v.z = z;
-}
-
-void Math::LinAlg::R3::rotateY(RE::NiPoint3& v, const float angle) {
-    const float x = v.x * cos(angle) + v.z * sin(angle);
-    const float z = -v.x * sin(angle) + v.z * cos(angle);
-    v.x = x;
-    v.z = z;
-}
-
-void Math::LinAlg::R3::rotateZ(RE::NiPoint3& v, const float angle) {
+void Utils::Math::rotateZ(RE::NiPoint3& v, const float angle) {
     const float x = v.x * cos(angle) - v.y * sin(angle);
     const float y = v.x * sin(angle) + v.y * cos(angle);
     v.x = x;
     v.y = y;
 }
 
-void Math::LinAlg::R3::rotate(RE::NiPoint3& v, const float angleX, const float angleY, const float angleZ) {
-    rotateX(v, angleX);
-    rotateY(v, angleY);
-    rotateZ(v, angleZ);
-}
-
-std::array<RE::NiPoint3, 3> Math::LinAlg::GetClosest3Vertices(const std::array<RE::NiPoint3, 8>& a_bounding_box,
-                                                              const RE::NiPoint3& outside_point) {
-    std::array<RE::NiPoint3, 3> result;
-
-    std::vector<std::pair<float, size_t>> distances;
-    for (size_t i = 0; i < a_bounding_box.size(); ++i) {
-        float dist = outside_point.GetDistance(a_bounding_box[i]);
-        distances.emplace_back(dist, i);
-    }
-    std::ranges::sort(distances);
-    for (size_t i = 0; i < 3 && i < distances.size(); ++i) {
-        const size_t index = distances[i].second;
-        result[i] = a_bounding_box[index];
-    }
-
-    return result;
-}
-
-std::array<RE::NiPoint3, 3> Math::LinAlg::GetClosest3Vertices(const std::array<RE::NiPoint3, 4>& a_bounded_plane,
-                                                              const RE::NiPoint3& outside_point) {
-    std::array<RE::NiPoint3, 3> result;
-
-    std::vector<std::pair<float, size_t>> distances;
-    for (size_t i = 0; i < a_bounded_plane.size(); ++i) {
-        float dist = outside_point.GetDistance(a_bounded_plane[i]);
-        distances.emplace_back(dist, i);
-    }
-    std::ranges::sort(distances);
-    for (size_t i = 0; i < 3 && i < distances.size(); ++i) {
-        const size_t index = distances[i].second;
-        result[i] = a_bounded_plane[index];
-    }
-
-    return result;
-}
-
-RE::NiPoint3 Math::LinAlg::CalculateNormalOfPlane(const RE::NiPoint3& span1, const RE::NiPoint3& span2) {
-    const auto crossed = span1.Cross(span2);
-    const auto length = crossed.Length();
-    if (fabs(length) < EPSILON) {
-        return {0, 0, 0};
-    }
-    return crossed / length;
-}
-
-RE::NiPoint3 Math::LinAlg::closestPointOnPlane(const RE::NiPoint3& a_point_on_plane,
-                                               const RE::NiPoint3& a_point_not_on_plane, const RE::NiPoint3& v_normal) {
-    const auto distance = (a_point_not_on_plane - a_point_on_plane).Dot(v_normal);
-    return a_point_not_on_plane - v_normal * distance;
-}
-
-RE::NiPoint3 Math::LinAlg::intersectLine(const std::array<RE::NiPoint3, 3>& vertices,
-                                         const RE::NiPoint3& outside_plane_point) {
-    const RE::NiPoint3 edge0 = vertices[1] - vertices[0]; // AtoB
-    const RE::NiPoint3 edge1 = vertices[2] - vertices[1]; // BtoC
-    const RE::NiPoint3 edge2 = vertices[0] - vertices[2]; // CtoA
-
-    const float mags[3] = {edge0.Length(), edge1.Length(), edge2.Length()};
-
-    size_t maxIndex = 0;
-    if (mags[1] > mags[maxIndex]) maxIndex = 1;
-    if (mags[2] > mags[maxIndex]) maxIndex = 2;
-
-    //[[maybe_unused]] const auto& hypotenuse = edges[index];
-    const auto index1 = (maxIndex + 1) % 3;
-    const auto index2 = (maxIndex + 2) % 3;
-
-    const auto& orthogonal_vertex = vertices[index2]; // B
-
-    for (const auto a_index : {maxIndex, index1}) {
-        const auto& hypotenuse_vertex = vertices[a_index]; // C or A depending on closed loop orientation
-
-        const auto temp = orthogonal_vertex - hypotenuse_vertex;
-        const auto temp_length = temp.Length();
-        if (temp_length == 0.f) continue;
-        const auto temp_unit = temp / temp_length;
-
-        const auto& other_hypotenuse_vertex = a_index == index1 ? vertices[maxIndex] : vertices[index1];
-        const auto temp2 = other_hypotenuse_vertex - orthogonal_vertex;
-        const auto temp2_length = temp2.Length();
-        if (temp2_length == 0.f) continue;
-        const auto temp2_unit = temp2 / temp2_length;
-
-        const auto theta_max = atan(temp2_length / temp_length);
-        const auto distance_vector = outside_plane_point - hypotenuse_vertex;
-        const auto distance_vector_length = distance_vector.Length();
-        const auto distance_vector_unit = distance_vector / distance_vector_length;
-
-        if (const auto theta = acos(distance_vector_unit.Dot(temp_unit));
-            0.f <= theta && theta <= theta_max) {
-            if (temp2_unit.Dot(distance_vector_unit) > 0) {
-                const auto a_span_size = tan(theta) * temp_length;
-                if (const auto intersect = temp + temp2_unit * a_span_size;
-                    intersect.Length() > distance_vector_length) {
-                    return outside_plane_point; // it is inside the triangle
-                }
-                const auto normal_distance = (outside_plane_point - orthogonal_vertex).Dot(temp2_unit);
-                return temp2_unit * normal_distance + orthogonal_vertex;
-            }
-        }
-    }
-
-    return orthogonal_vertex;
-}
-
-bool Inventory::IsQuestItem(const FormID formid, const InvMap& a_inv) {
+bool Utils::Inventory::IsQuestItem(const FormID formid, const InvMap& a_inv) {
     if (const auto item = FormReader::GetFormByID<RE::TESBoundObject>(formid)) {
         if (const auto it = a_inv.find(item); it != a_inv.end()) {
             if (it->second.second->IsQuestObject()) return true;
@@ -638,7 +441,7 @@ bool Inventory::IsQuestItem(const FormID formid, const InvMap& a_inv) {
     return false;
 }
 
-RE::TESObjectREFR* Menu::GetContainerFromMenu() {
+RE::TESObjectREFR* Utils::Menu::GetContainerFromMenu() {
     const auto ui = RE::UI::GetSingleton()->GetMenu<RE::ContainerMenu>();
     if (!ui) {
         logger::warn("GetContainerFromMenu: Container menu is null");
@@ -656,7 +459,7 @@ RE::TESObjectREFR* Menu::GetContainerFromMenu() {
     return nullptr;
 }
 
-RE::TESObjectREFR* Menu::GetVendorChestFromMenu() {
+RE::TESObjectREFR* Utils::Menu::GetVendorChestFromMenu() {
     const auto ui = RE::UI::GetSingleton()->GetMenu<RE::BarterMenu>();
     if (!ui) {
         logger::warn("GetVendorChestFromMenu: Barter menu is null");
@@ -696,7 +499,7 @@ RE::TESObjectREFR* Menu::GetVendorChestFromMenu() {
     return nullptr;
 }
 
-void Menu::UpdateItemList() {
+void Utils::Menu::UpdateItemList() {
     if (const auto ui = RE::UI::GetSingleton()) {
         if (ui->IsMenuOpen(RE::InventoryMenu::MENU_NAME)) {
             const auto inventory_menu = ui->GetMenu<RE::InventoryMenu>();
@@ -717,7 +520,7 @@ void Menu::UpdateItemList() {
     }
 }
 
-RE::StandardItemData* Menu::GetSelectedItemDataInMenu(std::string& a_menuOut) {
+RE::StandardItemData* Utils::Menu::GetSelectedItemDataInMenu(std::string& a_menuOut) {
     if (const auto ui = RE::UI::GetSingleton()) {
         if (ui->IsMenuOpen(RE::InventoryMenu::MENU_NAME)) {
             a_menuOut = RE::InventoryMenu::MENU_NAME;
@@ -729,19 +532,19 @@ RE::StandardItemData* Menu::GetSelectedItemDataInMenu(std::string& a_menuOut) {
         }
         if (ui->IsMenuOpen(RE::BarterMenu::MENU_NAME)) {
             a_menuOut = RE::BarterMenu::MENU_NAME;
-            return GetSelectedItemData<RE::BarterMenu>();
+            return Utils::Menu::GetSelectedItemData<RE::BarterMenu>();
         }
     }
     return nullptr;
 }
 
 
-RE::StandardItemData* Menu::GetSelectedItemDataInMenu() {
+RE::StandardItemData* Utils::Menu::GetSelectedItemDataInMenu() {
     std::string menu_name;
     return GetSelectedItemDataInMenu(menu_name);
 }
 
-RE::TESObjectREFR* Menu::GetOwnerOfItem(const RE::StandardItemData* a_itemdata) {
+RE::TESObjectREFR* Utils::Menu::GetOwnerOfItem(const RE::StandardItemData* a_itemdata) {
     auto& refHandle = a_itemdata->owner;
     if (const auto owner = RE::TESObjectREFR::LookupByHandle(refHandle)) {
         return owner.get();
@@ -750,106 +553,4 @@ RE::TESObjectREFR* Menu::GetOwnerOfItem(const RE::StandardItemData* a_itemdata) 
         return owner_actor->AsReference();
     }
     return nullptr;
-}
-
-void DynamicForm::copyBookAppearence(RE::TESForm* source, RE::TESForm* target) {
-    const auto* sourceBook = source->As<RE::TESObjectBOOK>();
-
-    auto* targetBook = target->As<RE::TESObjectBOOK>();
-
-    if (sourceBook && targetBook) {
-        targetBook->inventoryModel = sourceBook->inventoryModel;
-    }
-}
-
-void DynamicForm::copyFormArmorModel(RE::TESForm* source, RE::TESForm* target) {
-    const auto* sourceModelBipedForm = source->As<RE::TESObjectARMO>();
-
-    auto* targeteModelBipedForm = target->As<RE::TESObjectARMO>();
-
-    if (sourceModelBipedForm && targeteModelBipedForm) {
-        logger::info("armor");
-
-        targeteModelBipedForm->armorAddons = sourceModelBipedForm->armorAddons;
-    }
-}
-
-void DynamicForm::copyFormObjectWeaponModel(RE::TESForm* source, RE::TESForm* target) {
-    const auto* sourceModelWeapon = source->As<RE::TESObjectWEAP>();
-
-    auto* targeteModelWeapon = target->As<RE::TESObjectWEAP>();
-
-    if (sourceModelWeapon && targeteModelWeapon) {
-        logger::info("weapon");
-
-        targeteModelWeapon->firstPersonModelObject = sourceModelWeapon->firstPersonModelObject;
-
-        targeteModelWeapon->attackSound = sourceModelWeapon->attackSound;
-
-        targeteModelWeapon->attackSound2D = sourceModelWeapon->attackSound2D;
-
-        targeteModelWeapon->attackSound = sourceModelWeapon->attackSound;
-
-        targeteModelWeapon->attackFailSound = sourceModelWeapon->attackFailSound;
-
-        targeteModelWeapon->idleSound = sourceModelWeapon->idleSound;
-
-        targeteModelWeapon->equipSound = sourceModelWeapon->equipSound;
-
-        targeteModelWeapon->unequipSound = sourceModelWeapon->unequipSound;
-
-        targeteModelWeapon->soundLevel = sourceModelWeapon->soundLevel;
-    }
-}
-
-void DynamicForm::copyMagicEffect(RE::TESForm* source, RE::TESForm* target) {
-    const auto* sourceEffect = source->As<RE::EffectSetting>();
-
-    auto* targetEffect = target->As<RE::EffectSetting>();
-
-    if (sourceEffect && targetEffect) {
-        targetEffect->effectSounds = sourceEffect->effectSounds;
-
-        targetEffect->data.castingArt = sourceEffect->data.castingArt;
-
-        targetEffect->data.light = sourceEffect->data.light;
-
-        targetEffect->data.hitEffectArt = sourceEffect->data.hitEffectArt;
-
-        targetEffect->data.effectShader = sourceEffect->data.effectShader;
-
-        targetEffect->data.hitVisuals = sourceEffect->data.hitVisuals;
-
-        targetEffect->data.enchantShader = sourceEffect->data.enchantShader;
-
-        targetEffect->data.enchantEffectArt = sourceEffect->data.enchantEffectArt;
-
-        targetEffect->data.enchantVisuals = sourceEffect->data.enchantVisuals;
-
-        targetEffect->data.projectileBase = sourceEffect->data.projectileBase;
-
-        targetEffect->data.explosion = sourceEffect->data.explosion;
-
-        targetEffect->data.impactDataSet = sourceEffect->data.impactDataSet;
-
-        targetEffect->data.imageSpaceMod = sourceEffect->data.imageSpaceMod;
-    }
-}
-
-void DynamicForm::copyAppearence(RE::TESForm* source, RE::TESForm* target) {
-    copyFormArmorModel(source, target);
-
-    copyFormObjectWeaponModel(source, target);
-
-    copyMagicEffect(source, target);
-
-    copyBookAppearence(source, target);
-
-    copyComponent<RE::BGSPickupPutdownSounds>(source, target);
-
-    copyComponent<RE::BGSMenuDisplayObject>(source, target);
-
-    copyComponent<RE::TESModel>(source, target);
-
-    copyComponent<RE::TESBipedModelForm>(source, target);
 }
