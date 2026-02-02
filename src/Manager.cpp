@@ -11,6 +11,7 @@
 #include "CellScan.h"
 #include "Hooks.h"
 #include "Queue.h"
+#include "Settings.h"
 
 #ifndef NDEBUG
 namespace {
@@ -483,14 +484,27 @@ void Manager::MarkDirty_(RE::TESObjectREFR* r) {
 }
 
 void Manager::ProcessDirtyRefs_() {
-    if (std::shared_lock lk(dirty_mtx_);
-        dirty_refs_.empty()) {
-        return;
-    }
     std::unordered_map<RefID, RE::ObjectRefHandle> local;
+
     {
         std::unique_lock lk(dirty_mtx_);
-        local.swap(dirty_refs_);
+        if (dirty_refs_.empty()) {
+            return;
+        }
+
+        const std::size_t cap = std::max<std::size_t>(Settings::max_dirty_updates_min,
+                                                      Settings::max_dirty_updates.load());
+        if (dirty_refs_.size() <= cap) {
+            local.swap(dirty_refs_);
+        } else {
+            local.reserve(cap);
+            std::size_t moved = 0;
+            for (auto it = dirty_refs_.begin(); it != dirty_refs_.end() && moved < cap;) {
+                const auto cur = it++;
+                local.insert(dirty_refs_.extract(cur));
+                ++moved;
+            }
+        }
     }
 
     for (const auto& h : local | std::views::values) {

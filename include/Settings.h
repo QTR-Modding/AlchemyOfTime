@@ -41,6 +41,9 @@ namespace Settings {
     inline float search_radius = 1000.f;
     inline float max_modulator_strength = 1000000.f;
     inline float critical_stage_dur = 9999.f;
+    constexpr size_t max_dirty_updates_min = 1;
+    constexpr size_t max_dirty_updates_max = 10000;
+    inline std::atomic<size_t> max_dirty_updates = 100;
 
     namespace Ticker {
         enum Intervals {
@@ -87,13 +90,13 @@ namespace Settings {
         }
 
         inline std::map<Intervals, int> intervals = {
-            {kSlower, 10000},
-            {kSlow, 5000},
-            {kNormal, 3000},
-            {kFast, 1000},
-            {kFaster, 500},
-            {kVeryFast, 250},
-            {kExtreme, 100}
+            {kSlower, 5000},
+            {kSlow, 2500},
+            {kNormal, 1500},
+            {kFast, 500},
+            {kFaster, 250},
+            {kVeryFast, 125},
+            {kExtreme, 50}
         };
 
         inline int GetInterval(const Intervals e) { return intervals.at(e); }
