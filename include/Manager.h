@@ -7,7 +7,6 @@ class QueueManager;
 class Manager final : public Ticker, public SaveLoadData {
     std::shared_mutex dirty_mtx_;
     std::unordered_map<RefID, RE::ObjectRefHandle> dirty_refs_;
-    size_t maxDirtyUpdates = 10;
     std::atomic<int32_t> n_instances_{0};
 
     void MarkDirty_(RE::TESObjectREFR* r);

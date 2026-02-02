@@ -362,6 +362,9 @@ void PresetParse::SaveSettings() {
 
     doc.AddMember("plugin_version", version, allocator);
     doc.AddMember("ticker", Settings::Ticker::to_json(allocator), allocator);
+    doc.AddMember("max_dirty_updates",
+                  static_cast<uint32_t>(Settings::max_dirty_updates.load()),
+                  allocator);
 
     // Convert JSON document to string
     StringBuffer buffer;
@@ -1049,6 +1052,11 @@ void PresetParse::LoadJSONSettings() {
         return;
     }
     Settings::SetCurrentTickInterval(Settings::Ticker::from_string(ticker["speed"].GetString()));
+    if (doc.HasMember("max_dirty_updates") && doc["max_dirty_updates"].IsUint64()) {
+        const auto value = static_cast<size_t>(doc["max_dirty_updates"].GetUint64());
+        Settings::max_dirty_updates.store(
+            std::clamp<size_t>(value, Settings::max_dirty_updates_min, Settings::max_dirty_updates_max));
+    }
 }
 
 void PresetParse::LoadFormGroups() {

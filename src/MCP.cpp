@@ -59,6 +59,21 @@ void __stdcall UI::RenderSettings() {
         }
     }
 
+    ImGuiMCP::SetNextItemWidth(320.f);
+    int max_dirty_updates = static_cast<int>(Settings::max_dirty_updates.load());
+    if (ImGuiMCP::SliderInt("Max Updates Per Tick", &max_dirty_updates,
+                            static_cast<int>(Settings::max_dirty_updates_min),
+                            static_cast<int>(Settings::max_dirty_updates_max))) {
+        const auto clamped = std::clamp<size_t>(
+            static_cast<size_t>(max_dirty_updates),
+            Settings::max_dirty_updates_min,
+            Settings::max_dirty_updates_max);
+        Settings::max_dirty_updates.store(clamped);
+        PresetParse::SaveSettings();
+    }
+    ImGuiMCP::SameLine();
+    HelpMarker("Limits how many objects are updated each tick.");
+
     #ifndef NDEBUG
     ImGuiMCP::Checkbox("DrawDebug", &draw_debug);
     #endif

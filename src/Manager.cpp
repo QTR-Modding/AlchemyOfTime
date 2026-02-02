@@ -11,6 +11,7 @@
 #include "CellScan.h"
 #include "Hooks.h"
 #include "Queue.h"
+#include "Settings.h"
 
 #ifndef NDEBUG
 namespace {
@@ -491,7 +492,8 @@ void Manager::ProcessDirtyRefs_() {
             return;
         }
 
-        const std::size_t cap = maxDirtyUpdates;
+        const std::size_t cap = std::max<std::size_t>(Settings::max_dirty_updates_min,
+                                                      Settings::max_dirty_updates.load());
         if (dirty_refs_.size() <= cap) {
             local.swap(dirty_refs_);
         } else {
