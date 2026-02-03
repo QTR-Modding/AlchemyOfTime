@@ -8,6 +8,7 @@ template <typename MenuType>
 void Hooks::MenuHook<MenuType>::InstallHook(const REL::VariantID& varID) {
     REL::Relocation<std::uintptr_t> vTable(varID);
     _ProcessMessage = vTable.write_vfunc(0x4, &MenuHook<MenuType>::ProcessMessage_Hook);
+    _AdvanceMovie = vTable.write_vfunc(0x6, &MenuHook<MenuType>::AdvanceMovie_Hook);
 }
 
 template <typename MenuType>
@@ -38,6 +39,12 @@ RE::UI_MESSAGE_RESULTS Hooks::MenuHook<MenuType>::ProcessMessage_Hook(RE::UIMess
         }
     }
     return _ProcessMessage(this, a_message);
+}
+
+template <typename MenuType>
+void Hooks::MenuHook<MenuType>::AdvanceMovie_Hook(float a_interval, std::uint32_t a_currentTime) {
+    _AdvanceMovie(this, a_interval, a_currentTime);
+    M->ProcessDirtyRefs_();
 }
 
 void Hooks::Install() {
