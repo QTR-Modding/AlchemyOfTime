@@ -93,7 +93,7 @@ bool SaveLoadData::Load(SKSE::SerializationInterface* serializationInterface) {
         for (auto j = 0; std::cmp_less(j, rhsSize); j++) {
             StageInstancePlain rhs_;
             serializationInterface->ReadRecordData(rhs_);
-            if (!serializationInterface->ResolveFormID(rhs_._delay_formid, rhs_._delay_formid)) {
+            if (rhs_._delay_formid > 0 && !serializationInterface->ResolveFormID(rhs_._delay_formid, rhs_._delay_formid)) {
                 logger::error("Failed to resolve form ID, 0x{:X}.", formid);
                 continue;
             }
