@@ -16,7 +16,7 @@ bool SaveLoadData::Save(SKSE::SerializationInterface* serializationInterface) {
         // we serialize formid, editorid, and refid separately
         std::uint32_t formid = lhs.first.form_id;
         if (!serializationInterface->WriteRecordData(formid)) {
-            logger::error("Failed to save formid");
+            logger::error("Failed to save FormID");
             return false;
         }
 
@@ -25,7 +25,7 @@ bool SaveLoadData::Save(SKSE::SerializationInterface* serializationInterface) {
 
         std::uint32_t refid = lhs.second;
         if (!serializationInterface->WriteRecordData(refid)) {
-            logger::error("Failed to save refid");
+            logger::error("Failed to save RefID");
             return false;
         }
 
@@ -66,7 +66,7 @@ bool SaveLoadData::Load(SKSE::SerializationInterface* serializationInterface) {
     Locker locker(m_Lock);
     m_Data.clear();
 
-    for (auto i = 0; i < recordDataSize; i++) {
+    for (auto i = 0; std::cmp_less(i, recordDataSize); i++) {
         SaveDataRHS rhs;
 
         std::uint32_t formid = 0;
@@ -78,7 +78,7 @@ bool SaveLoadData::Load(SKSE::SerializationInterface* serializationInterface) {
 
         std::string editorid;
         if (!Serialization::read_string(serializationInterface, editorid)) {
-            logger::error("Failed to read editorid");
+            logger::error("Failed to read EditorID");
             return false;
         }
 
@@ -90,9 +90,13 @@ bool SaveLoadData::Load(SKSE::SerializationInterface* serializationInterface) {
         std::size_t rhsSize = 0;
         serializationInterface->ReadRecordData(rhsSize);
 
-        for (auto j = 0; j < rhsSize; j++) {
+        for (auto j = 0; std::cmp_less(j, rhsSize); j++) {
             StageInstancePlain rhs_;
             serializationInterface->ReadRecordData(rhs_);
+            if (!serializationInterface->ResolveFormID(rhs_._delay_formid, rhs_._delay_formid)) {
+                logger::error("Failed to resolve form ID, 0x{:X}.", formid);
+                continue;
+            }
             rhs.push_back(rhs_);
         }
 
@@ -116,7 +120,7 @@ bool DFSaveLoadData::Save(SKSE::SerializationInterface* serializationInterface) 
         // we serialize formid, editorid, and refid separately
         std::uint32_t formid = lhs.first;
         if (!serializationInterface->WriteRecordData(formid)) {
-            logger::error("Failed to save formid");
+            logger::error("Failed to save FormID {:x}", formid);
             return false;
         }
 
@@ -160,7 +164,7 @@ bool DFSaveLoadData::Load(SKSE::SerializationInterface* serializationInterface) 
     Locker locker(m_Lock);
     m_Data.clear();
 
-    for (auto i = 0; i < recordDataSize; i++) {
+    for (auto i = 0; std::cmp_less(i, recordDataSize); i++) {
         DFSaveDataRHS rhs;
 
         std::uint32_t formid = 0;
@@ -172,7 +176,7 @@ bool DFSaveLoadData::Load(SKSE::SerializationInterface* serializationInterface) 
 
         std::string editorid;
         if (!Serialization::read_string(serializationInterface, editorid)) {
-            logger::error("Failed to read editorid");
+            logger::error("Failed to read EditorID");
             return false;
         }
 
@@ -181,7 +185,7 @@ bool DFSaveLoadData::Load(SKSE::SerializationInterface* serializationInterface) 
         std::size_t rhsSize = 0;
         serializationInterface->ReadRecordData(rhsSize);
 
-        for (auto j = 0; j < rhsSize; j++) {
+        for (auto j = 0; std::cmp_less(j, rhsSize); j++) {
             DFSaveData rhs_;
             serializationInterface->ReadRecordData(rhs_);
             rhs.push_back(rhs_);

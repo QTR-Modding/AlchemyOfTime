@@ -486,7 +486,7 @@ void __stdcall UI::RenderStages() {
         for (size_t i = 0; i < mcp_sources.size(); ++i) {
             if (filter_module != "None" && mcp_sources[i].type != filter_module) continue;
             std::string label = "Source " + std::to_string(i + 1) + ": " + mcp_sources[i].stages.begin()->item.name;
-            if (ImGuiMCP::Selectable(label.c_str(), selected_source_index == static_cast<int>(i))) {
+            if (ImGuiMCP::Selectable(label.c_str(), std::cmp_equal(selected_source_index, i))) {
                 selected_source_index = static_cast<int>(i);
                 source_current = label;
             }

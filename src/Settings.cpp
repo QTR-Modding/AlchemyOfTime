@@ -151,7 +151,7 @@ std::string Settings::GetQFormType(const FormID formid) {
 
     const auto* form = FormReader::GetFormByID(formid);
     if (!form) {
-        logger::warn("GetQFormType: Form not found.");
+        logger::warn("GetQFormType: Form {:x} not found.", formid);
         std::unique_lock lk(g_settingsCacheMtx);
         g_qformCache.emplace(formid, "");
         return "";
@@ -194,7 +194,7 @@ bool Settings::IsInExclude(const FormID formid, std::string type) {
 
     const auto* form = FormReader::GetFormByID(formid);
     if (!form) {
-        logger::warn("Form not found.");
+        logger::warn("Form {:x} not found.", formid);
         return false;
     }
 
