@@ -1194,7 +1194,10 @@ void Manager::UpdateInventory(const RefInfo& a_info, const InvMap& inv) {
     for (;;) {
         auto next = GetNextUpdateTime(a_info);
         if (!next) break;
-        const float t = *next + 0.000001f;
+        float t = std::nextafterf(*next, std::numeric_limits<float>::infinity());
+        if (t <= *next) {
+            t = *next + std::numeric_limits<float>::epsilon();
+        }
         if (t >= curr) break;
         if (!UpdateInventory(a_info, t, inv)) break;
     }
