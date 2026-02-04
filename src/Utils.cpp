@@ -81,7 +81,7 @@ bool Utils::IsMedicineItem(const RE::TESForm* form) {
 }
 
 void Utils::OverrideMGEFFs(RE::BSTArray<RE::Effect*>& effect_array, const std::vector<FormID>& new_effects,
-                    const std::vector<uint32_t>& durations, const std::vector<float>& magnitudes) {
+                           const std::vector<uint32_t>& durations, const std::vector<float>& magnitudes) {
     size_t some_index = 0;
     for (auto* effect : effect_array) {
         if (auto* other_eff = FormReader::GetFormByID<RE::EffectSetting>(new_effects[some_index]); !other_eff) {

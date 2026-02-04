@@ -1137,7 +1137,7 @@ bool Manager::UpdateInventory(const RefInfo& a_info, const float t, const InvMap
         for (const auto& update : updates) {
             if (ApplyEvolutionInInventory(a_info, update.count, update.oldstage->formid, update.newstage->formid) &&
                 source.IsDecayedItem(update.newstage->formid)) {
-                Register(update.newstage->formid, update.count, a_info, t, inv);
+                Register(update.newstage->formid, update.count, a_info, update.update_time, inv);
             }
         }
     }
@@ -1194,7 +1194,9 @@ void Manager::UpdateInventory(const RefInfo& a_info, const InvMap& inv) {
     for (;;) {
         auto next = GetNextUpdateTime(a_info);
         if (!next) break;
-        const float t = *next + 0.000028f;
+        const float base = *next;
+        if (!std::isfinite(base)) break;
+        const float t = std::nextafterf(base, std::numeric_limits<float>::infinity());
         if (t >= curr) break;
         if (!UpdateInventory(a_info, t, inv)) break;
     }

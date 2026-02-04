@@ -81,7 +81,7 @@ bool QueueManager::ProcessPendingMoves(const int n_tasks) {
     }
 
     SKSE::GetTaskInterface()->AddTask([move_item_tasks = std::move(move_item_tasks)]() mutable {
-        //ListenGuard lg(Hooks::listen_disable_depth);
+        ListenGuard lg(Hooks::listen_disable_depth);
 
         for (const auto& [refid, tasks] : move_item_tasks) {
             if (refid == 0) continue;
@@ -151,6 +151,111 @@ void QueueManager::RefreshUI() {
         RE::SendUIMessage::SendInventoryUpdateMessage(RE::PlayerCharacter::GetSingleton(), nullptr);
         Utils::Menu::UpdateItemList();
     });
+}
+
+void QueueManager::PruneAddRemoveItemTasks(
+    std::unordered_map<RefID, std::vector<AddRemoveItemTask>>& tasks_to_prune) {
+    for (auto& [owner, tasks] : tasks_to_prune) {
+        if (tasks.empty()) continue;
+
+        struct Edge {
+            FormID from{0};
+            FormID to{0};
+            Count count{0};
+            bool active{true};
+        };
+
+        std::vector<Edge> edges;
+        std::vector<AddRemoveItemTask> passthrough;
+        edges.reserve(tasks.size());
+        passthrough.reserve(tasks.size());
+
+        for (const auto& task : tasks) {
+            if (task.add.item_id && task.remove.item_id && task.add.count > 0 && task.remove.count > 0) {
+                if (task.add.count == task.remove.count) {
+                    edges.push_back(Edge{task.remove.item_id, task.add.item_id, task.add.count, true});
+                } else {
+                    passthrough.push_back(task);
+                }
+            } else {
+                passthrough.push_back(task);
+            }
+        }
+
+        std::unordered_map<FormID, std::vector<size_t>> in_edges;
+        std::unordered_map<FormID, std::vector<size_t>> out_edges;
+        in_edges.reserve(edges.size());
+        out_edges.reserve(edges.size());
+
+        for (size_t i = 0; i < edges.size(); ++i) {
+            const auto& e = edges[i];
+            in_edges[e.to].push_back(i);
+            out_edges[e.from].push_back(i);
+        }
+
+        auto erase_index = [](std::vector<size_t>& vec, const size_t idx) {
+            std::erase(vec, idx);
+        };
+
+        auto is_mergeable = [&](const FormID node) {
+            return in_edges[node].size() == 1 && out_edges[node].size() == 1;
+        };
+
+        std::unordered_set<FormID> queued;
+        std::vector<FormID> queue;
+        queue.reserve(in_edges.size() + out_edges.size());
+
+        auto enqueue = [&](const FormID node) {
+            if (!is_mergeable(node)) return;
+            if (queued.insert(node).second) queue.push_back(node);
+        };
+
+        for (const auto& node : in_edges | std::views::keys) enqueue(node);
+        for (const auto& node : out_edges | std::views::keys) enqueue(node);
+
+        size_t head = 0;
+        while (head < queue.size()) {
+            const FormID mid = queue[head++];
+            queued.erase(mid);
+            if (!is_mergeable(mid)) continue;
+
+            const size_t in_idx = in_edges[mid].front();
+            const size_t out_idx = out_edges[mid].front();
+            if (in_idx == out_idx) continue;
+
+            auto& in_edge = edges[in_idx];
+            auto& out_edge = edges[out_idx];
+            if (!in_edge.active || !out_edge.active) continue;
+            if (in_edge.count != out_edge.count) continue;
+
+            const FormID from = in_edge.from;
+            const FormID to = out_edge.to;
+
+            out_edge.active = false;
+            erase_index(out_edges[mid], out_idx);
+            erase_index(in_edges[to], out_idx);
+
+            erase_index(in_edges[mid], in_idx);
+            in_edge.to = to;
+            in_edges[to].push_back(in_idx);
+
+            enqueue(mid);
+            enqueue(from);
+            enqueue(to);
+        }
+
+        std::vector<AddRemoveItemTask> pruned;
+        pruned.reserve(passthrough.size() + edges.size());
+        pruned.insert(pruned.end(), passthrough.begin(), passthrough.end());
+        for (const auto& edge : edges) {
+            if (!edge.active || edge.count <= 0 || edge.from == edge.to) continue;
+            pruned.push_back(AddRemoveItemTask{
+                AddItemTask{owner, 0, edge.to, edge.count},
+                RemoveItemTask{owner, edge.from, edge.count}});
+        }
+
+        tasks.swap(pruned);
+    }
 }
 
 //void QueueManager::QueueUpdate(const RE::TESObjectREFR* from, const RE::TESObjectREFR* to, const RE::TESForm* what,
@@ -249,6 +354,9 @@ std::unordered_map<RefID, std::vector<AddRemoveItemTask>> QueueManager::RequestP
             }
         }
     }
+
+    PruneAddRemoveItemTasks(result);
+
     return result;
 }
 
