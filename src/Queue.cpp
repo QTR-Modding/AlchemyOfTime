@@ -81,7 +81,7 @@ bool QueueManager::ProcessPendingMoves(const int n_tasks) {
     }
 
     SKSE::GetTaskInterface()->AddTask([move_item_tasks = std::move(move_item_tasks)]() mutable {
-        //ListenGuard lg(Hooks::listen_disable_depth);
+        ListenGuard lg(Hooks::listen_disable_depth);
 
         for (const auto& [refid, tasks] : move_item_tasks) {
             if (refid == 0) continue;
@@ -151,6 +151,51 @@ void QueueManager::RefreshUI() {
         RE::SendUIMessage::SendInventoryUpdateMessage(RE::PlayerCharacter::GetSingleton(), nullptr);
         Utils::Menu::UpdateItemList();
     });
+}
+
+void QueueManager::PruneAddRemoveItemTasks(
+    std::unordered_map<RefID, std::vector<AddRemoveItemTask>>& tasks_to_prune) {
+    for (auto& [owner, tasks] : tasks_to_prune) {
+        if (tasks.empty()) continue;
+
+        std::unordered_map<FormID, Count> add_counts;
+        std::unordered_map<FormID, Count> remove_counts;
+        add_counts.reserve(tasks.size());
+        remove_counts.reserve(tasks.size());
+
+        for (const auto& task : tasks) {
+            if (task.add.item_id && task.add.count > 0) {
+                add_counts[task.add.item_id] += task.add.count;
+            }
+            if (task.remove.item_id && task.remove.count > 0) {
+                remove_counts[task.remove.item_id] += task.remove.count;
+            }
+        }
+
+        std::unordered_set<FormID> all_items;
+        all_items.reserve(add_counts.size() + remove_counts.size());
+        for (const auto& fid : add_counts | std::views::keys) all_items.insert(fid);
+        for (const auto& fid : remove_counts | std::views::keys) all_items.insert(fid);
+
+        std::vector<AddRemoveItemTask> pruned;
+        pruned.reserve(all_items.size());
+
+        for (const auto fid : all_items) {
+            const Count adds = add_counts.contains(fid) ? add_counts[fid] : 0;
+            const Count removes = remove_counts.contains(fid) ? remove_counts[fid] : 0;
+            if (adds > removes) {
+                pruned.push_back(AddRemoveItemTask{
+                    AddItemTask{owner, 0, fid, adds - removes},
+                    RemoveItemTask{}});
+            } else if (removes > adds) {
+                pruned.push_back(AddRemoveItemTask{
+                    AddItemTask{},
+                    RemoveItemTask{owner, fid, removes - adds}});
+            }
+        }
+
+        tasks.swap(pruned);
+    }
 }
 
 //void QueueManager::QueueUpdate(const RE::TESObjectREFR* from, const RE::TESObjectREFR* to, const RE::TESForm* what,
@@ -249,6 +294,9 @@ std::unordered_map<RefID, std::vector<AddRemoveItemTask>> QueueManager::RequestP
             }
         }
     }
+
+    PruneAddRemoveItemTasks(result);
+
     return result;
 }
 

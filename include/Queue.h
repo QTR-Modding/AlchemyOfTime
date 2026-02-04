@@ -61,6 +61,8 @@ class QueueManager : public REX::Singleton<QueueManager>, public RE::BSTEventSin
 
     static void RefreshUI();
 
+    static void PruneAddRemoveItemTasks(std::unordered_map<RefID, std::vector<AddRemoveItemTask>>& tasks_to_prune);
+
 public:
     void Start() {
         if (!ticker.isRunning()) {
