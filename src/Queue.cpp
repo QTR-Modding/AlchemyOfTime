@@ -158,40 +158,95 @@ void QueueManager::PruneAddRemoveItemTasks(
     for (auto& [owner, tasks] : tasks_to_prune) {
         if (tasks.empty()) continue;
 
-        std::unordered_map<FormID, Count> add_counts;
-        std::unordered_map<FormID, Count> remove_counts;
-        add_counts.reserve(tasks.size());
-        remove_counts.reserve(tasks.size());
+        struct Edge {
+            FormID from{0};
+            FormID to{0};
+            Count count{0};
+        };
+
+        std::vector<Edge> edges;
+        std::vector<AddRemoveItemTask> passthrough;
+        edges.reserve(tasks.size());
+        passthrough.reserve(tasks.size());
 
         for (const auto& task : tasks) {
-            if (task.add.item_id && task.add.count > 0) {
-                add_counts[task.add.item_id] += task.add.count;
-            }
-            if (task.remove.item_id && task.remove.count > 0) {
-                remove_counts[task.remove.item_id] += task.remove.count;
+            if (task.add.item_id && task.remove.item_id && task.add.count > 0 && task.remove.count > 0) {
+                if (task.add.count == task.remove.count) {
+                    edges.push_back(Edge{task.remove.item_id, task.add.item_id, task.add.count});
+                } else {
+                    passthrough.push_back(task);
+                }
+            } else {
+                passthrough.push_back(task);
             }
         }
 
-        std::unordered_set<FormID> all_items;
-        all_items.reserve(add_counts.size() + remove_counts.size());
-        for (const auto& fid : add_counts | std::views::keys) all_items.insert(fid);
-        for (const auto& fid : remove_counts | std::views::keys) all_items.insert(fid);
+        bool changed = true;
+        while (changed) {
+            changed = false;
+
+            std::unordered_map<FormID, size_t> incoming;
+            std::unordered_map<FormID, size_t> outgoing;
+            std::unordered_set<FormID> ambiguous_in;
+            std::unordered_set<FormID> ambiguous_out;
+            incoming.reserve(edges.size());
+            outgoing.reserve(edges.size());
+
+            for (size_t i = 0; i < edges.size(); ++i) {
+                const auto& e = edges[i];
+                if (incoming.contains(e.to)) {
+                    ambiguous_in.insert(e.to);
+                } else {
+                    incoming[e.to] = i;
+                }
+
+                if (outgoing.contains(e.from)) {
+                    ambiguous_out.insert(e.from);
+                } else {
+                    outgoing[e.from] = i;
+                }
+            }
+
+            std::unordered_set<size_t> remove_indices;
+            for (size_t i = 0; i < edges.size(); ++i) {
+                const auto& e = edges[i];
+                const auto mid = e.to;
+                if (ambiguous_in.contains(mid) || ambiguous_out.contains(mid)) continue;
+
+                const auto in_it = incoming.find(mid);
+                const auto out_it = outgoing.find(mid);
+                if (in_it == incoming.end() || out_it == outgoing.end()) continue;
+
+                const size_t in_idx = in_it->second;
+                const size_t out_idx = out_it->second;
+                if (in_idx == out_idx) continue;
+
+                const auto& in_edge = edges[in_idx];
+                const auto& out_edge = edges[out_idx];
+                if (in_edge.count != out_edge.count) continue;
+
+                edges[in_idx] = Edge{in_edge.from, out_edge.to, in_edge.count};
+                remove_indices.insert(out_idx);
+                changed = true;
+            }
+
+            if (changed) {
+                std::vector<Edge> next;
+                next.reserve(edges.size());
+                for (size_t i = 0; i < edges.size(); ++i) {
+                    if (!remove_indices.contains(i)) next.push_back(edges[i]);
+                }
+                edges.swap(next);
+            }
+        }
 
         std::vector<AddRemoveItemTask> pruned;
-        pruned.reserve(all_items.size());
-
-        for (const auto fid : all_items) {
-            const Count adds = add_counts.contains(fid) ? add_counts[fid] : 0;
-            const Count removes = remove_counts.contains(fid) ? remove_counts[fid] : 0;
-            if (adds > removes) {
-                pruned.push_back(AddRemoveItemTask{
-                    AddItemTask{owner, 0, fid, adds - removes},
-                    RemoveItemTask{}});
-            } else if (removes > adds) {
-                pruned.push_back(AddRemoveItemTask{
-                    AddItemTask{},
-                    RemoveItemTask{owner, fid, removes - adds}});
-            }
+        pruned.reserve(passthrough.size() + edges.size());
+        pruned.insert(pruned.end(), passthrough.begin(), passthrough.end());
+        for (const auto& edge : edges) {
+            pruned.push_back(AddRemoveItemTask{
+                AddItemTask{owner, 0, edge.to, edge.count},
+                RemoveItemTask{owner, edge.from, edge.count}});
         }
 
         tasks.swap(pruned);
