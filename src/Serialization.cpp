@@ -95,7 +95,8 @@ bool SaveLoadData::Load(SKSE::SerializationInterface* serializationInterface) {
             serializationInterface->ReadRecordData(rhs_);
             if (rhs_._delay_formid > 0 && !serializationInterface->
                 ResolveFormID(rhs_._delay_formid, rhs_._delay_formid)) {
-                logger::error("Failed to resolve form ID, 0x{:X}.", formid);
+                logger::error("Failed to resolve delay form ID 0x{:X} (parent form ID 0x{:X}).", rhs_._delay_formid,
+                              formid);
                 continue;
             }
             rhs.push_back(rhs_);
