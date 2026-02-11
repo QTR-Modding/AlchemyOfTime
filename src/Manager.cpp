@@ -457,6 +457,7 @@ void Manager::UpdateImpl(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const R
         src = UpdateGetSource(ctx.what->GetFormID(), loc);
     }
     if (!src) {
+        RefreshRefs_(ctx);
         return;
     }
 
@@ -1594,6 +1595,7 @@ void Manager::Register(const FormID some_formid, const Count count, const RefID 
     } else {
         const auto bound = src->IsFakeStage(stage_no) ? src->GetBoundObject() : nullptr;
         ApplyStageInWorld(ref, src->GetStage(stage_no), bound);
+        src->UpdateTimeModulationInWorld(ref, *inserted_instance, register_time);
         // add to the queue
         const auto hitting_time = src->GetNextUpdateTime(inserted_instance);
         RefStop a_ref_stop(location_refid);
