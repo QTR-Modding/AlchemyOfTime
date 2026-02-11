@@ -3,11 +3,7 @@
 #include <unordered_set>
 #include "Data.h"
 #include <shared_mutex>
-#include <cassert>
-#include <thread>
-#include <mutex>
 #include <unordered_map>
-#include <atomic>
 #include "CellScan.h"
 #include "Hooks.h"
 #include "Queue.h"

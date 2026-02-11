@@ -1,12 +1,6 @@
 #pragma once
-
-#include <thread>
-#include <queue>
-#include <functional>
-#include <mutex>
-#include <condition_variable>
 #include <future>
-#include <type_traits> // For std::invoke_result
+#include <queue>
 
 class ThreadPool {
 public:
