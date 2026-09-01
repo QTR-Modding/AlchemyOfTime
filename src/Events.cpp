@@ -109,9 +109,11 @@ RE::BSEventNotifyControl EventSink::ProcessEvent(const RE::TESWaitStopEvent*,
 RE::BSEventNotifyControl EventSink::ProcessEvent(const RE::BGSActorCellEvent* a_event,
                                                  RE::BSTEventSource<RE::BGSActorCellEvent>*) {
     if (M->isLoading.load()) return RE::BSEventNotifyControl::kContinue;
+    if (!a_event) return RE::BSEventNotifyControl::kContinue;
 
     if (const auto a_cell = RE::TESForm::LookupByID<RE::TESObjectCELL>(a_event->cellID)) {
         if (a_event->flags.get() == RE::BGSActorCellEvent::CellFlag::kEnter) {
+            M->UpdateNow(RE::PlayerCharacter::GetSingleton());
             HandleWOsInCell(a_cell);
         }
     }

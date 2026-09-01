@@ -5,6 +5,27 @@
 #include "MCP.h"
 #include "Manager.h"
 
+namespace {
+    bool ContextHasTrigger(const RE::TESForm* trigger, const RE::TESObjectREFR* context) {
+        if (!trigger || !context || trigger->As<RE::TESBoundObject>()) return false;
+
+        if (trigger == context) return true;
+
+        if (const auto location = trigger->As<RE::BGSLocation>()) {
+            const auto current_location = context->GetCurrentLocation();
+            return current_location && (current_location == location || location->IsChild(current_location));
+        }
+
+        return trigger == context->GetParentCell() || trigger == context->GetWorldspace();
+    }
+
+    bool ContainerAllowsTrigger(const std::unordered_map<FormID, std::unordered_set<FormID>>& restrictions,
+                                const FormID trigger_id, const FormID owner_base) {
+        const auto it = restrictions.find(trigger_id);
+        return it == restrictions.end() || it->second.empty() || it->second.contains(owner_base);
+    }
+}
+
 void Source::Init(const DefaultSettings* defaultsettings) {
     if (!defaultsettings) {
         logger::error("Default settings is null.");
@@ -302,7 +323,7 @@ bool Source::InitInsertInstanceInventory(const StageNo n, const Count c, const R
         return false;
     }
 
-    SetDelayOfInstance(data[a_info.ref_id].back(), t_0, a_info.base_id, inv);
+    SetDelayOfInstance(data[a_info.ref_id].back(), t_0, a_info, inv);
     return true;
 }
 
@@ -476,7 +497,13 @@ inline FormID Source::GetModulatorInWorld(const RE::TESObjectREFR* wo, const Sta
         if (!settings.delayer_allowed_stages.at(dlyr_fid).contains(a_no)) {
             continue;
         }
-        candidates.push_back(dlyr_fid);
+        const auto trigger = FormReader::GetFormByID(dlyr_fid);
+        if (!trigger) continue;
+        if (trigger->As<RE::TESBoundObject>()) {
+            candidates.push_back(dlyr_fid);
+        } else if (ContextHasTrigger(trigger, wo)) {
+            return dlyr_fid;
+        }
     }
 
     if (const auto hit = SearchNearbyModulatorsCached(wo, candidates); hit) {
@@ -494,7 +521,13 @@ inline FormID Source::GetTransformerInWorld(const RE::TESObjectREFR* wo, const S
         if (!settings.transformer_allowed_stages.at(trns_fid).contains(a_no)) {
             continue;
         }
-        candidates.push_back(trns_fid);
+        const auto trigger = FormReader::GetFormByID(trns_fid);
+        if (!trigger) continue;
+        if (trigger->As<RE::TESBoundObject>()) {
+            candidates.push_back(trns_fid);
+        } else if (ContextHasTrigger(trigger, wo)) {
+            return trns_fid;
+        }
     }
 
     if (const auto hit = SearchNearbyModulatorsCached(wo, candidates); hit) {
@@ -542,31 +575,35 @@ float Source::GetNextUpdateTime(const StageInstance* st_inst) {
     return st_inst->GetHittingTime(schranke);
 }
 
-FormID Source::GetModulatorInInventory(const InvMap& inv, const FormID ownerBase, const StageNo no) const {
+FormID Source::GetModulatorInInventory(const InvMap& inv, const RefInfo& owner, const StageNo no) const {
+    const auto owner_ref = owner.GetRef();
     for (auto dlyr_fid : settings.delayers_order) {
         if (!settings.delayer_allowed_stages.at(dlyr_fid).contains(no)) continue;
-        auto obj = RE::TESForm::LookupByID<RE::TESBoundObject>(dlyr_fid);
-        if (!obj) continue;
-        if (auto it = inv.find(obj); it != inv.end() && it->second.first > 0) {
-            auto contIt = settings.delayer_containers.find(dlyr_fid);
-            if (contIt == settings.delayer_containers.end() || contIt->second.empty() ||
-                contIt->second.contains(ownerBase))
-                return dlyr_fid;
+        if (!ContainerAllowsTrigger(settings.delayer_containers, dlyr_fid, owner.base_id)) continue;
+
+        const auto trigger = FormReader::GetFormByID(dlyr_fid);
+        if (!trigger) continue;
+        if (const auto obj = trigger->As<RE::TESBoundObject>()) {
+            if (const auto it = inv.find(obj); it != inv.end() && it->second.first > 0) return dlyr_fid;
+        } else if (ContextHasTrigger(trigger, owner_ref)) {
+            return dlyr_fid;
         }
     }
     return 0;
 }
 
-FormID Source::GetTransformerInInventory(const InvMap& inv, const FormID ownerBase, const StageNo no) const {
+FormID Source::GetTransformerInInventory(const InvMap& inv, const RefInfo& owner, const StageNo no) const {
+    const auto owner_ref = owner.GetRef();
     for (auto trns_fid : settings.transformers_order) {
         if (!settings.transformer_allowed_stages.at(trns_fid).contains(no)) continue;
-        auto obj = RE::TESForm::LookupByID<RE::TESBoundObject>(trns_fid);
-        if (!obj) continue;
-        if (auto it = inv.find(obj); it != inv.end() && it->second.first > 0) {
-            auto contIt = settings.transformer_containers.find(trns_fid);
-            if (contIt == settings.transformer_containers.end() || contIt->second.empty() ||
-                contIt->second.contains(ownerBase))
-                return trns_fid;
+        if (!ContainerAllowsTrigger(settings.transformer_containers, trns_fid, owner.base_id)) continue;
+
+        const auto trigger = FormReader::GetFormByID(trns_fid);
+        if (!trigger) continue;
+        if (const auto obj = trigger->As<RE::TESBoundObject>()) {
+            if (const auto it = inv.find(obj); it != inv.end() && it->second.first > 0) return trns_fid;
+        } else if (ContextHasTrigger(trigger, owner_ref)) {
+            return trns_fid;
         }
     }
     return 0;
@@ -576,19 +613,17 @@ void Source::SetDelayOfInstances(const float t, const RefInfo& a_info, const Inv
     const auto loc = a_info.ref_id;
     if (!data.contains(loc)) return;
 
-    const auto ownerBase = a_info.base_id;
-
     for (auto& inst : data.at(loc)) {
         if (inst.count <= 0) continue;
-        if (ShouldFreezeEvolution(ownerBase)) {
+        if (ShouldFreezeEvolution(a_info.base_id)) {
             inst.RemoveTimeMod(t);
             inst.SetDelay(t, 0, 0);
             continue;
         }
 
-        if (const auto tr = GetTransformerInInventory(inv, ownerBase, inst.no))
+        if (const auto tr = GetTransformerInInventory(inv, a_info, inst.no))
             SetDelayOfInstance(inst, t, tr);
-        else if (const auto dl = GetModulatorInInventory(inv, ownerBase, inst.no))
+        else if (const auto dl = GetModulatorInInventory(inv, a_info, inst.no))
             SetDelayOfInstance(inst, t, dl);
         else
             inst.RemoveTimeMod(t);
@@ -939,20 +974,20 @@ Stage Source::GetTransformedStage(const FormID key_formid) const {
     return trnsf_st;
 }
 
-void Source::SetDelayOfInstance(StageInstance& instance, const float curr_time, const FormID inv_owner_base,
+void Source::SetDelayOfInstance(StageInstance& instance, const float curr_time, const RefInfo& inv_owner,
                                 const InvMap& a_inv) const {
     if (instance.count <= 0) return;
-    if (ShouldFreezeEvolution(inv_owner_base)) {
+    if (ShouldFreezeEvolution(inv_owner.base_id)) {
         instance.RemoveTimeMod(curr_time);
         instance.SetDelay(curr_time, 0, 0); // freeze
         return;
     }
 
     if (const auto transformer_best =
-        GetTransformerInInventory(a_inv, inv_owner_base, instance.no)) {
+        GetTransformerInInventory(a_inv, inv_owner, instance.no)) {
         SetDelayOfInstance(instance, curr_time, transformer_best);
     } else if (const auto delayer_best =
-        GetModulatorInInventory(a_inv, inv_owner_base, instance.no)) {
+        GetModulatorInInventory(a_inv, inv_owner, instance.no)) {
         SetDelayOfInstance(instance, curr_time, delayer_best);
     } else {
         instance.RemoveTimeMod(curr_time);

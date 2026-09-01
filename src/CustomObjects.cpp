@@ -181,7 +181,8 @@ bool DefaultSettings::CheckIntegrity() {
         const FormID _finalFormEditorID = _transformer.first;
         const Duration _duration = _transformer.second;
         const auto& _allowedStages = transformer_allowed_stages.at(a_formID);
-        if (!FormReader::GetFormByID(a_formID) || !FormReader::GetFormByID(_finalFormEditorID)) {
+        if (!FormReader::GetFormByID(a_formID) ||
+            !FormReader::GetFormByID<RE::TESBoundObject>(_finalFormEditorID)) {
             logger::error("Formid not found.");
             init_failed = true;
             return false;
@@ -412,7 +413,8 @@ bool AddOnSettings::CheckIntegrity() {
     for (const auto& [a_formid, _transformer] : transformers) {
         const FormID _finalFormEditorID = _transformer.first;
         const Duration _duration = _transformer.second;
-        if (!FormReader::GetFormByID(a_formid) || !FormReader::GetFormByID(_finalFormEditorID)) {
+        if (!FormReader::GetFormByID(a_formid) ||
+            !FormReader::GetFormByID<RE::TESBoundObject>(_finalFormEditorID)) {
             logger::error("Form not found.");
             init_failed = true;
             return false;

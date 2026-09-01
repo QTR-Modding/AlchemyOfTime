@@ -70,8 +70,8 @@ struct Source {
 
     // always update before doing this
     void UpdateTimeModulationInInventory(const RefInfo& a_info, float time, const InvMap& inv);
-    FormID GetModulatorInInventory(const InvMap& inv, FormID ownerBase, StageNo no) const;
-    FormID GetTransformerInInventory(const InvMap& inv, FormID ownerBase, StageNo no) const;
+    FormID GetModulatorInInventory(const InvMap& inv, const RefInfo& owner, StageNo no) const;
+    FormID GetTransformerInInventory(const InvMap& inv, const RefInfo& owner, StageNo no) const;
     void SetDelayOfInstances(float time, const RefInfo& a_info, const InvMap& inv);
 
 
@@ -169,7 +169,8 @@ private:
 
     [[nodiscard]] Stage GetTransformedStage(FormID key_formid) const;
 
-    void SetDelayOfInstance(StageInstance& instance, float curr_time, FormID inv_owner_base, const InvMap& a_inv) const;
+    void SetDelayOfInstance(StageInstance& instance, float curr_time, const RefInfo& inv_owner,
+                            const InvMap& a_inv) const;
     void SetDelayOfInstance(StageInstance& instance, float curr_time, RE::TESObjectREFR* a_loc) const;
     void SetDelayOfInstance(StageInstance& instance, float a_time, FormID a_modulator) const;
 

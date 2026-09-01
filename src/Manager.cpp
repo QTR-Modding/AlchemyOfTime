@@ -319,12 +319,14 @@ std::vector<Manager::ScanRequest> Manager::BuildCellScanRequests_(
 
         // Include all bases we want CellScanner to collect for this WO.
         for (const auto trns : src->settings.transformers_order) {
-            if (src->settings.transformer_allowed_stages.at(trns).contains(no)) {
+            if (src->settings.transformer_allowed_stages.at(trns).contains(no) &&
+                RE::TESForm::LookupByID<RE::TESBoundObject>(trns)) {
                 bases.push_back(trns);
             }
         }
         for (const auto dlyr : src->settings.delayers_order) {
-            if (src->settings.delayer_allowed_stages.at(dlyr).contains(no)) {
+            if (src->settings.delayer_allowed_stages.at(dlyr).contains(no) &&
+                RE::TESForm::LookupByID<RE::TESBoundObject>(dlyr)) {
                 bases.push_back(dlyr);
             }
         }
