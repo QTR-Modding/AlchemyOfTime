@@ -664,7 +664,7 @@ bool SoundHelper::Play(const RE::TESObjectREFR* ref, const FormID sound_id, cons
         return false;
     }
 
-    RE::BSAudioManager::GetSingleton()->BuildSoundDataFromDescriptor(sound_handle, sound);
+    RE::BSAudioManager::GetSingleton()->GetSoundHandle(sound_handle, sound);
     sound_handle.SetObjectToFollow(ref_node);
     sound_handle.SetVolume(volume);
     if (!sound_handle.IsValid()) {
