@@ -639,9 +639,6 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
             auto containers = parse_formid_vec(modulator, "containers");
 
             for (auto a_formid : parse_formid_vec(modulator, "FormEditorID")) {
-                if (!settings.delayers.contains(a_formid)) {
-                    settings.delayers_order.push_back(a_formid);
-                }
                 settings.delayer_allowed_stages[a_formid] = std::unordered_set(a_asv.begin(), a_asv.end());
                 settings.delayers[a_formid] = delayer_magnitude;
                 if (a_color) settings.delayer_colors[a_formid] = *a_color;
@@ -705,9 +702,6 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
             auto containers = parse_formid_vec(transformer, "containers");
 
             for (auto a_formid : parse_formid_vec(transformer, "FormEditorID")) {
-                if (!settings.transformers.contains(a_formid)) {
-                    settings.transformers_order.push_back(a_formid);
-                }
                 settings.transformers[a_formid] = {a_formid2, a_duration};
                 settings.transformer_allowed_stages[a_formid] = std::unordered_set(a_asv.begin(), a_asv.end());
                 if (a_color) settings.transformer_colors[a_formid] = *a_color;
@@ -840,8 +834,6 @@ DefaultSettings PresetParse::parseDefaults_(const YAML::Node& config) {
     settings.delayer_artobjects = addons.delayer_artobjects;
     settings.delayer_effect_shaders = addons.delayer_effect_shaders;
     settings.delayer_containers = addons.delayer_containers;
-    // delayers_order
-    settings.delayers_order = addons.delayers_order;
     // transformers
     settings.transformers = addons.transformers;
     settings.transformer_allowed_stages = addons.transformer_allowed_stages;
@@ -850,11 +842,9 @@ DefaultSettings PresetParse::parseDefaults_(const YAML::Node& config) {
     settings.transformer_artobjects = addons.transformer_artobjects;
     settings.transformer_effect_shaders = addons.transformer_effect_shaders;
     settings.transformer_containers = addons.transformer_containers;
-    // transformers_order
-    settings.transformers_order = addons.transformers_order;
 
     // loop delayers
-    for (const auto& a_formid : settings.delayers_order) {
+    for (const auto& a_formid : settings.delayers | std::views::keys) {
         if (settings.delayer_allowed_stages.contains(a_formid)) {
             if (settings.delayer_allowed_stages.at(a_formid).empty()) {
                 settings.delayer_allowed_stages.at(a_formid) = std::unordered_set(
@@ -867,7 +857,7 @@ DefaultSettings PresetParse::parseDefaults_(const YAML::Node& config) {
     }
 
     // loop transformers
-    for (const auto& a_formid : settings.transformers_order) {
+    for (const auto& a_formid : settings.transformers | std::views::keys) {
         if (settings.transformer_allowed_stages.contains(a_formid)) {
             if (settings.transformer_allowed_stages.at(a_formid).empty()) {
                 settings.transformer_allowed_stages.at(a_formid) = std::unordered_set(

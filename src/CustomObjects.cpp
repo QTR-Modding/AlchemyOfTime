@@ -186,11 +186,6 @@ bool DefaultSettings::CheckIntegrity() {
             init_failed = true;
             return false;
         }
-        if (!std::ranges::contains(transformers_order, a_formID)) {
-            logger::error("Transformer formid {:x} not found in transformers_order.", a_formID);
-            init_failed = true;
-            return false;
-        }
         if (_duration <= 0) {
             logger::error("Duration is less than or equal 0.");
             init_failed = true;
@@ -214,11 +209,6 @@ bool DefaultSettings::CheckIntegrity() {
         const auto& _allowedStages = delayer_allowed_stages.at(a_formID);
         if (!FormReader::GetFormByID(a_formID)) {
             logger::error("Delayer formid {:x} not found.", a_formID);
-            init_failed = true;
-            return false;
-        }
-        if (!std::ranges::contains(delayers_order, a_formID)) {
-            logger::error("Delayer formid {:x} not found in delayers_order.", a_formID);
             init_failed = true;
             return false;
         }
@@ -261,15 +251,12 @@ void DefaultSettings::Add(AddOnSettings& addon) {
     AddHelper(containers, addon.containers);
 
     // delayers
-    for (const auto a_formID : addon.delayers_order) {
+    for (const auto& [a_formID, _delay] : addon.delayers) {
         if (!a_formID) {
             logger::critical("AddOn has null formid.");
             continue;
         }
-        if (!delayers.contains(a_formID)) {
-            delayers_order.push_back(a_formID);
-        }
-        delayers[a_formID] = addon.delayers.at(a_formID);
+        delayers[a_formID] = _delay;
 
         if (addon.delayer_allowed_stages.contains(a_formID)) {
             AddHelper(delayer_allowed_stages[a_formID], addon.delayer_allowed_stages.at(a_formID));
@@ -279,15 +266,12 @@ void DefaultSettings::Add(AddOnSettings& addon) {
         }
     }
     // transformers
-    for (const auto a_formID : addon.transformers_order) {
+    for (const auto& [a_formID, _transformer] : addon.transformers) {
         if (!a_formID) {
             logger::critical("AddOn has null formid.");
             continue;
         }
-        if (!transformers.contains(a_formID)) {
-            transformers_order.push_back(a_formID);
-        }
-        transformers[a_formID] = addon.transformers.at(a_formID);
+        transformers[a_formID] = _transformer;
         if (addon.transformer_allowed_stages.contains(a_formID)) {
             AddHelper(transformer_allowed_stages[a_formID], addon.transformer_allowed_stages.at(a_formID));
         }
@@ -400,12 +384,6 @@ bool AddOnSettings::CheckIntegrity() {
         }
     }
 
-    if (!std::ranges::is_permutation(delayers_order, delayers | std::views::keys)) {
-        logger::error("Delayers order does not match the keys in delayers map.");
-        init_failed = true;
-        return false;
-    }
-
     for (const auto& [a_formid, _transformer] : transformers) {
         const FormID _finalFormEditorID = _transformer.first;
         const Duration _duration = _transformer.second;
@@ -420,12 +398,6 @@ bool AddOnSettings::CheckIntegrity() {
             return false;
         }
     }
-    if (!std::ranges::is_permutation(transformers_order, transformers | std::views::keys)) {
-        logger::error("Transformers order does not match the keys in transformers map.");
-        init_failed = true;
-        return false;
-    }
-
     return true;
 }
 

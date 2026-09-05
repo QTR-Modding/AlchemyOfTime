@@ -15,6 +15,7 @@
     "clib-util",
     "clib-utils-qtr",
     "skse-mcp",
+    "tsl-ordered-map",
     "yaml-cpp"
   ],
   "overrides": [
