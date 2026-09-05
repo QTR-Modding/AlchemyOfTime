@@ -180,29 +180,10 @@ struct StageUpdate {
     }
 };
 
-struct TriggerHash {
-    size_t operator()(const RE::TESForm* form) const noexcept {
-        return (*this)(form ? form->GetFormID() : FormID{});
-    }
-    size_t operator()(FormID id) const noexcept { return std::hash<FormID>{}(id); }
-};
-
-struct TriggerEqual {
-    using is_transparent = void;
-
-    bool operator()(const RE::TESForm* form, FormID id) const noexcept {
-        return (form ? form->GetFormID() : FormID{}) == id;
-    }
-    bool operator()(FormID id, const RE::TESForm* form) const noexcept { return (*this)(form, id); }
-    bool operator()(const RE::TESForm* left, const RE::TESForm* right) const noexcept {
-        return (*this)(left, right ? right->GetFormID() : FormID{});
-    }
-};
-
 struct AddOnSettings {
     std::unordered_set<FormID> containers;
 
-    tsl::ordered_map<RE::TESForm*, float, TriggerHash, TriggerEqual> delayers;
+    tsl::ordered_map<FormID, float> delayers;
     std::unordered_map<FormID, uint32_t> delayer_colors;
     std::unordered_map<FormID, FormID> delayer_sounds;
     std::unordered_map<FormID, FormID> delayer_artobjects;
@@ -210,7 +191,7 @@ struct AddOnSettings {
     std::unordered_map<FormID, std::unordered_set<FormID>> delayer_containers;
     std::unordered_map<FormID, std::unordered_set<StageNo>> delayer_allowed_stages;
 
-    tsl::ordered_map<RE::TESForm*, std::pair<FormID, Duration>, TriggerHash, TriggerEqual> transformers;
+    tsl::ordered_map<FormID, std::pair<FormID, Duration>> transformers;
     std::unordered_map<FormID, uint32_t> transformer_colors;
     std::unordered_map<FormID, FormID> transformer_sounds;
     std::unordered_map<FormID, FormID> transformer_artobjects;

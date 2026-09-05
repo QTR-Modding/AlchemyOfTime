@@ -189,7 +189,7 @@ private:
 
     StageNo GetLastStageNo();
 
-    static FormID FindWorldTrigger(const RE::TESObjectREFR* a_obj, const std::vector<RE::TESForm*>& candidates);
+    static FormID FindWorldTrigger(const RE::TESObjectREFR* a_obj, const std::vector<FormID>& candidates);
 };
 
 template <typename T>

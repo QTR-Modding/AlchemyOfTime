@@ -318,16 +318,12 @@ std::vector<Manager::ScanRequest> Manager::BuildCellScanRequests_(
         bases.reserve(src->settings.transformers.size() + src->settings.delayers.size());
 
         // Include all bases we want CellScanner to collect for this WO.
-        for (const auto* trigger : src->settings.transformers | std::views::keys) {
-            if (!trigger || !trigger->As<RE::TESBoundObject>()) continue;
-            const auto trns = trigger->GetFormID();
+        for (const auto trns : src->settings.transformers | std::views::keys) {
             if (src->settings.transformer_allowed_stages.at(trns).contains(no)) {
                 bases.push_back(trns);
             }
         }
-        for (const auto* trigger : src->settings.delayers | std::views::keys) {
-            if (!trigger || !trigger->As<RE::TESBoundObject>()) continue;
-            const auto dlyr = trigger->GetFormID();
+        for (const auto dlyr : src->settings.delayers | std::views::keys) {
             if (src->settings.delayer_allowed_stages.at(dlyr).contains(no)) {
                 bases.push_back(dlyr);
             }

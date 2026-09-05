@@ -640,7 +640,7 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
 
             for (auto a_formid : parse_formid_vec(modulator, "FormEditorID")) {
                 settings.delayer_allowed_stages[a_formid] = std::unordered_set(a_asv.begin(), a_asv.end());
-                settings.delayers[FormReader::GetFormByID(a_formid)] = delayer_magnitude;
+                settings.delayers[a_formid] = delayer_magnitude;
                 if (a_color) settings.delayer_colors[a_formid] = *a_color;
                 if (a_sound) settings.delayer_sounds[a_formid] = *a_sound;
                 if (a_art_object) settings.delayer_artobjects[a_formid] = *a_art_object;
@@ -702,7 +702,7 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
             auto containers = parse_formid_vec(transformer, "containers");
 
             for (auto a_formid : parse_formid_vec(transformer, "FormEditorID")) {
-                settings.transformers[FormReader::GetFormByID(a_formid)] = {a_formid2, a_duration};
+                settings.transformers[a_formid] = {a_formid2, a_duration};
                 settings.transformer_allowed_stages[a_formid] = std::unordered_set(a_asv.begin(), a_asv.end());
                 if (a_color) settings.transformer_colors[a_formid] = *a_color;
                 if (a_sound) settings.transformer_sounds[a_formid] = *a_sound;
@@ -844,9 +844,7 @@ DefaultSettings PresetParse::parseDefaults_(const YAML::Node& config) {
     settings.transformer_containers = addons.transformer_containers;
 
     // loop delayers
-    for (const auto* trigger : settings.delayers | std::views::keys) {
-        if (!trigger) continue;
-        const auto a_formid = trigger->GetFormID();
+    for (const auto& a_formid : settings.delayers | std::views::keys) {
         if (settings.delayer_allowed_stages.contains(a_formid)) {
             if (settings.delayer_allowed_stages.at(a_formid).empty()) {
                 settings.delayer_allowed_stages.at(a_formid) = std::unordered_set(
@@ -859,9 +857,7 @@ DefaultSettings PresetParse::parseDefaults_(const YAML::Node& config) {
     }
 
     // loop transformers
-    for (const auto* trigger : settings.transformers | std::views::keys) {
-        if (!trigger) continue;
-        const auto a_formid = trigger->GetFormID();
+    for (const auto& a_formid : settings.transformers | std::views::keys) {
         if (settings.transformer_allowed_stages.contains(a_formid)) {
             if (settings.transformer_allowed_stages.at(a_formid).empty()) {
                 settings.transformer_allowed_stages.at(a_formid) = std::unordered_set(
