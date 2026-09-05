@@ -81,7 +81,9 @@ void Source::Init(const DefaultSettings* defaultsettings) {
     decayed_stage = GetFinalStage();
 
     // transformed stages
-    for (const auto& key : settings.transformers | std::views::keys) {
+    for (const auto* trigger : settings.transformers | std::views::keys) {
+        if (!trigger) continue;
+        const auto key = trigger->GetFormID();
         const auto temp_stage = GetTransformedStage(key);
         transformed_stages[key] = temp_stage;
     }
@@ -469,17 +471,17 @@ bool Source::IsDecayedItem(const FormID _form_id) const {
 }
 
 inline FormID Source::GetModulatorInWorld(const RE::TESObjectREFR* wo, const StageNo a_no) const {
-    std::vector<FormID> candidates;
+    std::vector<RE::TESForm*> candidates;
     candidates.reserve(settings.delayers.size());
 
-    for (const auto& dlyr_fid : settings.delayers | std::views::keys) {
-        if (!settings.delayer_allowed_stages.at(dlyr_fid).contains(a_no)) {
+    for (const auto trigger : settings.delayers | std::views::keys) {
+        if (!trigger || !settings.delayer_allowed_stages.at(trigger->GetFormID()).contains(a_no)) {
             continue;
         }
-        candidates.push_back(dlyr_fid);
+        candidates.push_back(trigger);
     }
 
-    if (const auto hit = SearchNearbyModulatorsCached(wo, candidates); hit) {
+    if (const auto hit = FindWorldTrigger(wo, candidates); hit) {
         return hit;
     }
 
@@ -487,17 +489,17 @@ inline FormID Source::GetModulatorInWorld(const RE::TESObjectREFR* wo, const Sta
 }
 
 inline FormID Source::GetTransformerInWorld(const RE::TESObjectREFR* wo, const StageNo a_no) const {
-    std::vector<FormID> candidates;
+    std::vector<RE::TESForm*> candidates;
     candidates.reserve(settings.transformers.size());
 
-    for (const auto& trns_fid : settings.transformers | std::views::keys) {
-        if (!settings.transformer_allowed_stages.at(trns_fid).contains(a_no)) {
+    for (const auto trigger : settings.transformers | std::views::keys) {
+        if (!trigger || !settings.transformer_allowed_stages.at(trigger->GetFormID()).contains(a_no)) {
             continue;
         }
-        candidates.push_back(trns_fid);
+        candidates.push_back(trigger);
     }
 
-    if (const auto hit = SearchNearbyModulatorsCached(wo, candidates); hit) {
+    if (const auto hit = FindWorldTrigger(wo, candidates); hit) {
         return hit;
     }
 
@@ -543,9 +545,11 @@ float Source::GetNextUpdateTime(const StageInstance* st_inst) {
 }
 
 FormID Source::GetModulatorInInventory(const InvMap& inv, const FormID ownerBase, const StageNo no) const {
-    for (auto dlyr_fid : settings.delayers | std::views::keys) {
+    for (const auto trigger : settings.delayers | std::views::keys) {
+        if (!trigger) continue;
+        const auto dlyr_fid = trigger->GetFormID();
         if (!settings.delayer_allowed_stages.at(dlyr_fid).contains(no)) continue;
-        auto obj = RE::TESForm::LookupByID<RE::TESBoundObject>(dlyr_fid);
+        auto obj = trigger->As<RE::TESBoundObject>();
         if (!obj) continue;
         if (auto it = inv.find(obj); it != inv.end() && it->second.first > 0) {
             auto contIt = settings.delayer_containers.find(dlyr_fid);
@@ -558,9 +562,11 @@ FormID Source::GetModulatorInInventory(const InvMap& inv, const FormID ownerBase
 }
 
 FormID Source::GetTransformerInInventory(const InvMap& inv, const FormID ownerBase, const StageNo no) const {
-    for (auto trns_fid : settings.transformers | std::views::keys) {
+    for (const auto trigger : settings.transformers | std::views::keys) {
+        if (!trigger) continue;
+        const auto trns_fid = trigger->GetFormID();
         if (!settings.transformer_allowed_stages.at(trns_fid).contains(no)) continue;
-        auto obj = RE::TESForm::LookupByID<RE::TESBoundObject>(trns_fid);
+        auto obj = trigger->As<RE::TESBoundObject>();
         if (!obj) continue;
         if (auto it = inv.find(obj); it != inv.end() && it->second.first > 0) {
             auto contIt = settings.transformer_containers.find(trns_fid);
@@ -1267,56 +1273,57 @@ namespace {
     }
 };
 
-FormID Source::SearchNearbyModulatorsCached(const RE::TESObjectREFR* a_obj, const std::vector<FormID>& candidates) {
+FormID Source::FindWorldTrigger(const RE::TESObjectREFR* a_obj, const std::vector<RE::TESForm*>& candidates) {
     if (!a_obj || candidates.empty()) {
         return 0;
     }
 
     const auto cache = CellScanner::GetSingleton()->GetCache();
-    if (!cache || cache->byBase.empty()) {
-        return 0;
-    }
-
     const auto originPos = Utils::WorldObject::GetPosition(a_obj);
 
     const float r = Settings::search_radius;
     const float r2 = (r > 0.0f) ? (r * r) : std::numeric_limits<float>::infinity();
 
-    // Respect candidate ordering (unlike your current unordered_set path).
-    for (const auto baseID : candidates) {
-        const auto it = cache->byBase.find(baseID);
-        if (it == cache->byBase.end()) {
-            continue;
-        }
+    for (const auto* trigger : candidates) {
+        if (!trigger) continue;
 
-        // For this baseID, try the closest refs first (without sorting):
-        // we scan all within r2 and keep the best hit that passes the OBB check.
-        float bestD2 = r2;
-        bool found = false;
-
-        for (const auto& e : it->second) {
-            const float dx = e.pos.x - originPos.x;
-            const float dy = e.pos.y - originPos.y;
-            const float dz = e.pos.z - originPos.z;
-            const float d2 = dx * dx + dy * dy + dz * dz;
-
-            if (d2 > bestD2) {
+        if (const auto* bound = trigger->As<RE::TESBoundObject>()) {
+            if (!cache) continue;
+            const auto baseID = bound->GetFormID();
+            const auto it = cache->byBase.find(baseID);
+            if (it == cache->byBase.end()) {
                 continue;
             }
 
-            const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(e.refid);
-            if (!ref || ref->IsDisabled() || ref->IsDeleted() || ref->IsMarkedForDeletion()) {
-                continue;
+            // For this baseID, try the closest refs first (without sorting):
+            // we scan all within r2 and keep the best hit that passes the OBB check.
+            float bestD2 = r2;
+            bool found = false;
+
+            for (const auto& e : it->second) {
+                const float dx = e.pos.x - originPos.x;
+                const float dy = e.pos.y - originPos.y;
+                const float dz = e.pos.z - originPos.z;
+                const float d2 = dx * dx + dy * dy + dz * dz;
+
+                if (d2 > bestD2) {
+                    continue;
+                }
+
+                const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(e.refid);
+                if (!ref || ref->IsDisabled() || ref->IsDeleted() || ref->IsMarkedForDeletion()) {
+                    continue;
+                }
+
+                if (SearchModulatorInCell_Sub(a_obj, ref)) {
+                    bestD2 = d2;
+                    found = true;
+                }
             }
 
-            if (SearchModulatorInCell_Sub(a_obj, ref)) {
-                bestD2 = d2;
-                found = true;
+            if (found) {
+                return baseID;
             }
-        }
-
-        if (found) {
-            return baseID;
         }
     }
 

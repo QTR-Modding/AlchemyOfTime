@@ -177,15 +177,15 @@ bool DefaultSettings::CheckIntegrity() {
         init_failed = true;
         return false;
     }
-    for (const auto& [a_formID, _transformer] : transformers) {
+    for (const auto& [trigger, _transformer] : transformers) {
         const FormID _finalFormEditorID = _transformer.first;
         const Duration _duration = _transformer.second;
-        const auto& _allowedStages = transformer_allowed_stages.at(a_formID);
-        if (!FormReader::GetFormByID(a_formID) || !FormReader::GetFormByID(_finalFormEditorID)) {
+        if (!trigger || !FormReader::GetFormByID(_finalFormEditorID)) {
             logger::error("Formid not found.");
             init_failed = true;
             return false;
         }
+        const auto& _allowedStages = transformer_allowed_stages.at(trigger->GetFormID());
         if (_duration <= 0) {
             logger::error("Duration is less than or equal 0.");
             init_failed = true;
@@ -205,13 +205,14 @@ bool DefaultSettings::CheckIntegrity() {
         }
     }
 
-    for (const auto& a_formID : delayers | std::views::keys) {
-        const auto& _allowedStages = delayer_allowed_stages.at(a_formID);
-        if (!FormReader::GetFormByID(a_formID)) {
-            logger::error("Delayer formid {:x} not found.", a_formID);
+    for (const auto* trigger : delayers | std::views::keys) {
+        if (!trigger) {
+            logger::error("Delayer form not found.");
             init_failed = true;
             return false;
         }
+        const auto a_formID = trigger->GetFormID();
+        const auto& _allowedStages = delayer_allowed_stages.at(a_formID);
         if (_allowedStages.empty()) {
             logger::error("Allowed stages is empty for delayer formid {:x}.", a_formID);
             init_failed = true;
@@ -251,12 +252,13 @@ void DefaultSettings::Add(AddOnSettings& addon) {
     AddHelper(containers, addon.containers);
 
     // delayers
-    for (const auto& [a_formID, _delay] : addon.delayers) {
-        if (!a_formID) {
+    for (const auto& [trigger, _delay] : addon.delayers) {
+        if (!trigger) {
             logger::critical("AddOn has null formid.");
             continue;
         }
-        delayers[a_formID] = _delay;
+        delayers[trigger] = _delay;
+        const auto a_formID = trigger->GetFormID();
 
         if (addon.delayer_allowed_stages.contains(a_formID)) {
             AddHelper(delayer_allowed_stages[a_formID], addon.delayer_allowed_stages.at(a_formID));
@@ -266,12 +268,13 @@ void DefaultSettings::Add(AddOnSettings& addon) {
         }
     }
     // transformers
-    for (const auto& [a_formID, _transformer] : addon.transformers) {
-        if (!a_formID) {
+    for (const auto& [trigger, _transformer] : addon.transformers) {
+        if (!trigger) {
             logger::critical("AddOn has null formid.");
             continue;
         }
-        transformers[a_formID] = _transformer;
+        transformers[trigger] = _transformer;
+        const auto a_formID = trigger->GetFormID();
         if (addon.transformer_allowed_stages.contains(a_formID)) {
             AddHelper(transformer_allowed_stages[a_formID], addon.transformer_allowed_stages.at(a_formID));
         }
@@ -376,18 +379,18 @@ bool AddOnSettings::CheckIntegrity() {
         }
     }
 
-    for (const auto& a_formID : delayers | std::views::keys) {
-        if (!FormReader::GetFormByID(a_formID)) {
-            logger::error("Delayer form {} not found.", a_formID);
+    for (const auto* trigger : delayers | std::views::keys) {
+        if (!trigger) {
+            logger::error("Delayer form not found.");
             init_failed = true;
             return false;
         }
     }
 
-    for (const auto& [a_formid, _transformer] : transformers) {
+    for (const auto& [trigger, _transformer] : transformers) {
         const FormID _finalFormEditorID = _transformer.first;
         const Duration _duration = _transformer.second;
-        if (!FormReader::GetFormByID(a_formid) || !FormReader::GetFormByID(_finalFormEditorID)) {
+        if (!trigger || !FormReader::GetFormByID(_finalFormEditorID)) {
             logger::error("Form not found.");
             init_failed = true;
             return false;
