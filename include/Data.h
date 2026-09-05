@@ -189,7 +189,7 @@ private:
 
     StageNo GetLastStageNo();
 
-    static FormID SearchNearbyModulatorsCached(const RE::TESObjectREFR* a_obj, const std::vector<FormID>& candidates);
+    static FormID FindWorldTrigger(const RE::TESObjectREFR* a_obj, const std::vector<FormID>& candidates);
 };
 
 template <typename T>

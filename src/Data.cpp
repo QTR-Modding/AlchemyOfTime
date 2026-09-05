@@ -479,7 +479,7 @@ inline FormID Source::GetModulatorInWorld(const RE::TESObjectREFR* wo, const Sta
         candidates.push_back(dlyr_fid);
     }
 
-    if (const auto hit = SearchNearbyModulatorsCached(wo, candidates); hit) {
+    if (const auto hit = FindWorldTrigger(wo, candidates); hit) {
         return hit;
     }
 
@@ -497,7 +497,7 @@ inline FormID Source::GetTransformerInWorld(const RE::TESObjectREFR* wo, const S
         candidates.push_back(trns_fid);
     }
 
-    if (const auto hit = SearchNearbyModulatorsCached(wo, candidates); hit) {
+    if (const auto hit = FindWorldTrigger(wo, candidates); hit) {
         return hit;
     }
 
@@ -1267,56 +1267,57 @@ namespace {
     }
 };
 
-FormID Source::SearchNearbyModulatorsCached(const RE::TESObjectREFR* a_obj, const std::vector<FormID>& candidates) {
+FormID Source::FindWorldTrigger(const RE::TESObjectREFR* a_obj, const std::vector<FormID>& candidates) {
     if (!a_obj || candidates.empty()) {
         return 0;
     }
 
     const auto cache = CellScanner::GetSingleton()->GetCache();
-    if (!cache || cache->byBase.empty()) {
-        return 0;
-    }
-
     const auto originPos = Utils::WorldObject::GetPosition(a_obj);
 
     const float r = Settings::search_radius;
     const float r2 = (r > 0.0f) ? (r * r) : std::numeric_limits<float>::infinity();
 
-    // Respect candidate ordering (unlike your current unordered_set path).
-    for (const auto baseID : candidates) {
-        const auto it = cache->byBase.find(baseID);
-        if (it == cache->byBase.end()) {
-            continue;
-        }
+    for (const auto triggerID : candidates) {
+        const auto* trigger = FormReader::GetFormByID(triggerID);
+        if (!trigger) continue;
 
-        // For this baseID, try the closest refs first (without sorting):
-        // we scan all within r2 and keep the best hit that passes the OBB check.
-        float bestD2 = r2;
-        bool found = false;
-
-        for (const auto& e : it->second) {
-            const float dx = e.pos.x - originPos.x;
-            const float dy = e.pos.y - originPos.y;
-            const float dz = e.pos.z - originPos.z;
-            const float d2 = dx * dx + dy * dy + dz * dz;
-
-            if (d2 > bestD2) {
+        if (trigger->As<RE::TESBoundObject>()) {
+            if (!cache) continue;
+            const auto it = cache->byBase.find(triggerID);
+            if (it == cache->byBase.end()) {
                 continue;
             }
 
-            const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(e.refid);
-            if (!ref || ref->IsDisabled() || ref->IsDeleted() || ref->IsMarkedForDeletion()) {
-                continue;
+            // For this triggerID, try the closest refs first (without sorting):
+            // we scan all within r2 and keep the best hit that passes the OBB check.
+            float bestD2 = r2;
+            bool found = false;
+
+            for (const auto& e : it->second) {
+                const float dx = e.pos.x - originPos.x;
+                const float dy = e.pos.y - originPos.y;
+                const float dz = e.pos.z - originPos.z;
+                const float d2 = dx * dx + dy * dy + dz * dz;
+
+                if (d2 > bestD2) {
+                    continue;
+                }
+
+                const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(e.refid);
+                if (!ref || ref->IsDisabled() || ref->IsDeleted() || ref->IsMarkedForDeletion()) {
+                    continue;
+                }
+
+                if (SearchModulatorInCell_Sub(a_obj, ref)) {
+                    bestD2 = d2;
+                    found = true;
+                }
             }
 
-            if (SearchModulatorInCell_Sub(a_obj, ref)) {
-                bestD2 = d2;
-                found = true;
+            if (found) {
+                return triggerID;
             }
-        }
-
-        if (found) {
-            return baseID;
         }
     }
 
