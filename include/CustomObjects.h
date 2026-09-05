@@ -183,7 +183,7 @@ struct AddOnSettings {
     std::unordered_set<FormID> containers;
 
     std::unordered_map<FormID, float> delayers;
-    std::unordered_set<FormID> delayers_order;
+    std::vector<FormID> delayers_order;
     std::unordered_map<FormID, uint32_t> delayer_colors;
     std::unordered_map<FormID, FormID> delayer_sounds;
     std::unordered_map<FormID, FormID> delayer_artobjects;
@@ -192,7 +192,7 @@ struct AddOnSettings {
     std::unordered_map<FormID, std::unordered_set<StageNo>> delayer_allowed_stages;
 
     std::unordered_map<FormID, std::pair<FormID, Duration>> transformers;
-    std::unordered_set<FormID> transformers_order;
+    std::vector<FormID> transformers_order;
     std::unordered_map<FormID, uint32_t> transformer_colors;
     std::unordered_map<FormID, FormID> transformer_sounds;
     std::unordered_map<FormID, FormID> transformer_artobjects;

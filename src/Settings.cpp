@@ -639,10 +639,11 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
             auto containers = parse_formid_vec(modulator, "containers");
 
             for (auto a_formid : parse_formid_vec(modulator, "FormEditorID")) {
+                if (!settings.delayers.contains(a_formid)) {
+                    settings.delayers_order.push_back(a_formid);
+                }
                 settings.delayer_allowed_stages[a_formid] = std::unordered_set(a_asv.begin(), a_asv.end());
                 settings.delayers[a_formid] = delayer_magnitude;
-                // delayer (order)
-                settings.delayers_order.insert(a_formid);
                 if (a_color) settings.delayer_colors[a_formid] = *a_color;
                 if (a_sound) settings.delayer_sounds[a_formid] = *a_sound;
                 if (a_art_object) settings.delayer_artobjects[a_formid] = *a_art_object;
@@ -704,9 +705,10 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
             auto containers = parse_formid_vec(transformer, "containers");
 
             for (auto a_formid : parse_formid_vec(transformer, "FormEditorID")) {
+                if (!settings.transformers.contains(a_formid)) {
+                    settings.transformers_order.push_back(a_formid);
+                }
                 settings.transformers[a_formid] = {a_formid2, a_duration};
-                // transformers (order)
-                settings.transformers_order.insert(a_formid);
                 settings.transformer_allowed_stages[a_formid] = std::unordered_set(a_asv.begin(), a_asv.end());
                 if (a_color) settings.transformer_colors[a_formid] = *a_color;
                 if (a_sound) settings.transformer_sounds[a_formid] = *a_sound;
