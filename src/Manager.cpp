@@ -574,7 +574,7 @@ void Manager::ApplyTransferToSource_(Source& src, UpdateCtx& ctx, const InvMap& 
     }
 
     if (ctx.count > 0) {
-        Register(ctx.what_formid, ctx.count, {ctx.to_refid, src.formid}, ctx.curr_time, to_inv, ctx.to_base_id);
+        Register(ctx.what_formid, ctx.count, {ctx.to_refid, ctx.to_base_id}, ctx.curr_time, to_inv);
     }
 
     CleanUpSourceData(&src, ctx.from_refid);
@@ -1095,7 +1095,7 @@ std::set<float> Manager::GetUpdateTimes(const RE::TESObjectREFR* inventory_owner
     return queued_updates;
 }
 
-bool Manager::UpdateInventory(const RefInfo& a_info, const float t, const InvMap& inv, const FormID ownerBase) {
+bool Manager::UpdateInventory(const RefInfo& a_info, const float t, const InvMap& inv) {
     bool update_took_place = false;
     const auto refid = a_info.ref_id;
 
@@ -1135,7 +1135,7 @@ bool Manager::UpdateInventory(const RefInfo& a_info, const float t, const InvMap
         for (const auto& update : updates) {
             if (ApplyEvolutionInInventory(a_info, update.count, update.oldstage->formid, update.newstage->formid) &&
                 source.IsDecayedItem(update.newstage->formid)) {
-                Register(update.newstage->formid, update.count, a_info, update.update_time, inv, ownerBase);
+                Register(update.newstage->formid, update.count, a_info, update.update_time, inv);
             }
         }
     }
@@ -1167,7 +1167,7 @@ bool Manager::UpdateInventory(const RefInfo& a_info, const float t, const InvMap
             }
             auto source_info = a_info;
             source_info.source_id = src_formid;
-            sit->second->UpdateTimeModulationInInventory(source_info, t, inv, ownerBase);
+            sit->second->UpdateTimeModulationInInventory(source_info, t, inv);
         }
     } else {
         std::vector<FormID> mod_sources;
@@ -1182,15 +1182,15 @@ bool Manager::UpdateInventory(const RefInfo& a_info, const float t, const InvMap
             }
             auto source_info = a_info;
             source_info.source_id = src_formid;
-            sit->second->UpdateTimeModulationInInventory(source_info, t, inv, ownerBase);
+            sit->second->UpdateTimeModulationInInventory(source_info, t, inv);
         }
     }
 
     return update_took_place;
 }
 
-void Manager::UpdateInventory(const RefInfo& a_info, const InvMap& inv, const FormID ownerBase) {
-    SyncWithInventory(a_info, inv, ownerBase);
+void Manager::UpdateInventory(const RefInfo& a_info, const InvMap& inv) {
+    SyncWithInventory(a_info, inv);
 
     const auto curr = RE::Calendar::GetSingleton()->GetHoursPassed();
     for (;;) {
@@ -1200,13 +1200,13 @@ void Manager::UpdateInventory(const RefInfo& a_info, const InvMap& inv, const Fo
         if (!std::isfinite(base)) break;
         const float t = std::nextafterf(base, std::numeric_limits<float>::infinity());
         if (t >= curr) break;
-        if (!UpdateInventory(a_info, t, inv, ownerBase)) break;
+        if (!UpdateInventory(a_info, t, inv)) break;
     }
 
-    UpdateInventory(a_info, curr, inv, ownerBase);
+    UpdateInventory(a_info, curr, inv);
 }
 
-void Manager::SyncWithInventory(const RefInfo& a_info, const InvMap& inv, const FormID ownerBase) {
+void Manager::SyncWithInventory(const RefInfo& a_info, const InvMap& inv) {
     const RefID loc = a_info.ref_id;
     const bool needHandling = locs_to_be_handled.contains(loc);
     const float now = RE::Calendar::GetSingleton()->GetHoursPassed();
@@ -1263,13 +1263,13 @@ void Manager::SyncWithInventory(const RefInfo& a_info, const InvMap& inv, const 
 
         auto rt = reg_total.find(fid);
         if (rt == reg_total.end()) {
-            if (invCount > 0) Register(fid, invCount, a_info, now, inv, ownerBase);
+            if (invCount > 0) Register(fid, invCount, a_info, now, inv);
             continue;
         }
 
         const Count regCount = rt->second;
         if (regCount < invCount) {
-            Register(fid, invCount - regCount, a_info, now, inv, ownerBase);
+            Register(fid, invCount - regCount, a_info, now, inv);
         } else if (regCount > invCount) {
             const Count diff = regCount - invCount;
             if (needHandling && reg_has_fake[fid]) {
@@ -1496,10 +1496,9 @@ void Manager::UpdateWO(RE::TESObjectREFR* ref) {
 void Manager::UpdateRef(RE::TESObjectREFR* loc) {
     if (loc->HasContainer()) {
         const auto base = loc->GetBaseObject();
-        const auto ownerBase = base ? base->GetFormID() : 0;
-        const RefInfo info(loc->GetFormID(), 0);
+        const RefInfo info(loc->GetFormID(), base ? base->GetFormID() : 0);
         const auto inv = loc->GetInventory();
-        UpdateInventory(info, inv, ownerBase);
+        UpdateInventory(info, inv);
     } else {
         UpdateWO(loc);
     }
@@ -1608,7 +1607,7 @@ void Manager::Register(const FormID some_formid, const Count count, const RefID 
 }
 
 void Manager::Register(const FormID some_formid, const Count count, const RefInfo& ref_info,
-                       const Duration register_time, const InvMap& a_inv, const FormID ownerBase) {
+                       const Duration register_time, const InvMap& a_inv) {
     if (do_not_register.contains(some_formid)) {
         return;
     }
@@ -1655,7 +1654,7 @@ void Manager::Register(const FormID some_formid, const Count count, const RefInf
 
     auto source_info = ref_info;
     source_info.source_id = src->formid;
-    if (!src->InitInsertInstanceInventory(stage_no, count, source_info, register_time, a_inv, ownerBase)) {
+    if (!src->InitInsertInstanceInventory(stage_no, count, source_info, register_time, a_inv)) {
         logger::error("Register: InsertNewInstance failed 1.");
     } else {
         UpdateLocationIndexForSource(*src, location_refid);
@@ -1933,7 +1932,7 @@ void Manager::HandleLoc(RE::TESObjectREFR* loc_ref) {
     }
 
     const auto loc_base = loc_ref->GetObjectReference()->GetFormID();
-    SyncWithInventory(RefInfo(loc_refid, 0), loc_inventory_temp, loc_base);
+    SyncWithInventory(RefInfo(loc_refid, loc_base), loc_inventory_temp);
     Update(loc_ref);
     locs_to_be_handled.erase(loc_refid);
 }
