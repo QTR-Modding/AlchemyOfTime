@@ -315,15 +315,15 @@ std::vector<Manager::ScanRequest> Manager::BuildCellScanRequests_(
         const StageNo no = inst.no;
 
         std::vector<FormID> bases;
-        bases.reserve(src->settings.transformers_order.size() + src->settings.delayers_order.size());
+        bases.reserve(src->settings.transformers.size() + src->settings.delayers.size());
 
         // Include all bases we want CellScanner to collect for this WO.
-        for (const auto trns : src->settings.transformers_order) {
+        for (const auto trns : src->settings.transformers | std::views::keys) {
             if (src->settings.transformer_allowed_stages.at(trns).contains(no)) {
                 bases.push_back(trns);
             }
         }
-        for (const auto dlyr : src->settings.delayers_order) {
+        for (const auto dlyr : src->settings.delayers | std::views::keys) {
             if (src->settings.delayer_allowed_stages.at(dlyr).contains(no)) {
                 bases.push_back(dlyr);
             }
@@ -1871,7 +1871,7 @@ void Manager::SendData() {
     for (const auto& src : sources | std::views::values) {
         const auto& source = *src;
         if (source.GetStageDuration(0) >= 10000.f) {
-            if (source.settings.transformers_order.size() == 0 && source.settings.delayers_order.size() == 0) {
+            if (source.settings.transformers.empty() && source.settings.delayers.empty()) {
                 continue;
             }
         }

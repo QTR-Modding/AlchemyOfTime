@@ -56,6 +56,7 @@ find_path(CLIB_UTIL_INCLUDE_DIRS "ClibUtil/utils.hpp")
 find_path(CLIB_UTILS_QTR_INCLUDE_DIRS "ClibUtilsQTR/utils.hpp")
 find_path(SKSE_MCP_INCLUDE_DIRS "SKSEMCP/utils.hpp")
 find_package(yaml-cpp CONFIG REQUIRED)
+find_package(tsl-ordered-map CONFIG REQUIRED)
 
 file(
  GLOB_RECURSE
@@ -91,7 +92,7 @@ target_include_directories(
 	${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-target_link_libraries(${PROJECT_NAME} PRIVATE yaml-cpp::yaml-cpp)
+target_link_libraries(${PROJECT_NAME} PRIVATE yaml-cpp::yaml-cpp tsl::ordered_map)
 target_compile_definitions(${PROJECT_NAME} PRIVATE IS_HOST_PLUGIN)
 
 # Ensure MSVC warning level4 is applied last (covers cl.exe and clang-cl)

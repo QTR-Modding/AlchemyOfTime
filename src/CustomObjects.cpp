@@ -186,11 +186,6 @@ bool DefaultSettings::CheckIntegrity() {
             init_failed = true;
             return false;
         }
-        if (!transformers_order.contains(a_formID)) {
-            logger::error("Transformer formid {:x} not found in transformers_order.", a_formID);
-            init_failed = true;
-            return false;
-        }
         if (_duration <= 0) {
             logger::error("Duration is less than or equal 0.");
             init_failed = true;
@@ -214,11 +209,6 @@ bool DefaultSettings::CheckIntegrity() {
         const auto& _allowedStages = delayer_allowed_stages.at(a_formID);
         if (!FormReader::GetFormByID(a_formID)) {
             logger::error("Delayer formid {:x} not found.", a_formID);
-            init_failed = true;
-            return false;
-        }
-        if (!delayers_order.contains(a_formID)) {
-            logger::error("Delayer formid {:x} not found in delayers_order.", a_formID);
             init_failed = true;
             return false;
         }
@@ -266,9 +256,6 @@ void DefaultSettings::Add(AddOnSettings& addon) {
             logger::critical("AddOn has null formid.");
             continue;
         }
-        if (!delayers.contains(a_formID)) {
-            delayers_order.insert(a_formID);
-        }
         delayers[a_formID] = _delay;
 
         if (addon.delayer_allowed_stages.contains(a_formID)) {
@@ -279,13 +266,10 @@ void DefaultSettings::Add(AddOnSettings& addon) {
         }
     }
     // transformers
-    for (auto& [a_formID, _transformer] : addon.transformers) {
+    for (const auto& [a_formID, _transformer] : addon.transformers) {
         if (!a_formID) {
             logger::critical("AddOn has null formid.");
             continue;
-        }
-        if (!transformers.contains(a_formID)) {
-            transformers_order.insert(a_formID);
         }
         transformers[a_formID] = _transformer;
         if (addon.transformer_allowed_stages.contains(a_formID)) {
@@ -392,23 +376,14 @@ bool AddOnSettings::CheckIntegrity() {
         }
     }
 
-    std::unordered_set<FormID> all_delayers;
     for (const auto& a_formID : delayers | std::views::keys) {
         if (!FormReader::GetFormByID(a_formID)) {
             logger::error("Delayer form {} not found.", a_formID);
             init_failed = true;
             return false;
         }
-        all_delayers.insert(a_formID);
     }
 
-    if (all_delayers != delayers_order) {
-        logger::error("Delayers order does not match the keys in delayers map.");
-        init_failed = true;
-        return false;
-    }
-
-    std::unordered_set<FormID> all_transformers;
     for (const auto& [a_formid, _transformer] : transformers) {
         const FormID _finalFormEditorID = _transformer.first;
         const Duration _duration = _transformer.second;
@@ -422,14 +397,7 @@ bool AddOnSettings::CheckIntegrity() {
             init_failed = true;
             return false;
         }
-        all_transformers.insert(a_formid);
     }
-    if (all_transformers != transformers_order) {
-        logger::error("Transformers order does not match the keys in transformers map.");
-        init_failed = true;
-        return false;
-    }
-
     return true;
 }
 
@@ -664,7 +632,7 @@ bool SoundHelper::Play(const RE::TESObjectREFR* ref, const FormID sound_id, cons
         return false;
     }
 
-    RE::BSAudioManager::GetSingleton()->BuildSoundDataFromDescriptor(sound_handle, sound);
+    RE::BSAudioManager::GetSingleton()->GetSoundHandle(sound_handle, sound);
     sound_handle.SetObjectToFollow(ref_node);
     sound_handle.SetVolume(volume);
     if (!sound_handle.IsValid()) {

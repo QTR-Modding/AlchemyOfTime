@@ -470,9 +470,9 @@ bool Source::IsDecayedItem(const FormID _form_id) const {
 
 inline FormID Source::GetModulatorInWorld(const RE::TESObjectREFR* wo, const StageNo a_no) const {
     std::vector<FormID> candidates;
-    candidates.reserve(settings.delayers_order.size());
+    candidates.reserve(settings.delayers.size());
 
-    for (const auto& dlyr_fid : settings.delayers_order) {
+    for (const auto& dlyr_fid : settings.delayers | std::views::keys) {
         if (!settings.delayer_allowed_stages.at(dlyr_fid).contains(a_no)) {
             continue;
         }
@@ -488,9 +488,9 @@ inline FormID Source::GetModulatorInWorld(const RE::TESObjectREFR* wo, const Sta
 
 inline FormID Source::GetTransformerInWorld(const RE::TESObjectREFR* wo, const StageNo a_no) const {
     std::vector<FormID> candidates;
-    candidates.reserve(settings.transformers_order.size());
+    candidates.reserve(settings.transformers.size());
 
-    for (const auto& trns_fid : settings.transformers_order) {
+    for (const auto& trns_fid : settings.transformers | std::views::keys) {
         if (!settings.transformer_allowed_stages.at(trns_fid).contains(a_no)) {
             continue;
         }
@@ -543,7 +543,7 @@ float Source::GetNextUpdateTime(const StageInstance* st_inst) {
 }
 
 FormID Source::GetModulatorInInventory(const InvMap& inv, const FormID ownerBase, const StageNo no) const {
-    for (auto dlyr_fid : settings.delayers_order) {
+    for (auto dlyr_fid : settings.delayers | std::views::keys) {
         if (!settings.delayer_allowed_stages.at(dlyr_fid).contains(no)) continue;
         auto obj = RE::TESForm::LookupByID<RE::TESBoundObject>(dlyr_fid);
         if (!obj) continue;
@@ -558,7 +558,7 @@ FormID Source::GetModulatorInInventory(const InvMap& inv, const FormID ownerBase
 }
 
 FormID Source::GetTransformerInInventory(const InvMap& inv, const FormID ownerBase, const StageNo no) const {
-    for (auto trns_fid : settings.transformers_order) {
+    for (auto trns_fid : settings.transformers | std::views::keys) {
         if (!settings.transformer_allowed_stages.at(trns_fid).contains(no)) continue;
         auto obj = RE::TESForm::LookupByID<RE::TESBoundObject>(trns_fid);
         if (!obj) continue;
@@ -1252,8 +1252,8 @@ namespace {
             DebugAPI_IMPL::DrawDebug::DrawOBB(obb2);
             DebugAPI_IMPL::DrawDebug::DrawOBB(obb1);
 
-            DebugAPI_IMPL::DrawDebug::draw_line(WorldObject::GetPosition(ref),
-                                                WorldObject::GetPosition(RE::PlayerCharacter::GetSingleton()), 3.f,
+            DebugAPI_IMPL::DrawDebug::draw_line(Utils::WorldObject::GetPosition(ref),
+                                                Utils::WorldObject::GetPosition(RE::PlayerCharacter::GetSingleton()), 3.f,
                                                 RE::NiColorA(0.f, 0.f, 1.f, 1.f));
 
             const RE::NiPoint3 c1{obb1.Center.x, obb1.Center.y, obb1.Center.z};
