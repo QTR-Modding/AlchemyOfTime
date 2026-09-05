@@ -1165,9 +1165,7 @@ bool Manager::UpdateInventory(const RefInfo& a_info, const float t, const InvMap
                 RemoveLocationIndex(refid, src_formid);
                 continue;
             }
-            auto source_info = a_info;
-            source_info.source_id = src_formid;
-            sit->second->UpdateTimeModulationInInventory(source_info, t, inv);
+            sit->second->UpdateTimeModulationInInventory(a_info, t, inv);
         }
     } else {
         std::vector<FormID> mod_sources;
@@ -1180,9 +1178,7 @@ bool Manager::UpdateInventory(const RefInfo& a_info, const float t, const InvMap
                 RemoveLocationIndex(refid, src_formid);
                 continue;
             }
-            auto source_info = a_info;
-            source_info.source_id = src_formid;
-            sit->second->UpdateTimeModulationInInventory(source_info, t, inv);
+            sit->second->UpdateTimeModulationInInventory(a_info, t, inv);
         }
     }
 
@@ -1652,9 +1648,7 @@ void Manager::Register(const FormID some_formid, const Count count, const RefInf
 
     const auto stage_no = src->formid == some_formid ? 0 : src->GetStageNo(some_formid);
 
-    auto source_info = ref_info;
-    source_info.source_id = src->formid;
-    if (!src->InitInsertInstanceInventory(stage_no, count, source_info, register_time, a_inv)) {
+    if (!src->InitInsertInstanceInventory(stage_no, count, ref_info, register_time, a_inv)) {
         logger::error("Register: InsertNewInstance failed 1.");
     } else {
         UpdateLocationIndexForSource(*src, location_refid);
