@@ -295,14 +295,14 @@ StageInstance* Source::InitInsertInstanceWO(StageNo n, const Count c, const RefI
 }
 
 bool Source::InitInsertInstanceInventory(const StageNo n, const Count c, const RefInfo& a_info,
-                                         const Duration t_0, const InvMap& inv) {
+                                         const Duration t_0, const InvMap& inv, const FormID ownerBase) {
     // isme takilma
     if (!InitInsertInstanceWO(n, c, a_info.ref_id, t_0)) {
         logger::error("InitInsertInstance failed.");
         return false;
     }
 
-    SetDelayOfInstance(data[a_info.ref_id].back(), t_0, a_info.base_id, inv);
+    SetDelayOfInstance(data[a_info.ref_id].back(), t_0, ownerBase, inv);
     return true;
 }
 
@@ -572,11 +572,9 @@ FormID Source::GetTransformerInInventory(const InvMap& inv, const FormID ownerBa
     return 0;
 }
 
-void Source::SetDelayOfInstances(const float t, const RefInfo& a_info, const InvMap& inv) {
+void Source::SetDelayOfInstances(const float t, const RefInfo& a_info, const InvMap& inv, const FormID ownerBase) {
     const auto loc = a_info.ref_id;
     if (!data.contains(loc)) return;
-
-    const auto ownerBase = a_info.base_id;
 
     for (auto& inst : data.at(loc)) {
         if (inst.count <= 0) continue;
@@ -595,10 +593,11 @@ void Source::SetDelayOfInstances(const float t, const RefInfo& a_info, const Inv
     }
 }
 
-void Source::UpdateTimeModulationInInventory(const RefInfo& a_info, const float t, const InvMap& inv) {
+void Source::UpdateTimeModulationInInventory(const RefInfo& a_info, const float t, const InvMap& inv,
+                                             const FormID ownerBase) {
     if (!data.contains(a_info.ref_id)) return;
     if (data.at(a_info.ref_id).empty()) return;
-    SetDelayOfInstances(t, a_info, inv);
+    SetDelayOfInstances(t, a_info, inv, ownerBase);
 }
 
 

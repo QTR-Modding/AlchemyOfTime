@@ -152,16 +152,16 @@ class Manager final : public Ticker, public SaveLoadData {
     std::set<float> GetUpdateTimes(const RE::TESObjectREFR* inventory_owner);
 
     // [expects: sourceMutex_] (unique)
-    bool UpdateInventory(const RefInfo& a_info, float t, const InvMap& inv);
+    bool UpdateInventory(const RefInfo& a_info, float t, const InvMap& inv, FormID ownerBase);
 
     // [expects: sourceMutex_] (unique)
-    void UpdateInventory(const RefInfo& a_info, const InvMap& inv);
+    void UpdateInventory(const RefInfo& a_info, const InvMap& inv, FormID ownerBase);
 
     void UpdateQueuedWO(const RefInfo& ref_info, float curr_time);
     // [expects: sourceMutex_] (unique)
     void UpdateWO(RE::TESObjectREFR* ref);
     // [expects: sourceMutex_] (unique)
-    void SyncWithInventory(const RefInfo& a_info, const InvMap& inv);
+    void SyncWithInventory(const RefInfo& a_info, const InvMap& inv, FormID ownerBase);
 
 
     // [expects: sourceMutex_] (unique)
@@ -214,7 +214,7 @@ public:
 
     // Registers instances; may mutate sources. [expects: sourceMutex_] (unique)
     void Register(FormID some_formid, Count count, const RefInfo& ref_info,
-                  Duration register_time, const InvMap& a_inv);
+                  Duration register_time, const InvMap& a_inv, FormID ownerBase);
     // Registers instances; may mutate sources. [expects: sourceMutex_] (unique)
     void Register(FormID some_formid, Count count, RefID location_refid, Duration register_time);
 
