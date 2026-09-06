@@ -652,14 +652,18 @@ void Manager::PreDeleteRefStop(RefStop& a_ref_stop) {
 }
 
 void Manager::UpdateLoop() {
-    if (!Settings::world_objects_evolve.load()) {
-        ClearWOUpdateQueue();
-    } else if (QUE_UNIQUE_GUARD;
-        !queue_delete_.empty() || !Settings::placed_objects_evolve.load()) {
+    if (QUE_UNIQUE_GUARD;
+        !queue_delete_.empty() || !Settings::world_objects_evolve.load() || !Settings::placed_objects_evolve.load()) {
         for (auto it = _ref_stops_.begin(); it != _ref_stops_.end();) {
-            if (const auto ref = it->second.GetRef();
-                queue_delete_.contains(it->first) ||
-                ref && !Settings::placed_objects_evolve.load() && Utils::WorldObject::IsPlacedObject(ref)) {
+            bool remove = queue_delete_.contains(it->first);
+            if (!remove && it->second.ref_info.update_type == RefInfo::UpdateType::kWorldObject) {
+                remove = !Settings::world_objects_evolve.load();
+                if (!remove && !Settings::placed_objects_evolve.load()) {
+                    const auto ref = it->second.GetRef();
+                    remove = ref && Utils::WorldObject::IsPlacedObject(ref);
+                }
+            }
+            if (remove) {
                 PreDeleteRefStop(it->second);
                 it = _ref_stops_.erase(it);
             } else ++it;
@@ -728,7 +732,8 @@ void Manager::UpdateLoop() {
 
 void Manager::QueueRefUpdate(const RefStop& a_refstop) {
     if (a_refstop.ref_info.update_type == RefInfo::UpdateType::kNone) return;
-    if (!Settings::world_objects_evolve.load()) return;
+    if (a_refstop.ref_info.update_type == RefInfo::UpdateType::kWorldObject &&
+        !Settings::world_objects_evolve.load()) return;
 
     bool needStart;
     {
