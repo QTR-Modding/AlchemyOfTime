@@ -727,6 +727,7 @@ void Manager::UpdateLoop() {
 }
 
 void Manager::QueueRefUpdate(const RefStop& a_refstop) {
+    if (a_refstop.ref_info.update_type == RefInfo::UpdateType::kNone) return;
     if (!Settings::world_objects_evolve.load()) return;
 
     bool needStart;
