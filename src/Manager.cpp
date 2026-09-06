@@ -263,10 +263,15 @@ void Manager::UpdateLocationIndexForSource(const Source& src, const RefID locati
     const auto it = src.data.find(location_id);
     if (it == src.data.end() || it->second.empty()) {
         RemoveLocationIndex(location_id, src.formid);
+        if (src.HasInventoryOwnerTriggers()) {
+            QUE_UNIQUE_GUARD;
+            RemoveQueuedUpdate(location_id, src.formid, RefStop::Type::kInventoryTriggers);
+        }
         return;
     }
 
     AddLocationIndex(location_id, src.formid);
+    if (src.HasInventoryOwnerTriggers()) QueueInventoryUpdate(src, location_id);
 }
 
 void Manager::RefreshLocationIndex(const RefID location_id) {
@@ -480,6 +485,18 @@ void Manager::MarkDirty_(RE::TESObjectREFR* r) {
     dirty_refs_[r->GetFormID()] = h;
 }
 
+void Manager::ProcessInventoryUpdates() {
+    if (!inventory_poll_due_.load(std::memory_order_relaxed) || !inventory_poll_due_.exchange(false)) return;
+    if (isLoading.load() || isUninstalled.load()) return;
+    if (const auto ui = RE::UI::GetSingleton(); ui && ui->GameIsPaused()) return;
+    const auto calendar = RE::Calendar::GetSingleton();
+    if (!calendar) return;
+    const auto time = calendar->GetHoursPassed();
+    for (const auto& info : GetRefStops(RefStop::Type::kInventoryTriggers)) {
+        UpdateQueuedRef(info, RefStop::Type::kInventoryTriggers, time);
+    }
+}
+
 void Manager::ProcessDirtyRefs_() {
     std::unordered_map<RefID, RE::ObjectRefHandle> local;
 
@@ -654,11 +671,16 @@ void Manager::PreDeleteRefStop(RefStop& a_ref_stop) {
 void Manager::UpdateLoop() {
     if (!Settings::world_objects_evolve.load()) {
         ClearWOUpdateQueue();
-    } else if (QUE_UNIQUE_GUARD;
+    }
+    if (QUE_UNIQUE_GUARD;
         !queue_delete_.empty() || !Settings::placed_objects_evolve.load()) {
         for (auto it = _ref_stops_.begin(); it != _ref_stops_.end();) {
+            if (it->second.type != RefStop::Type::kWorldObject) {
+                ++it;
+                continue;
+            }
             if (const auto ref = it->second.GetRef();
-                queue_delete_.contains(it->first) ||
+                queue_delete_.contains(it->second.ref_info.ref_id) ||
                 ref && !Settings::placed_objects_evolve.load() && Utils::WorldObject::IsPlacedObject(ref)) {
                 PreDeleteRefStop(it->second);
                 it = _ref_stops_.erase(it);
@@ -683,7 +705,21 @@ void Manager::UpdateLoop() {
 
     if (const auto ui = RE::UI::GetSingleton(); ui && ui->GameIsPaused()) return;
 
-    const auto ref_stops_copy = GetRefStops();
+    std::vector<RefInfo> ref_stops_copy;
+    {
+        QUE_SHARED_GUARD;
+        bool inventory_pending = false;
+        for (const auto& stop : _ref_stops_ | std::views::values) {
+            if (stop.type == RefStop::Type::kWorldObject) {
+                if (ref_stops_copy.empty()) ref_stops_copy.reserve(_ref_stops_.size());
+                ref_stops_copy.push_back(stop.ref_info);
+            }
+            else if (stop.type == RefStop::Type::kInventoryTriggers) inventory_pending = true;
+        }
+        if (inventory_pending) inventory_poll_due_.store(true, std::memory_order_relaxed);
+    }
+
+    if (ref_stops_copy.empty()) return;
 
     const auto scanReq = BuildCellScanRequests_(ref_stops_copy);
     CellScanner::GetSingleton()->RequestRefresh(scanReq);
@@ -692,16 +728,16 @@ void Manager::UpdateLoop() {
     if (const auto cal = RE::Calendar::GetSingleton()) {
         // make copy with only stops
         curr_time = cal->GetHoursPassed();
-        std::vector<RefID> ref_stops_due;
+        std::vector<std::pair<RefID, FormID>> ref_stops_due;
         ref_stops_due.reserve(ref_stops_copy.size());
         for (
             QUE_UNIQUE_GUARD;
             const auto& key : ref_stops_copy) {
-            auto it = _ref_stops_.find(key.ref_id);
-            if (it == _ref_stops_.end()) continue;
+            auto stop = GetRefStop(key.ref_id);
+            if (!stop) continue;
 
-            if (auto& val = it->second; val.IsDue(curr_time)) {
-                ref_stops_due.push_back(key.ref_id);
+            if (auto& val = *stop; val.IsDue(curr_time)) {
+                ref_stops_due.emplace_back(key.ref_id, key.source_id);
             } else if (const auto ref = val.GetRef()) {
                 val.ApplyTint(ref);
                 val.ApplyArtObject(ref);
@@ -710,38 +746,90 @@ void Manager::UpdateLoop() {
             }
         }
 
-        for (QUE_UNIQUE_GUARD; const auto refid : ref_stops_due) {
-            if (auto it = _ref_stops_.find(refid); it != _ref_stops_.end()) {
-                auto& val = it->second;
-                PreDeleteRefStop(val);
-                _ref_stops_.erase(it);
-            }
+        for (QUE_UNIQUE_GUARD; const auto& [refid, source] : ref_stops_due) {
+            RemoveQueuedUpdate(refid, source, RefStop::Type::kWorldObject);
         }
     }
 
     //SKSE::GetTaskInterface()->AddTask([ref_stops_copy = std::move(ref_stops_copy)]() mutable {
     if (curr_time > 0.f) {
         for (const auto& ref_info : ref_stops_copy) {
-            M->UpdateQueuedWO(ref_info, curr_time);
+            M->UpdateQueuedRef(ref_info, RefStop::Type::kWorldObject, curr_time);
         }
     }
     //});
 }
 
-void Manager::QueueWOUpdate(const RefStop& a_refstop) {
-    if (!Settings::world_objects_evolve.load()) return;
+void Manager::QueueRefUpdate(const RefStop& a_refstop) {
+    if (a_refstop.type == RefStop::Type::kWorldObject && !Settings::world_objects_evolve.load()) return;
 
     bool needStart;
     {
         const auto refid = a_refstop.ref_info.ref_id;
         QUE_UNIQUE_GUARD;
-        if (auto [it, inserted] = _ref_stops_.try_emplace(refid, a_refstop); !inserted) {
+        const UpdateKey key{refid, a_refstop.type == RefStop::Type::kWorldObject ? 0 : a_refstop.ref_info.source_id,
+                            a_refstop.type};
+        if (auto [it, inserted] = _ref_stops_.try_emplace(key, a_refstop); !inserted) {
             it->second.Update(a_refstop);
         }
         needStart = !isRunning();
     }
 
     if (needStart) Start();
+}
+
+void Manager::RemoveQueuedUpdate(const RefID refid, const FormID source, const RefStop::Type type) {
+    const UpdateKey key{refid, type == RefStop::Type::kWorldObject ? 0 : source, type};
+    if (const auto it = _ref_stops_.find(key); it != _ref_stops_.end() && it->second.ref_info.source_id == source) {
+        if (type == RefStop::Type::kWorldObject) PreDeleteRefStop(it->second);
+        _ref_stops_.erase(it);
+    }
+}
+
+void Manager::QueueInventoryUpdate(const Source& source, const RefID owner) {
+    const auto it = source.data.find(owner);
+    if (it == source.data.end() || !std::ranges::any_of(it->second, [](const auto& instance) {
+            return instance.count > 0 && !instance.xtra.is_decayed;
+        })) {
+        QUE_UNIQUE_GUARD;
+        RemoveQueuedUpdate(owner, source.formid, RefStop::Type::kInventoryTriggers);
+        return;
+    }
+    RefStop stop(owner);
+    const auto ref = stop.GetRef();
+    if (!ref || !ref->HasContainer() || !ref->Is(RE::FormType::ActorCharacter)) return;
+    stop.ref_info.source_id = source.formid;
+    stop.type = RefStop::Type::kInventoryTriggers;
+    QueueRefUpdate(stop);
+}
+
+void Manager::UpdateQueuedRef(const RefInfo& info, const RefStop::Type type, const float time) {
+    switch (type) {
+    case RefStop::Type::kWorldObject:
+        UpdateQueuedWO(info, time);
+        return;
+    case RefStop::Type::kInventoryTriggers: {
+        SRC_SHARED_GUARD;
+        const auto src = sources.find(info.source_id);
+        const auto owner = info.GetRef();
+        if (src == sources.end() || !src->second->IsHealthy() || !src->second->HasInventoryOwnerTriggers() ||
+            !owner || owner->IsDeleted() || owner->IsMarkedForDeletion() || !owner->HasContainer()) {
+            QUE_UNIQUE_GUARD;
+            RemoveQueuedUpdate(info.ref_id, info.source_id, type);
+            return;
+        }
+        const auto instances = src->second->data.find(info.ref_id);
+        if (instances == src->second->data.end() || !std::ranges::any_of(instances->second, [](const auto& instance) {
+                return instance.count > 0 && !instance.xtra.is_decayed;
+            })) {
+            QUE_UNIQUE_GUARD;
+            RemoveQueuedUpdate(info.ref_id, info.source_id, type);
+            return;
+        }
+        if (src->second->InventoryTriggersNeedUpdate(info, *owner, time)) MarkDirty_(owner);
+        return;
+    }
+    }
 }
 
 void Manager::UpdateRefStop(const Source& src, const StageInstance& wo_inst, RefStop& a_ref_stop, const float stop_t) {
@@ -1410,7 +1498,7 @@ void Manager::UpdateQueuedWO(const RefInfo& ref_info, const float curr_time) {
     if (const auto next_update = source->GetNextUpdateTime(&wo_inst); next_update > curr_time) {
         RefStop a_ref_stop(refid);
         UpdateRefStop(*source, wo_inst, a_ref_stop, next_update);
-        QueueWOUpdate(a_ref_stop);
+        QueueRefUpdate(a_ref_stop);
     }
 
     CleanUpSourceData(source, refid);
@@ -1429,7 +1517,7 @@ void Manager::UpdateWO(RE::TESObjectREFR* ref) {
 
     {
         QUE_SHARED_GUARD;
-        if (_ref_stops_.contains(refid)) {
+        if (GetRefStop(refid)) {
             return;
         }
     }
@@ -1483,7 +1571,7 @@ void Manager::UpdateWO(RE::TESObjectREFR* ref) {
     if (const auto next_update = source->GetNextUpdateTime(&wo_inst); next_update > curr_time) {
         RefStop a_ref_stop(refid);
         UpdateRefStop(*source, wo_inst, a_ref_stop, next_update);
-        QueueWOUpdate(a_ref_stop);
+        QueueRefUpdate(a_ref_stop);
     }
 
     CleanUpSourceData(source, refid);
@@ -1501,7 +1589,7 @@ void Manager::UpdateRef(RE::TESObjectREFR* loc) {
 }
 
 RefStop* Manager::GetRefStop(const RefID refid) {
-    const auto it = _ref_stops_.find(refid);
+    const auto it = _ref_stops_.find({refid, 0, RefStop::Type::kWorldObject});
     return it == _ref_stops_.end() ? nullptr : &it->second;
 }
 
@@ -1523,6 +1611,10 @@ bool Manager::DeRegisterRef(const RefID refid) {
         if (auto it = source.data.find(refid); it != source.data.end()) {
             M->InstanceCountUpdate(-static_cast<int>(it->second.size()));
             source.data.erase(it);
+            if (source.HasInventoryOwnerTriggers()) {
+                QUE_UNIQUE_GUARD;
+                RemoveQueuedUpdate(refid, source.formid, RefStop::Type::kInventoryTriggers);
+            }
             RemoveLocationIndex(refid, source.formid);
             found = true;
         }
@@ -1532,10 +1624,14 @@ bool Manager::DeRegisterRef(const RefID refid) {
 
 void Manager::ClearWOUpdateQueue() {
     QUE_UNIQUE_GUARD;
-    for (auto& val : _ref_stops_ | std::views::values) {
-        PreDeleteRefStop(val);
+    for (auto it = _ref_stops_.begin(); it != _ref_stops_.end();) {
+        if (it->second.type == RefStop::Type::kWorldObject) {
+            PreDeleteRefStop(it->second);
+            it = _ref_stops_.erase(it);
+        } else {
+            ++it;
+        }
     }
-    _ref_stops_.clear();
 }
 
 void Manager::Register(const FormID some_formid, const Count count, const RefID location_refid,
@@ -1597,7 +1693,7 @@ void Manager::Register(const FormID some_formid, const Count count, const RefID 
         const auto hitting_time = src->GetNextUpdateTime(inserted_instance);
         RefStop a_ref_stop(location_refid);
         UpdateRefStop(*src, *inserted_instance, a_ref_stop, hitting_time);
-        QueueWOUpdate(a_ref_stop);
+        QueueRefUpdate(a_ref_stop);
         UpdateLocationIndexForSource(*src, location_refid);
     }
 }
@@ -1833,6 +1929,10 @@ void Manager::Reset() {
         sources.clear();
         stage_to_sources.clear();
         loc_to_sources.clear();
+        QUE_UNIQUE_GUARD;
+        _ref_stops_.clear();
+        queue_delete_.clear();
+        inventory_poll_due_.store(false);
     }
 
     // external_favs.clear();         // we will update this in ReceiveData
@@ -2165,13 +2265,13 @@ std::vector<Source> Manager::GetSourcesByStageAndOwner(const FormID stage_formid
     return out;
 }
 
-std::unordered_map<RefID, float> Manager::GetUpdateQueue() {
-    std::unordered_map<RefID, float> _ref_stops_copy;
+std::map<std::tuple<RefID, FormID, RefStop::Type>, float> Manager::GetUpdateQueue() {
+    std::map<std::tuple<RefID, FormID, RefStop::Type>, float> ref_stops_copy;
     QUE_SHARED_GUARD;
-    for (const auto& [key, value] : _ref_stops_) {
-        _ref_stops_copy[key] = value.stop_time;
+    for (const auto& value : _ref_stops_ | std::views::values) {
+        ref_stops_copy[{value.ref_info.ref_id, value.ref_info.source_id, value.type}] = value.stop_time;
     }
-    return _ref_stops_copy;
+    return ref_stops_copy;
 }
 
 void Manager::HandleDynamicWO(RE::TESObjectREFR* ref) {
@@ -2206,11 +2306,11 @@ void Manager::HandleWOBaseChange(RE::TESObjectREFR* ref) {
     }
 }
 
-std::vector<RefInfo> Manager::GetRefStops() {
+std::vector<RefInfo> Manager::GetRefStops(const RefStop::Type type) {
     std::vector<RefInfo> ref_stops_copy;
     QUE_SHARED_GUARD;
-    ref_stops_copy.reserve(_ref_stops_.size());
     for (const auto& refstop : _ref_stops_ | std::views::values) {
+        if (refstop.type != type) continue;
         ref_stops_copy.emplace_back(refstop.ref_info);
     }
     return ref_stops_copy;

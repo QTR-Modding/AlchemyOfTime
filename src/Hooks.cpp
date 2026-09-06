@@ -70,6 +70,7 @@ void Hooks::Install() {
 
 void Hooks::UpdateHook::Update(RE::Actor* a_this, float a_delta) {
     Update_(a_this, a_delta);
+    M->ProcessInventoryUpdates();
     M->ProcessDirtyRefs_();
 
     #ifndef NDEBUG

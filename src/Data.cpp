@@ -48,6 +48,8 @@ void Source::Init(const DefaultSettings* defaultsettings) {
         settings.Add(*addon);
     }
 
+    CacheInventoryOwnerTriggers();
+
     formtype = bound->GetFormType();
 
     if (!stages.empty()) {
@@ -106,6 +108,8 @@ void Source::UpdateAddons() {
     if (const auto addon = Settings::GetAddOnSettings(form); addon && addon->IsHealthy()) {
         settings.Add(*addon);
     }
+
+    CacheInventoryOwnerTriggers();
 
     if (!settings.CheckIntegrity()) {
         logger::critical("Default settings integrity check failed.");
@@ -302,7 +306,7 @@ bool Source::InitInsertInstanceInventory(const StageNo n, const Count c, const R
         return false;
     }
 
-    SetDelayOfInstance(data[a_info.ref_id].back(), t_0, a_info.base_id, inv);
+    SetDelayOfInstance(data[a_info.ref_id].back(), t_0, a_info, inv);
     return true;
 }
 
@@ -542,30 +546,63 @@ float Source::GetNextUpdateTime(const StageInstance* st_inst) {
     return st_inst->GetHittingTime(schranke);
 }
 
-FormID Source::GetModulatorInInventory(const InvMap& inv, const FormID ownerBase, const StageNo no) const {
+void Source::CacheInventoryOwnerTriggers() {
+    inventory_owner_triggers.clear();
+    const auto cache = [this](const FormID id) {
+        if (auto form = FormReader::GetFormByID(id); form && form->Is(RE::FormType::Perk)) {
+            inventory_owner_triggers.emplace(id, form);
+        }
+    };
+    for (const auto id : settings.transformers | std::views::keys) cache(id);
+    for (const auto id : settings.delayers | std::views::keys) cache(id);
+}
+
+bool Source::MatchesInventoryOwnerTrigger(RE::TESForm* trigger, RE::TESObjectREFR* owner) {
+    if (!owner) return false;
+    switch (trigger->GetFormType()) {
+    case RE::FormType::Perk: {
+        const auto perk = static_cast<RE::BGSPerk*>(trigger);
+        const auto perk_owner = owner->As<RE::Actor>();
+        return perk_owner && perk_owner->HasPerk(perk) &&
+            (!perk->perkConditions || perk->perkConditions.IsTrue(owner, owner));
+    }
+    default:
+        return false;
+    }
+}
+
+bool Source::MatchesInventoryTrigger(const FormID trigger, const RefInfo& info, const InvMap& inv) const {
+    if (!inventory_owner_triggers.empty()) {
+        if (const auto it = inventory_owner_triggers.find(trigger); it != inventory_owner_triggers.end()) {
+            return MatchesInventoryOwnerTrigger(it->second, info.GetRef());
+        }
+    }
+    const auto obj = RE::TESForm::LookupByID<RE::TESBoundObject>(trigger);
+    if (!obj) return false;
+    const auto it = inv.find(obj);
+    return it != inv.end() && it->second.first > 0;
+}
+
+FormID Source::GetModulatorInInventory(const InvMap& inv, const RefInfo& info, const StageNo no) const {
     for (auto dlyr_fid : settings.delayers | std::views::keys) {
         if (!settings.delayer_allowed_stages.at(dlyr_fid).contains(no)) continue;
-        auto obj = RE::TESForm::LookupByID<RE::TESBoundObject>(dlyr_fid);
-        if (!obj) continue;
-        if (auto it = inv.find(obj); it != inv.end() && it->second.first > 0) {
+        if (MatchesInventoryTrigger(dlyr_fid, info, inv)) {
             auto contIt = settings.delayer_containers.find(dlyr_fid);
             if (contIt == settings.delayer_containers.end() || contIt->second.empty() ||
-                contIt->second.contains(ownerBase))
+                contIt->second.contains(info.base_id))
                 return dlyr_fid;
         }
     }
     return 0;
 }
 
-FormID Source::GetTransformerInInventory(const InvMap& inv, const FormID ownerBase, const StageNo no) const {
+FormID Source::GetTransformerInInventory(const InvMap& inv, const RefInfo& info, const StageNo no) const {
     for (auto trns_fid : settings.transformers | std::views::keys) {
         if (!settings.transformer_allowed_stages.at(trns_fid).contains(no)) continue;
-        auto obj = RE::TESForm::LookupByID<RE::TESBoundObject>(trns_fid);
-        if (!obj) continue;
-        if (auto it = inv.find(obj); it != inv.end() && it->second.first > 0) {
+        if (MatchesInventoryTrigger(trns_fid, info, inv)) {
             auto contIt = settings.transformer_containers.find(trns_fid);
             if (contIt == settings.transformer_containers.end() || contIt->second.empty() ||
-                contIt->second.contains(ownerBase))
+                contIt->second.contains(info.base_id))
                 return trns_fid;
         }
     }
@@ -586,9 +623,9 @@ void Source::SetDelayOfInstances(const float t, const RefInfo& a_info, const Inv
             continue;
         }
 
-        if (const auto tr = GetTransformerInInventory(inv, ownerBase, inst.no))
+        if (const auto tr = GetTransformerInInventory(inv, a_info, inst.no))
             SetDelayOfInstance(inst, t, tr);
-        else if (const auto dl = GetModulatorInInventory(inv, ownerBase, inst.no))
+        else if (const auto dl = GetModulatorInInventory(inv, a_info, inst.no))
             SetDelayOfInstance(inst, t, dl);
         else
             inst.RemoveTimeMod(t);
@@ -599,6 +636,50 @@ void Source::UpdateTimeModulationInInventory(const RefInfo& a_info, const float 
     if (!data.contains(a_info.ref_id)) return;
     if (data.at(a_info.ref_id).empty()) return;
     SetDelayOfInstances(t, a_info, inv);
+}
+
+template <class T>
+std::optional<bool> Source::InventoryTriggerChanged(const RefInfo& info, RE::TESObjectREFR& owner, const StageInstance& instance,
+    const T& triggers, const std::unordered_map<FormID, std::unordered_set<StageNo>>& allowedStages,
+    const std::unordered_map<FormID, std::unordered_set<FormID>>& containers) const {
+    const auto current = instance.GetDelayerFormID();
+    for (const auto id : triggers | std::views::keys) {
+        if (!allowedStages.at(id).contains(instance.no)) continue;
+        const auto restriction = containers.find(id);
+        if (restriction != containers.end() && !restriction->second.empty() &&
+            !restriction->second.contains(info.base_id)) continue;
+
+        if (const auto it = inventory_owner_triggers.find(id); it != inventory_owner_triggers.end()) {
+            const bool matches = MatchesInventoryOwnerTrigger(it->second, &owner);
+            if (id == current) return !matches;
+            if (matches) return true;
+        } else if (id == current) {
+            return false;
+        }
+    }
+    return std::nullopt;
+}
+
+bool Source::InventoryTriggersNeedUpdate(const RefInfo& info, RE::TESObjectREFR& owner, const float time) const {
+    const auto it = data.find(info.ref_id);
+    if (it == data.end() || ShouldFreezeEvolution(info.base_id)) return false;
+    for (const auto& instance : it->second) {
+        if (instance.count <= 0 || instance.xtra.is_decayed) continue;
+        const auto next = GetNextUpdateTime(&instance);
+        if (next > 0.f && next <= time) return true;
+
+        // The current item winner also stops the search: later perks cannot outrank it.
+        if (const auto changed = InventoryTriggerChanged(info, owner, instance, settings.transformers,
+                settings.transformer_allowed_stages, settings.transformer_containers)) {
+            if (*changed) return true;
+            continue;
+        }
+        if (const auto changed = InventoryTriggerChanged(info, owner, instance, settings.delayers,
+                settings.delayer_allowed_stages, settings.delayer_containers); changed && *changed) {
+            return true;
+        }
+    }
+    return false;
 }
 
 
@@ -817,6 +898,7 @@ void Source::Reset() {
     editorid = "";
     stages.clear();
     data.clear();
+    inventory_owner_triggers.clear();
     init_failed = false;
 }
 
@@ -939,20 +1021,20 @@ Stage Source::GetTransformedStage(const FormID key_formid) const {
     return trnsf_st;
 }
 
-void Source::SetDelayOfInstance(StageInstance& instance, const float curr_time, const FormID inv_owner_base,
-                                const InvMap& a_inv) const {
+void Source::SetDelayOfInstance(StageInstance& instance, const float curr_time, const RefInfo& info,
+                                 const InvMap& a_inv) const {
     if (instance.count <= 0) return;
-    if (ShouldFreezeEvolution(inv_owner_base)) {
+    if (ShouldFreezeEvolution(info.base_id)) {
         instance.RemoveTimeMod(curr_time);
         instance.SetDelay(curr_time, 0, 0); // freeze
         return;
     }
 
     if (const auto transformer_best =
-        GetTransformerInInventory(a_inv, inv_owner_base, instance.no)) {
+        GetTransformerInInventory(a_inv, info, instance.no)) {
         SetDelayOfInstance(instance, curr_time, transformer_best);
     } else if (const auto delayer_best =
-        GetModulatorInInventory(a_inv, inv_owner_base, instance.no)) {
+        GetModulatorInInventory(a_inv, info, instance.no)) {
         SetDelayOfInstance(instance, curr_time, delayer_best);
     } else {
         instance.RemoveTimeMod(curr_time);

@@ -357,6 +357,7 @@ RefStopFeature& RefStopFeature::operator=(const RefStopFeature& other) {
 RefStop& RefStop::operator=(const RefStop& other) {
     if (this != &other) {
         ref_info = other.ref_info;
+        type = other.type;
         stop_time = other.stop_time;
         features = other.features;
         // Manually handle any special cases for members
@@ -561,12 +562,13 @@ bool RefStop::HasArtObject(RE::TESObjectREFR* a_ref, const RE::BGSArtObject* a_a
 }
 
 void RefStop::Update(const RefStop& other) {
-    if (ref_info.ref_id != other.ref_info.ref_id) {
-        logger::critical("RefID not the same.");
+    if (ref_info.ref_id != other.ref_info.ref_id || type != other.type) {
+        logger::critical("Reference update ID or type differs.");
         return;
     }
 
-    ref_info.source_id = other.ref_info.source_id;
+    if (type == Type::kInventoryTriggers) ref_info = other.ref_info;
+    else ref_info.source_id = other.ref_info.source_id;
 
     if (features.tint_color.id != other.features.tint_color.id) {
         RemoveTint();

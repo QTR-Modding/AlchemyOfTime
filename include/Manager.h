@@ -86,8 +86,17 @@ class Manager final : public Ticker, public SaveLoadData {
     unsigned int _instance_limit = 200000;
 
     // queueMutex_ guards these
-    std::unordered_map<RefID, RefStop> _ref_stops_;
+    using UpdateKey = std::tuple<RefID, FormID, RefStop::Type>;
+    struct UpdateKeyHash {
+        std::size_t operator()(const UpdateKey& key) const noexcept {
+            const auto& [refid, source, type] = key;
+            const auto packed = (std::uint64_t{refid} << std::numeric_limits<FormID>::digits) | source;
+            return std::hash<std::uint64_t>{}(packed) ^ std::hash<RefStop::Type>{}(type);
+        }
+    };
+    std::unordered_map<UpdateKey, RefStop, UpdateKeyHash> _ref_stops_;
     std::unordered_set<RefID> queue_delete_;
+    std::atomic<bool> inventory_poll_due_{false};
 
     std::unordered_set<FormID> do_not_register;
 
@@ -97,7 +106,11 @@ class Manager final : public Ticker, public SaveLoadData {
     void UpdateLoop();
 
     // Enqueue/merge a RefStop. [locks: queueMutex_]
-    void QueueWOUpdate(const RefStop& a_refstop);
+    void QueueRefUpdate(const RefStop& a_refstop);
+    void QueueInventoryUpdate(const Source& source, RefID owner);
+    // [expects: queueMutex_] (unique)
+    void RemoveQueuedUpdate(RefID refid, FormID source, RefStop::Type type);
+    void UpdateQueuedRef(const RefInfo& info, RefStop::Type type, float time);
 
     static void UpdateRefStop(const Source& src, const StageInstance& wo_inst, RefStop& a_ref_stop, float stop_t);
 
@@ -260,7 +273,7 @@ public:
     std::vector<Source> GetSourcesByStageAndOwner(FormID stage_formid, RefID location_id);
 
     // Snapshot of the update queue. [locks: queueMutex_] (shared)
-    std::unordered_map<RefID, float> GetUpdateQueue();
+    std::map<std::tuple<RefID, FormID, RefStop::Type>, float> GetUpdateQueue();
 
     // [expects: sourceMutex_] (shared)
     void HandleDynamicWO(RE::TESObjectREFR* ref);
@@ -273,11 +286,12 @@ public:
         return isRunning();
     }
 
-    std::vector<RefInfo> GetRefStops();
+    std::vector<RefInfo> GetRefStops(RefStop::Type type = RefStop::Type::kWorldObject);
 
     void IndexStage(FormID stage_formid, FormID source_formid);
 
     void ProcessDirtyRefs_();
+    void ProcessInventoryUpdates();
 
     void InstanceCountUpdate(int32_t delta);
 };

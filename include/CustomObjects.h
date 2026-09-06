@@ -323,6 +323,8 @@ struct RefInfo {
 
 
 struct RefStop {
+    enum class Type { kWorldObject, kInventoryTriggers };
+
     ~RefStop() = default;
 
     bool operator<(const RefStop& other) const { return ref_info.ref_id < other.ref_info.ref_id; }
@@ -330,6 +332,7 @@ struct RefStop {
     RefStop& operator=(const RefStop& other);
 
     RefInfo ref_info;
+    Type type = Type::kWorldObject;
     float stop_time = 0;
     RefStopFeatures features;
 
