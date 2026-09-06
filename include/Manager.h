@@ -96,7 +96,6 @@ class Manager final : public Ticker, public SaveLoadData {
     };
     std::unordered_map<UpdateKey, RefStop, UpdateKeyHash> _ref_stops_;
     std::unordered_set<RefID> queue_delete_;
-    std::atomic<bool> inventory_poll_due_{false};
 
     std::unordered_set<FormID> do_not_register;
 
@@ -171,6 +170,7 @@ class Manager final : public Ticker, public SaveLoadData {
     void UpdateInventory(const RefInfo& a_info, const InvMap& inv);
 
     void UpdateQueuedWO(const RefInfo& ref_info, float curr_time);
+    void UpdateQueuedInventory(const RefInfo& info);
     // [expects: sourceMutex_] (unique)
     void UpdateWO(RE::TESObjectREFR* ref);
     // [expects: sourceMutex_] (unique)
@@ -190,7 +190,7 @@ class Manager final : public Ticker, public SaveLoadData {
     using ScanRequest = std::pair<RefInfo, std::vector<FormID>>;
 
     [[nodiscard]] std::vector<ScanRequest> BuildCellScanRequests_(
-        const std::vector<RefInfo>& refStopsCopy);
+        const std::vector<std::pair<RefInfo, RefStop::Type>>& refStopsCopy);
 
     static bool LocHasStage(Source* src, RefID loc, FormID stage_formid);
 
@@ -286,12 +286,11 @@ public:
         return isRunning();
     }
 
-    std::vector<RefInfo> GetRefStops(RefStop::Type type = RefStop::Type::kWorldObject);
+    std::vector<std::pair<RefInfo, RefStop::Type>> GetRefStops();
 
     void IndexStage(FormID stage_formid, FormID source_formid);
 
     void ProcessDirtyRefs_();
-    void ProcessInventoryUpdates();
 
     void InstanceCountUpdate(int32_t delta);
 };
