@@ -158,6 +158,7 @@ class Manager final : public Ticker, public SaveLoadData {
     void UpdateInventory(const RefInfo& a_info, const InvMap& inv);
 
     void UpdateQueuedRef(const RefInfo& ref_info, float curr_time);
+    void UpdateQueuedWO(const RefInfo& ref_info, float curr_time);
     // [expects: sourceMutex_] (unique)
     void UpdateWO(RE::TESObjectREFR* ref);
     // [expects: sourceMutex_] (unique)
