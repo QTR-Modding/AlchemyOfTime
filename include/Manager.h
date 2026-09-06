@@ -98,10 +98,6 @@ class Manager final : public Ticker, public SaveLoadData {
 
     // Enqueue/merge a RefStop. [locks: queueMutex_]
     void QueueRefUpdate(const RefStop& a_refstop);
-    void QueueInventoryUpdate(const Source& source, RefID owner);
-    // [expects: queueMutex_] (unique)
-    void RemoveQueuedUpdate(RefID refid, FormID source, RefStop::Type type);
-    void UpdateQueuedRef(const RefInfo& info, RefStop::Type type, float time);
 
     static void UpdateRefStop(const Source& src, const StageInstance& wo_inst, RefStop& a_ref_stop, float stop_t);
 
@@ -161,8 +157,8 @@ class Manager final : public Ticker, public SaveLoadData {
     // [expects: sourceMutex_] (unique)
     void UpdateInventory(const RefInfo& a_info, const InvMap& inv);
 
+    void UpdateQueuedRef(const RefInfo& info, RefStop::Type type, float time);
     void UpdateQueuedWO(const RefInfo& ref_info, float curr_time);
-    void UpdateQueuedInventory(const RefInfo& info);
     // [expects: sourceMutex_] (unique)
     void UpdateWO(RE::TESObjectREFR* ref);
     // [expects: sourceMutex_] (unique)
@@ -265,7 +261,7 @@ public:
     std::vector<Source> GetSourcesByStageAndOwner(FormID stage_formid, RefID location_id);
 
     // Snapshot of the update queue. [locks: queueMutex_] (shared)
-    std::unordered_map<RefID, std::pair<RefStop::Type, float>> GetUpdateQueue();
+    std::unordered_map<RefID, float> GetUpdateQueue();
 
     // [expects: sourceMutex_] (shared)
     void HandleDynamicWO(RE::TESObjectREFR* ref);

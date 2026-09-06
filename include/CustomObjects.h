@@ -323,7 +323,7 @@ struct RefInfo {
 
 
 struct RefStop {
-    enum class Type { kWorldObject, kInventoryTriggers };
+    enum class Type { kWorldObject };
 
     ~RefStop() = default;
 

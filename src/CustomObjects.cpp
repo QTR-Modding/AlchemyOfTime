@@ -562,13 +562,13 @@ bool RefStop::HasArtObject(RE::TESObjectREFR* a_ref, const RE::BGSArtObject* a_a
 }
 
 void RefStop::Update(const RefStop& other) {
-    if (ref_info.ref_id != other.ref_info.ref_id || type != other.type) {
-        logger::critical("Reference update ID or type differs.");
+    if (ref_info.ref_id != other.ref_info.ref_id) {
+        logger::critical("RefID not the same.");
         return;
     }
 
-    if (type == Type::kInventoryTriggers) ref_info = other.ref_info;
-    else ref_info.source_id = other.ref_info.source_id;
+    ref_info.source_id = other.ref_info.source_id;
+    type = other.type;
 
     if (features.tint_color.id != other.features.tint_color.id) {
         RemoveTint();

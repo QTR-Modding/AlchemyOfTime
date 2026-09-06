@@ -70,12 +70,9 @@ struct Source {
 
     // always update before doing this
     void UpdateTimeModulationInInventory(const RefInfo& a_info, float time, const InvMap& inv);
-    FormID GetModulatorInInventory(const InvMap& inv, const RefInfo& info, StageNo no) const;
-    FormID GetTransformerInInventory(const InvMap& inv, const RefInfo& info, StageNo no) const;
+    FormID GetModulatorInInventory(const InvMap& inv, FormID ownerBase, StageNo no) const;
+    FormID GetTransformerInInventory(const InvMap& inv, FormID ownerBase, StageNo no) const;
     void SetDelayOfInstances(float time, const RefInfo& a_info, const InvMap& inv);
-
-    bool HasInventoryOwnerTriggers() const { return !inventory_owner_triggers.empty(); }
-    bool InventoryTriggersNeedUpdate(const RefInfo& info, RE::TESObjectREFR& owner, float time) const;
 
 
     float GetNextUpdateTime(const StageInstance* st_inst);
@@ -110,17 +107,6 @@ private:
     bool init_failed = false;
 
     StageDict stages;
-
-    std::unordered_map<FormID, RE::TESForm*> inventory_owner_triggers;
-
-    void CacheInventoryOwnerTriggers();
-    static bool MatchesInventoryOwnerTrigger(RE::TESForm* trigger, RE::TESObjectREFR* owner);
-    bool MatchesInventoryTrigger(FormID trigger, const RefInfo& info, const InvMap& inv) const;
-
-    template <class T>
-    std::optional<bool> InventoryTriggerChanged(const RefInfo& info, RE::TESObjectREFR& owner, const StageInstance& instance,
-        const T& triggers, const std::unordered_map<FormID, std::unordered_set<StageNo>>& allowedStages,
-        const std::unordered_map<FormID, std::unordered_set<FormID>>& containers) const;
 
     // counta karismiyor
     [[nodiscard]] bool UpdateStageInstanceHelper(StageInstance& st_inst, float curr_time,
@@ -183,7 +169,7 @@ private:
 
     [[nodiscard]] Stage GetTransformedStage(FormID key_formid) const;
 
-    void SetDelayOfInstance(StageInstance& instance, float curr_time, const RefInfo& info, const InvMap& a_inv) const;
+    void SetDelayOfInstance(StageInstance& instance, float curr_time, FormID inv_owner_base, const InvMap& a_inv) const;
     void SetDelayOfInstance(StageInstance& instance, float curr_time, RE::TESObjectREFR* a_loc) const;
     void SetDelayOfInstance(StageInstance& instance, float a_time, FormID a_modulator) const;
 
