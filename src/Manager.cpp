@@ -292,6 +292,7 @@ std::vector<Manager::ScanRequest> Manager::BuildCellScanRequests_(
     SRC_SHARED_GUARD;
 
     for (const auto& ref_info : refStopsCopy) {
+        if (ref_info.update_type != RefInfo::UpdateType::kWorldObject) continue;
         const auto refid = ref_info.ref_id;
         if (!refid) {
             continue;
