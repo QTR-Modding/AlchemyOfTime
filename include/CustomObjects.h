@@ -288,9 +288,12 @@ struct RefStopFeatures {
 };
 
 struct RefInfo {
+    enum class UpdateType { kNone, kWorldObject };
+
     RefID ref_id = 0;
     FormID base_id = 0;
     FormID source_id = 0;
+    UpdateType update_type = UpdateType::kNone;
     mutable RE::ObjectRefHandle ref_handle{};
 
     explicit RefInfo(const RefID id) : ref_id(id) {
@@ -323,8 +326,6 @@ struct RefInfo {
 
 
 struct RefStop {
-    enum class Type { kWorldObject };
-
     ~RefStop() = default;
 
     bool operator<(const RefStop& other) const { return ref_info.ref_id < other.ref_info.ref_id; }
@@ -332,7 +333,6 @@ struct RefStop {
     RefStop& operator=(const RefStop& other);
 
     RefInfo ref_info;
-    Type type = Type::kWorldObject;
     float stop_time = 0;
     RefStopFeatures features;
 

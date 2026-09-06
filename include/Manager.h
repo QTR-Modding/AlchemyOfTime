@@ -157,8 +157,7 @@ class Manager final : public Ticker, public SaveLoadData {
     // [expects: sourceMutex_] (unique)
     void UpdateInventory(const RefInfo& a_info, const InvMap& inv);
 
-    void UpdateQueuedRef(const RefInfo& info, RefStop::Type type, float time);
-    void UpdateQueuedWO(const RefInfo& ref_info, float curr_time);
+    void UpdateQueuedRef(const RefInfo& ref_info, float curr_time);
     // [expects: sourceMutex_] (unique)
     void UpdateWO(RE::TESObjectREFR* ref);
     // [expects: sourceMutex_] (unique)
@@ -178,7 +177,7 @@ class Manager final : public Ticker, public SaveLoadData {
     using ScanRequest = std::pair<RefInfo, std::vector<FormID>>;
 
     [[nodiscard]] std::vector<ScanRequest> BuildCellScanRequests_(
-        const std::vector<std::pair<RefInfo, RefStop::Type>>& refStopsCopy);
+        const std::vector<RefInfo>& refStopsCopy);
 
     static bool LocHasStage(Source* src, RefID loc, FormID stage_formid);
 
@@ -274,7 +273,7 @@ public:
         return isRunning();
     }
 
-    std::vector<std::pair<RefInfo, RefStop::Type>> GetRefStops();
+    std::vector<RefInfo> GetRefStops();
 
     void IndexStage(FormID stage_formid, FormID source_formid);
 

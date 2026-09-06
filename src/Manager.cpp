@@ -284,14 +284,14 @@ void Manager::RefreshLocationIndex(const RefID location_id) {
 }
 
 std::vector<Manager::ScanRequest> Manager::BuildCellScanRequests_(
-    const std::vector<std::pair<RefInfo, RefStop::Type>>& refStopsCopy) {
+    const std::vector<RefInfo>& refStopsCopy) {
     std::vector<ScanRequest> out;
     out.reserve(refStopsCopy.size());
 
     // Only touches plugin-owned data => guarded by sourceMutex_.
     SRC_SHARED_GUARD;
 
-    for (const auto& ref_info : refStopsCopy | std::views::keys) {
+    for (const auto& ref_info : refStopsCopy) {
         const auto refid = ref_info.ref_id;
         if (!refid) {
             continue;
@@ -696,7 +696,7 @@ void Manager::UpdateLoop() {
         ref_stops_due.reserve(ref_stops_copy.size());
         for (
             QUE_UNIQUE_GUARD;
-            const auto& key : ref_stops_copy | std::views::keys) {
+            const auto& key : ref_stops_copy) {
             auto it = _ref_stops_.find(key.ref_id);
             if (it == _ref_stops_.end()) continue;
 
@@ -720,8 +720,8 @@ void Manager::UpdateLoop() {
     }
 
     if (curr_time > 0.f) {
-        for (const auto& [ref_info, type] : ref_stops_copy) {
-            M->UpdateQueuedRef(ref_info, type, curr_time);
+        for (const auto& ref_info : ref_stops_copy) {
+            M->UpdateQueuedRef(ref_info, curr_time);
         }
     }
 }
@@ -744,6 +744,7 @@ void Manager::QueueRefUpdate(const RefStop& a_refstop) {
 
 void Manager::UpdateRefStop(const Source& src, const StageInstance& wo_inst, RefStop& a_ref_stop, const float stop_t) {
     a_ref_stop.ref_info.source_id = src.formid;
+    a_ref_stop.ref_info.update_type = RefInfo::UpdateType::kWorldObject;
     const auto delayer = wo_inst.GetDelayerFormID();
     const bool is_transformer = src.settings.transformers.contains(delayer);
     const bool is_delayer = !is_transformer && src.settings.delayers.contains(delayer);
@@ -1314,112 +1315,111 @@ void Manager::SyncWithInventory(const RefInfo& a_info, const InvMap& inv) {
 }
 
 
-void Manager::UpdateQueuedRef(const RefInfo& info, const RefStop::Type type, const float time) {
-    switch (type) {
-    case RefStop::Type::kWorldObject:
-        UpdateQueuedWO(info, time);
+void Manager::UpdateQueuedRef(const RefInfo& ref_info, const float curr_time) {
+    switch (ref_info.update_type) {
+    case RefInfo::UpdateType::kNone:
         return;
-    }
-}
+    case RefInfo::UpdateType::kWorldObject: {
+        // Called from UpdateLoop task.
 
-void Manager::UpdateQueuedWO(const RefInfo& ref_info, const float curr_time) {
-    // Called from UpdateLoop task.
+        const auto refid = ref_info.ref_id;
 
-    const auto refid = ref_info.ref_id;
+        SRC_UNIQUE_GUARD;
 
-    SRC_UNIQUE_GUARD;
-
-    RE::TESObjectREFR* ref = ref_info.GetRef();
-    if (!ref) {
-        QUE_UNIQUE_GUARD;
-        queue_delete_.insert(refid);
-        return;
-    }
-
-    HandleDynamicWO(ref);
-
-    if (!RefIsUpdatable(ref)) {
-        DeRegisterRef(refid);
-        QUE_UNIQUE_GUARD;
-        queue_delete_.insert(refid);
-        return;
-    }
-
-    const auto base = ref->GetObjectReference();
-    const FormID base_id = base ? base->GetFormID() : 0;
-
-    const auto count = ref->extraList.GetCount();
-
-    Source* source = GetSourceByLocation(refid);
-
-    if (!source) {
-        if (GetSource(base_id)) {
-            Register(base_id, count, refid, curr_time);
-            return;
-        }
-
-        // Not a stage item => deregister/delete
-        DeRegisterRef(refid);
-        QUE_UNIQUE_GUARD;
-        queue_delete_.insert(refid);
-        return;
-    }
-
-    // Handle base change the same way UpdateWO does:
-    HandleWOBaseChange(ref);
-
-    // Re-fetch after HandleWOBaseChange because it may have zeroed the instance
-    {
-        if (const auto it = source->data.find(refid);
-            it == source->data.end() || it->second.empty() || it->second.front().count <= 0) {
-            if (it == source->data.end() || it->second.empty()) {
-                UpdateLocationIndexForSource(*source, refid);
-            }
+        RE::TESObjectREFR* ref = ref_info.GetRef();
+        if (!ref) {
             QUE_UNIQUE_GUARD;
             queue_delete_.insert(refid);
             return;
         }
-    }
 
-    if (const auto updated_stages = source->UpdateAllStages(refid, curr_time);
-        !updated_stages.empty()) {
-        if (updated_stages.size() > 1) {
-            logger::error("UpdateQueuedWO: Multiple updates for the same ref.");
-        }
-        const auto& update = updated_stages.front();
-        const auto src_bound = source->IsFakeStage(update.newstage->no) ? source->GetBoundObject() : nullptr;
-        ApplyStageInWorld(ref, *update.newstage, src_bound);
-        if (source->IsDecayedItem(update.newstage->formid)) {
-            Register(update.newstage->formid, update.count, refid, update.update_time);
-        }
-    }
+        HandleDynamicWO(ref);
 
-    const auto it = source->data.find(refid);
-    if (it == source->data.end() || it->second.empty()) {
-        Register(ref->GetBaseObject()->GetFormID(), ref->extraList.GetCount(), refid, curr_time);
+        if (!RefIsUpdatable(ref)) {
+            DeRegisterRef(refid);
+            QUE_UNIQUE_GUARD;
+            queue_delete_.insert(refid);
+            return;
+        }
+
+        const auto base = ref->GetObjectReference();
+        const FormID base_id = base ? base->GetFormID() : 0;
+
+        const auto count = ref->extraList.GetCount();
+
+        Source* source = GetSourceByLocation(refid);
+
+        if (!source) {
+            if (GetSource(base_id)) {
+                Register(base_id, count, refid, curr_time);
+                return;
+            }
+
+            // Not a stage item => deregister/delete
+            DeRegisterRef(refid);
+            QUE_UNIQUE_GUARD;
+            queue_delete_.insert(refid);
+            return;
+        }
+
+        // Handle base change the same way UpdateWO does:
+        HandleWOBaseChange(ref);
+
+        // Re-fetch after HandleWOBaseChange because it may have zeroed the instance
+        {
+            if (const auto it = source->data.find(refid);
+                it == source->data.end() || it->second.empty() || it->second.front().count <= 0) {
+                if (it == source->data.end() || it->second.empty()) {
+                    UpdateLocationIndexForSource(*source, refid);
+                }
+                QUE_UNIQUE_GUARD;
+                queue_delete_.insert(refid);
+                return;
+            }
+        }
+
+        if (const auto updated_stages = source->UpdateAllStages(refid, curr_time);
+            !updated_stages.empty()) {
+            if (updated_stages.size() > 1) {
+                logger::error("UpdateQueuedRef: Multiple updates for the same ref.");
+            }
+            const auto& update = updated_stages.front();
+            const auto src_bound = source->IsFakeStage(update.newstage->no) ? source->GetBoundObject() : nullptr;
+            ApplyStageInWorld(ref, *update.newstage, src_bound);
+            if (source->IsDecayedItem(update.newstage->formid)) {
+                Register(update.newstage->formid, update.count, refid, update.update_time);
+            }
+        }
+
+        const auto it = source->data.find(refid);
+        if (it == source->data.end() || it->second.empty()) {
+            Register(ref->GetBaseObject()->GetFormID(), ref->extraList.GetCount(), refid, curr_time);
+            return;
+        }
+
+        auto& wo_inst = it->second.front();
+        if (wo_inst.count <= 0) {
+            source->data.erase(it);
+            UpdateLocationIndexForSource(*source, refid);
+            Register(ref->GetBaseObject()->GetFormID(), ref->extraList.GetCount(), refid, curr_time);
+            return;
+        }
+
+        if (wo_inst.xtra.is_fake) {
+            ApplyStageInWorld(ref, source->GetStage(wo_inst.no), source->GetBoundObject());
+        }
+
+        source->UpdateTimeModulationInWorld(ref, wo_inst, curr_time);
+        if (const auto next_update = source->GetNextUpdateTime(&wo_inst); next_update > curr_time) {
+            RefStop a_ref_stop(refid);
+            UpdateRefStop(*source, wo_inst, a_ref_stop, next_update);
+            QueueRefUpdate(a_ref_stop);
+        }
+
+        CleanUpSourceData(source, refid);
         return;
     }
-
-    auto& wo_inst = it->second.front();
-    if (wo_inst.count <= 0) {
-        source->data.erase(it);
-        UpdateLocationIndexForSource(*source, refid);
-        Register(ref->GetBaseObject()->GetFormID(), ref->extraList.GetCount(), refid, curr_time);
-        return;
     }
-
-    if (wo_inst.xtra.is_fake) {
-        ApplyStageInWorld(ref, source->GetStage(wo_inst.no), source->GetBoundObject());
-    }
-
-    source->UpdateTimeModulationInWorld(ref, wo_inst, curr_time);
-    if (const auto next_update = source->GetNextUpdateTime(&wo_inst); next_update > curr_time) {
-        RefStop a_ref_stop(refid);
-        UpdateRefStop(*source, wo_inst, a_ref_stop, next_update);
-        QueueRefUpdate(a_ref_stop);
-    }
-
-    CleanUpSourceData(source, refid);
 }
 
 void Manager::UpdateWO(RE::TESObjectREFR* ref) {
@@ -2212,12 +2212,12 @@ void Manager::HandleWOBaseChange(RE::TESObjectREFR* ref) {
     }
 }
 
-std::vector<std::pair<RefInfo, RefStop::Type>> Manager::GetRefStops() {
-    std::vector<std::pair<RefInfo, RefStop::Type>> ref_stops_copy;
+std::vector<RefInfo> Manager::GetRefStops() {
+    std::vector<RefInfo> ref_stops_copy;
     QUE_SHARED_GUARD;
     ref_stops_copy.reserve(_ref_stops_.size());
     for (const auto& refstop : _ref_stops_ | std::views::values) {
-        ref_stops_copy.emplace_back(refstop.ref_info, refstop.type);
+        ref_stops_copy.emplace_back(refstop.ref_info);
     }
     return ref_stops_copy;
 }
