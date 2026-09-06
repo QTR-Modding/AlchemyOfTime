@@ -86,15 +86,7 @@ class Manager final : public Ticker, public SaveLoadData {
     unsigned int _instance_limit = 200000;
 
     // queueMutex_ guards these
-    using UpdateKey = std::tuple<RefID, FormID, RefStop::Type>;
-    struct UpdateKeyHash {
-        std::size_t operator()(const UpdateKey& key) const noexcept {
-            const auto& [refid, source, type] = key;
-            const auto packed = (std::uint64_t{refid} << std::numeric_limits<FormID>::digits) | source;
-            return std::hash<std::uint64_t>{}(packed) ^ std::hash<RefStop::Type>{}(type);
-        }
-    };
-    std::unordered_map<UpdateKey, RefStop, UpdateKeyHash> _ref_stops_;
+    std::unordered_map<RefID, RefStop> _ref_stops_;
     std::unordered_set<RefID> queue_delete_;
 
     std::unordered_set<FormID> do_not_register;
@@ -273,7 +265,7 @@ public:
     std::vector<Source> GetSourcesByStageAndOwner(FormID stage_formid, RefID location_id);
 
     // Snapshot of the update queue. [locks: queueMutex_] (shared)
-    std::map<std::tuple<RefID, FormID, RefStop::Type>, float> GetUpdateQueue();
+    std::unordered_map<RefID, std::pair<RefStop::Type, float>> GetUpdateQueue();
 
     // [expects: sourceMutex_] (shared)
     void HandleDynamicWO(RE::TESObjectREFR* ref);

@@ -70,7 +70,7 @@ namespace UI {
     inline std::vector<std::string> logLines;
 
     inline LocationMap locations;
-    inline std::map<std::tuple<RefID, FormID, RefStop::Type>, std::pair<std::string, float>> update_q;
+    inline std::map<RefID, std::tuple<std::string, RefStop::Type, float>> update_q;
     inline std::vector<MCPSource> mcp_sources;
 
     inline std::string last_generated;

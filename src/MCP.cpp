@@ -449,20 +449,15 @@ void __stdcall UI::RenderUpdateQ() {
         ImGuiMCP::TextColored(ImGuiMCP::ImVec4(1, 0, 0, 1), "World Objects Evolve: Disabled");
     }
 
-    if (ImGuiMCP::BeginTable("table_queue", 4, table_flags)) {
+    if (ImGuiMCP::BeginTable("table_queue", 3, table_flags)) {
         ImGuiMCP::TableSetupColumn("Name");
-        ImGuiMCP::TableSetupColumn("Source FormID");
         ImGuiMCP::TableSetupColumn("Update Type");
         ImGuiMCP::TableSetupColumn("Update Time");
         ImGuiMCP::TableHeadersRow();
-        for (const auto& [key, value] : update_q) {
-            const auto& [refid, source, type] = key;
-            const auto& [name, time] = value;
+        for (const auto& [name, type, time] : update_q | std::views::values) {
             ImGuiMCP::TableNextRow();
             ImGuiMCP::TableNextColumn();
             ImGuiMCP::Text(name.c_str());
-            ImGuiMCP::TableNextColumn();
-            ImGuiMCP::Text(std::format("{:08X}", source).c_str());
             ImGuiMCP::TableNextColumn();
             ImGuiMCP::Text(type == RefStop::Type::kWorldObject ? "World object" : "Inventory triggers");
             ImGuiMCP::TableNextColumn();
@@ -911,13 +906,13 @@ void UI::Refresh() {
     UpdateStages(sources);
 
     update_q.clear();
-    for (const auto& [key, stop_time] : M->GetUpdateQueue()) {
-        const auto& [refid, source, type] = key;
+    for (const auto& [refid, update] : M->GetUpdateQueue()) {
+        const auto& [type, stop_time] = update;
         if (const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(refid)) {
             std::string temp_name = std::format("{} ({:x})", ref->GetName(), refid);
-            update_q[key] = std::make_pair(temp_name, stop_time);
+            update_q[refid] = {temp_name, type, stop_time};
         } else {
-            update_q[key] = std::make_pair(std::format("{:x}", refid), stop_time);
+            update_q[refid] = {std::format("{:x}", refid), type, stop_time};
         }
     }
 }

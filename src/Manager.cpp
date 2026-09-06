@@ -263,10 +263,6 @@ void Manager::UpdateLocationIndexForSource(const Source& src, const RefID locati
     const auto it = src.data.find(location_id);
     if (it == src.data.end() || it->second.empty()) {
         RemoveLocationIndex(location_id, src.formid);
-        if (src.HasInventoryOwnerTriggers()) {
-            QUE_UNIQUE_GUARD;
-            RemoveQueuedUpdate(location_id, src.formid, RefStop::Type::kInventoryTriggers);
-        }
         return;
     }
 
@@ -669,7 +665,7 @@ void Manager::UpdateLoop() {
                 continue;
             }
             if (const auto ref = it->second.GetRef();
-                queue_delete_.contains(it->second.ref_info.ref_id) ||
+                queue_delete_.contains(it->first) ||
                 ref && !Settings::placed_objects_evolve.load() && Utils::WorldObject::IsPlacedObject(ref)) {
                 PreDeleteRefStop(it->second);
                 it = _ref_stops_.erase(it);
@@ -744,9 +740,7 @@ void Manager::QueueRefUpdate(const RefStop& a_refstop) {
     {
         const auto refid = a_refstop.ref_info.ref_id;
         QUE_UNIQUE_GUARD;
-        const UpdateKey key{refid, a_refstop.type == RefStop::Type::kWorldObject ? 0 : a_refstop.ref_info.source_id,
-                            a_refstop.type};
-        if (auto [it, inserted] = _ref_stops_.try_emplace(key, a_refstop); !inserted) {
+        if (auto [it, inserted] = _ref_stops_.try_emplace(refid, a_refstop); !inserted) {
             it->second.Update(a_refstop);
         }
         needStart = !isRunning();
@@ -756,8 +750,8 @@ void Manager::QueueRefUpdate(const RefStop& a_refstop) {
 }
 
 void Manager::RemoveQueuedUpdate(const RefID refid, const FormID source, const RefStop::Type type) {
-    const UpdateKey key{refid, type == RefStop::Type::kWorldObject ? 0 : source, type};
-    if (const auto it = _ref_stops_.find(key); it != _ref_stops_.end() && it->second.ref_info.source_id == source) {
+    if (const auto it = _ref_stops_.find(refid);
+        it != _ref_stops_.end() && it->second.type == type && it->second.ref_info.source_id == source) {
         if (type == RefStop::Type::kWorldObject) PreDeleteRefStop(it->second);
         _ref_stops_.erase(it);
     }
@@ -768,14 +762,11 @@ void Manager::QueueInventoryUpdate(const Source& source, const RefID owner) {
     if (it == source.data.end() || !std::ranges::any_of(it->second, [](const auto& instance) {
             return instance.count > 0 && !instance.xtra.is_decayed;
         })) {
-        QUE_UNIQUE_GUARD;
-        RemoveQueuedUpdate(owner, source.formid, RefStop::Type::kInventoryTriggers);
         return;
     }
     RefStop stop(owner);
     const auto ref = stop.GetRef();
     if (!ref || !ref->HasContainer() || !ref->Is(RE::FormType::ActorCharacter)) return;
-    stop.ref_info.source_id = source.formid;
     stop.type = RefStop::Type::kInventoryTriggers;
     QueueRefUpdate(stop);
 }
@@ -798,23 +789,30 @@ void Manager::UpdateQueuedInventory(const RefInfo& info) {
     if (!calendar) return;
 
     SRC_SHARED_GUARD;
-    const auto src = sources.find(info.source_id);
     const auto owner = info.GetRef();
-    if (src == sources.end() || !src->second->IsHealthy() || !src->second->HasInventoryOwnerTriggers() ||
-        !owner || owner->IsDeleted() || owner->IsMarkedForDeletion() || !owner->HasContainer()) {
-        QUE_UNIQUE_GUARD;
-        RemoveQueuedUpdate(info.ref_id, info.source_id, RefStop::Type::kInventoryTriggers);
-        return;
+    const auto indexed = loc_to_sources.find(info.ref_id);
+    bool keep_queued = false;
+    if (owner && !owner->IsDeleted() && !owner->IsMarkedForDeletion() && owner->HasContainer() &&
+        owner->Is(RE::FormType::ActorCharacter) && indexed != loc_to_sources.end()) {
+        const auto time = calendar->GetHoursPassed();
+        for (const auto source_id : indexed->second) {
+            const auto src = sources.find(source_id);
+            if (src == sources.end() || !src->second->IsHealthy() || !src->second->HasInventoryOwnerTriggers()) continue;
+            const auto instances = src->second->data.find(info.ref_id);
+            if (instances == src->second->data.end() || !std::ranges::any_of(instances->second, [](const auto& instance) {
+                    return instance.count > 0 && !instance.xtra.is_decayed;
+                })) continue;
+            keep_queued = true;
+            if (src->second->InventoryTriggersNeedUpdate(info, *owner, time)) {
+                MarkDirty_(owner);
+                return;
+            }
+        }
     }
-    const auto instances = src->second->data.find(info.ref_id);
-    if (instances == src->second->data.end() || !std::ranges::any_of(instances->second, [](const auto& instance) {
-            return instance.count > 0 && !instance.xtra.is_decayed;
-        })) {
+    if (!keep_queued) {
         QUE_UNIQUE_GUARD;
-        RemoveQueuedUpdate(info.ref_id, info.source_id, RefStop::Type::kInventoryTriggers);
-        return;
+        RemoveQueuedUpdate(info.ref_id, 0, RefStop::Type::kInventoryTriggers);
     }
-    if (src->second->InventoryTriggersNeedUpdate(info, *owner, calendar->GetHoursPassed())) MarkDirty_(owner);
 }
 
 void Manager::UpdateRefStop(const Source& src, const StageInstance& wo_inst, RefStop& a_ref_stop, const float stop_t) {
@@ -1574,8 +1572,8 @@ void Manager::UpdateRef(RE::TESObjectREFR* loc) {
 }
 
 RefStop* Manager::GetRefStop(const RefID refid) {
-    const auto it = _ref_stops_.find({refid, 0, RefStop::Type::kWorldObject});
-    return it == _ref_stops_.end() ? nullptr : &it->second;
+    const auto it = _ref_stops_.find(refid);
+    return it == _ref_stops_.end() || it->second.type != RefStop::Type::kWorldObject ? nullptr : &it->second;
 }
 
 bool Manager::RefIsUpdatable(const RE::TESObjectREFR* ref) {
@@ -1596,14 +1594,12 @@ bool Manager::DeRegisterRef(const RefID refid) {
         if (auto it = source.data.find(refid); it != source.data.end()) {
             M->InstanceCountUpdate(-static_cast<int>(it->second.size()));
             source.data.erase(it);
-            if (source.HasInventoryOwnerTriggers()) {
-                QUE_UNIQUE_GUARD;
-                RemoveQueuedUpdate(refid, source.formid, RefStop::Type::kInventoryTriggers);
-            }
             RemoveLocationIndex(refid, source.formid);
             found = true;
         }
     }
+    QUE_UNIQUE_GUARD;
+    RemoveQueuedUpdate(refid, 0, RefStop::Type::kInventoryTriggers);
     return found;
 }
 
@@ -2249,11 +2245,11 @@ std::vector<Source> Manager::GetSourcesByStageAndOwner(const FormID stage_formid
     return out;
 }
 
-std::map<std::tuple<RefID, FormID, RefStop::Type>, float> Manager::GetUpdateQueue() {
-    std::map<std::tuple<RefID, FormID, RefStop::Type>, float> ref_stops_copy;
+std::unordered_map<RefID, std::pair<RefStop::Type, float>> Manager::GetUpdateQueue() {
+    std::unordered_map<RefID, std::pair<RefStop::Type, float>> ref_stops_copy;
     QUE_SHARED_GUARD;
-    for (const auto& value : _ref_stops_ | std::views::values) {
-        ref_stops_copy[{value.ref_info.ref_id, value.ref_info.source_id, value.type}] = value.stop_time;
+    for (const auto& [refid, value] : _ref_stops_) {
+        ref_stops_copy[refid] = {value.type, value.stop_time};
     }
     return ref_stops_copy;
 }
