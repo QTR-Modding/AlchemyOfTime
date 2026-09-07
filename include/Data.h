@@ -70,9 +70,13 @@ struct Source {
 
     // always update before doing this
     void UpdateTimeModulationInInventory(const RefInfo& a_info, float time, const InvMap& inv);
-    FormID GetModulatorInInventory(const InvMap& inv, FormID ownerBase, StageNo no) const;
-    FormID GetTransformerInInventory(const InvMap& inv, FormID ownerBase, StageNo no) const;
+    FormID GetModulatorInInventory(const InvMap& inv, const RefInfo& a_info, StageNo no) const;
+    FormID GetTransformerInInventory(const InvMap& inv, const RefInfo& a_info, StageNo no) const;
     void SetDelayOfInstances(float time, const RefInfo& a_info, const InvMap& inv);
+
+    bool HasInventoryOwnerTriggers(bool is_actor) const {
+        return owner_trigger_types.location || (is_actor && owner_trigger_types.perk);
+    }
 
 
     float GetNextUpdateTime(const StageInstance* st_inst);
@@ -97,6 +101,13 @@ struct Source {
 
 private:
     void Init(const DefaultSettings* defaultsettings);
+
+    struct {
+        bool location = false;
+        bool perk = false;
+    } owner_trigger_types;
+
+    void IndexInventoryOwnerTriggers();
 
     RE::FormType formtype;
     std::set<StageNo> fake_stages;
@@ -169,7 +180,7 @@ private:
 
     [[nodiscard]] Stage GetTransformedStage(FormID key_formid) const;
 
-    void SetDelayOfInstance(StageInstance& instance, float curr_time, FormID inv_owner_base, const InvMap& a_inv) const;
+    void SetDelayOfInstance(StageInstance& instance, float curr_time, const RefInfo& a_info, const InvMap& a_inv) const;
     void SetDelayOfInstance(StageInstance& instance, float curr_time, RE::TESObjectREFR* a_loc) const;
     void SetDelayOfInstance(StageInstance& instance, float a_time, FormID a_modulator) const;
 

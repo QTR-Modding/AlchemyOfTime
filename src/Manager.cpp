@@ -267,6 +267,7 @@ void Manager::UpdateLocationIndexForSource(const Source& src, const RefID locati
     }
 
     AddLocationIndex(location_id, src.formid);
+    if (src.HasInventoryOwnerTriggers(true)) QueueInventoryOwnerUpdate(src, location_id);
 }
 
 void Manager::RefreshLocationIndex(const RefID location_id) {
@@ -292,7 +293,6 @@ std::vector<Manager::ScanRequest> Manager::BuildCellScanRequests_(
     SRC_SHARED_GUARD;
 
     for (const auto& ref_info : refStopsCopy) {
-        if (ref_info.update_type != RefInfo::UpdateType::kWorldObject) continue;
         const auto refid = ref_info.ref_id;
         if (!refid) {
             continue;
@@ -411,23 +411,30 @@ std::optional<float> Manager::GetNextUpdateTime(const RefInfo& a_info) {
         const auto sit = sources.find(src_formid);
         if (sit == sources.end()) continue;
 
-        auto& src = *sit->second;
-        if (!src.IsHealthy()) continue;
-
-        const auto dit = src.data.find(refid);
-        if (dit == src.data.end()) continue;
-
-        for (auto& inst : dit->second) {
-            if (inst.xtra.is_decayed || !src.IsStageNo(inst.no)) continue;
-            const float t = src.GetNextUpdateTime(&inst);
-            if (t > 0.0f && t < best) {
-                best = t;
-                found = true;
-            }
+        if (const auto time = GetNextUpdateTime(*sit->second, refid); time && *time < best) {
+            best = *time;
+            found = true;
         }
     }
     if (!found) return std::nullopt;
     return best;
+}
+
+std::optional<float> Manager::GetNextUpdateTime(const Source& source, const RefID owner) {
+    if (!source.IsHealthy()) return std::nullopt;
+    const auto instances = source.data.find(owner);
+    if (instances == source.data.end()) return std::nullopt;
+    float best = std::numeric_limits<float>::infinity();
+    bool found = false;
+    for (const auto& instance : instances->second) {
+        if (instance.xtra.is_decayed || !source.IsStageNo(instance.no)) continue;
+        const float time = source.GetNextUpdateTime(&instance);
+        if (time > 0.f && time < best) {
+            best = time;
+            found = true;
+        }
+    }
+    return found ? std::optional{best} : std::nullopt;
 }
 
 void Manager::UpdateImpl(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::TESForm* what, const Count count,
@@ -653,42 +660,62 @@ void Manager::PreDeleteRefStop(RefStop& a_ref_stop) {
 }
 
 void Manager::UpdateLoop() {
-    if (QUE_UNIQUE_GUARD;
-        !queue_delete_.empty() || !Settings::world_objects_evolve.load() || !Settings::placed_objects_evolve.load()) {
-        for (auto it = _ref_stops_.begin(); it != _ref_stops_.end();) {
-            bool remove = queue_delete_.contains(it->first);
-            if (!remove && it->second.ref_info.update_type == RefInfo::UpdateType::kWorldObject) {
-                remove = !Settings::world_objects_evolve.load();
+    auto batches = GetRefStops();
+    if (batches.empty()) {
+        Stop();
+        return;
+    }
+
+    for (auto& [type, refs] : batches) {
+        switch (type) {
+            case RefInfo::UpdateType::kNone:
+                {
+                    QUE_UNIQUE_GUARD;
+                    for (const auto& info : refs) {
+                        _ref_stops_.erase(info.ref_id);
+                        queue_delete_.erase(info.ref_id);
+                    }
+                }
+                break;
+            case RefInfo::UpdateType::kWorldObject:
+                UpdateQueuedWorldObjects(refs);
+                break;
+            case RefInfo::UpdateType::kInventoryOwner:
+                QueueInventoryOwnerUpdates(std::move(refs));
+                break;
+        }
+    }
+}
+
+void Manager::UpdateQueuedWorldObjects(std::vector<RefInfo>& ref_stops_copy) {
+    bool should_stop;
+    {
+        QUE_UNIQUE_GUARD;
+        if (!queue_delete_.empty() || !Settings::world_objects_evolve.load() || !Settings::placed_objects_evolve.load()) {
+            std::erase_if(ref_stops_copy, [this](const RefInfo& info) {
+                const bool canceled = queue_delete_.erase(info.ref_id) != 0;
+                const auto it = _ref_stops_.find(info.ref_id);
+                if (it == _ref_stops_.end()) return true;
+                bool remove = canceled || !Settings::world_objects_evolve.load();
                 if (!remove && !Settings::placed_objects_evolve.load()) {
                     const auto ref = it->second.GetRef();
                     remove = ref && Utils::WorldObject::IsPlacedObject(ref);
                 }
-            }
-            if (remove) {
+                if (!remove) return false;
                 PreDeleteRefStop(it->second);
-                it = _ref_stops_.erase(it);
-            } else ++it;
+                _ref_stops_.erase(it);
+                return true;
+            });
         }
-        queue_delete_.clear();
-    }
-
-    bool should_stop = false;
-    {
-        QUE_SHARED_GUARD;
-        if (_ref_stops_.empty()) {
-            should_stop = true;
-        }
+        should_stop = _ref_stops_.empty();
     }
     if (should_stop) {
         Stop();
-        QUE_UNIQUE_GUARD;
-        queue_delete_.clear();
         return;
     }
 
+    if (ref_stops_copy.empty()) return;
     if (const auto ui = RE::UI::GetSingleton(); ui && ui->GameIsPaused()) return;
-
-    const auto ref_stops_copy = GetRefStops();
 
     const auto scanReq = BuildCellScanRequests_(ref_stops_copy);
     CellScanner::GetSingleton()->RequestRefresh(scanReq);
@@ -726,9 +753,91 @@ void Manager::UpdateLoop() {
 
     if (curr_time > 0.f) {
         for (const auto& ref_info : ref_stops_copy) {
-            M->UpdateQueuedRef(ref_info, curr_time);
+            UpdateQueuedWO(ref_info, curr_time);
         }
     }
+}
+
+void Manager::QueueInventoryOwnerUpdates(std::vector<RefInfo> refs) {
+    if (isLoading.load() || isUninstalled.load()) return;
+    if (const auto ui = RE::UI::GetSingleton(); ui && ui->GameIsPaused()) return;
+    if (inventory_task_pending_.exchange(true)) return;
+    SKSE::GetTaskInterface()->AddTask([this, refs = std::move(refs)] {
+        const SKSE::stl::scope_exit clear_pending{[this] { inventory_task_pending_.store(false); }};
+        if (isLoading.load() || isUninstalled.load()) return;
+        if (const auto ui = RE::UI::GetSingleton(); ui && ui->GameIsPaused()) return;
+        for (const auto& info : refs) UpdateInventoryOwner(info);
+    });
+}
+
+void Manager::QueueInventoryOwnerUpdate(const Source& source, const RefID owner) {
+    if (!source.IsHealthy()) return;
+    const auto instances = source.data.find(owner);
+    if (instances == source.data.end() || !std::ranges::any_of(instances->second, [](const auto& instance) {
+            return instance.count > 0 && !instance.xtra.is_decayed;
+        })) return;
+    RefStop stop(owner);
+    const auto ref = stop.GetRef();
+    if (!ref || !ref->HasContainer() || !source.HasInventoryOwnerTriggers(ref->Is(RE::FormType::ActorCharacter))) return;
+    stop.ref_info.update_type = RefInfo::UpdateType::kInventoryOwner;
+    QueueRefUpdate(stop);
+}
+
+std::vector<FormID> Manager::GetInventoryOwnerSources(const RE::TESObjectREFR& owner) const {
+    std::vector<FormID> source_ids;
+    const auto owner_id = owner.GetFormID();
+    const auto indexed = loc_to_sources.find(owner_id);
+    if (indexed == loc_to_sources.end()) return source_ids;
+    const bool is_actor = owner.Is(RE::FormType::ActorCharacter);
+    for (const auto source_id : indexed->second) {
+        const auto src = sources.find(source_id);
+        if (src == sources.end() || !src->second->IsHealthy() || !src->second->HasInventoryOwnerTriggers(is_actor)) continue;
+        const auto instances = src->second->data.find(owner_id);
+        if (instances != src->second->data.end() && std::ranges::any_of(instances->second, [](const auto& instance) {
+                return instance.count > 0 && !instance.xtra.is_decayed;
+            })) source_ids.push_back(source_id);
+    }
+    return source_ids;
+}
+
+void Manager::UpdateInventoryOwner(RefInfo info) {
+    const auto calendar = RE::Calendar::GetSingleton();
+    if (!calendar) return;
+    SRC_UNIQUE_GUARD;
+    {
+        QUE_SHARED_GUARD;
+        const auto queued = _ref_stops_.find(info.ref_id);
+        if (queued == _ref_stops_.end() || queued->second.ref_info.update_type != info.update_type) return;
+        info = queued->second.ref_info;
+    }
+    const auto owner = info.GetRef();
+    std::vector<FormID> source_ids;
+    if (owner && !owner->IsDeleted() && !owner->IsMarkedForDeletion() && owner->HasContainer()) {
+        source_ids = GetInventoryOwnerSources(*owner);
+    }
+    {
+        QUE_UNIQUE_GUARD;
+        queue_delete_.erase(info.ref_id);
+        if (source_ids.empty()) {
+            _ref_stops_.erase(info.ref_id);
+            return;
+        }
+    }
+
+    const auto inv = owner->GetInventory();
+    const float curr = calendar->GetHoursPassed();
+    for (;;) {
+        std::optional<float> next;
+        for (const auto source_id : source_ids) {
+            const auto src = sources.find(source_id);
+            if (src == sources.end()) continue;
+            if (const auto time = GetNextUpdateTime(*src->second, info.ref_id); time && (!next || *time < *next)) next = time;
+        }
+        if (!next || !std::isfinite(*next)) break;
+        const float time = std::nextafterf(*next, std::numeric_limits<float>::infinity());
+        if (time >= curr || !UpdateInventory(info, *owner, time, inv, source_ids)) break;
+    }
+    UpdateInventory(info, *owner, curr, inv, source_ids);
 }
 
 void Manager::QueueRefUpdate(const RefStop& a_refstop) {
@@ -1101,6 +1210,41 @@ std::set<float> Manager::GetUpdateTimes(const RE::TESObjectREFR* inventory_owner
     return queued_updates;
 }
 
+bool Manager::UpdateInventorySource(Source& source, const RefInfo& info, const float time, const InvMap& inv) {
+    if (!source.IsHealthy()) return false;
+    const auto instances = source.data.find(info.ref_id);
+    if (instances == source.data.end() || instances->second.empty()) {
+        UpdateLocationIndexForSource(source, info.ref_id);
+        return false;
+    }
+    const auto updates = source.UpdateAllStages(info.ref_id, time);
+    CleanUpSourceData(&source, info.ref_id);
+    for (const auto& update : updates) {
+        if (ApplyEvolutionInInventory(info, update.count, update.oldstage->formid, update.newstage->formid) &&
+            source.IsDecayedItem(update.newstage->formid)) {
+            Register(update.newstage->formid, update.count, info, update.update_time, inv);
+        }
+    }
+    return !updates.empty();
+}
+
+bool Manager::UpdateInventory(const RefInfo& info, const RE::TESObjectREFR& owner, const float time, const InvMap& inv,
+                              std::vector<FormID>& source_ids) {
+    bool updated = false;
+    for (const auto source_id : source_ids) {
+        if (const auto src = sources.find(source_id); src != sources.end()) {
+            updated |= UpdateInventorySource(*src->second, info, time, inv);
+        }
+    }
+    if (updated) source_ids = GetInventoryOwnerSources(owner);
+    for (const auto source_id : source_ids) {
+        if (const auto src = sources.find(source_id); src != sources.end()) {
+            src->second->UpdateTimeModulationInInventory(info, time, inv);
+        }
+    }
+    return updated;
+}
+
 bool Manager::UpdateInventory(const RefInfo& a_info, const float t, const InvMap& inv) {
     bool update_took_place = false;
     const auto refid = a_info.ref_id;
@@ -1120,30 +1264,7 @@ bool Manager::UpdateInventory(const RefInfo& a_info, const float t, const InvMap
             continue;
         }
 
-        auto& source = *sit->second;
-        if (!source.IsHealthy()) {
-            continue;
-        }
-
-        const auto dit = source.data.find(refid);
-        if (dit == source.data.end() || dit->second.empty()) {
-            UpdateLocationIndexForSource(source, refid);
-            continue;
-        }
-
-        const auto& updates = source.UpdateAllStages(refid, t);
-        if (!updates.empty()) {
-            update_took_place = true;
-        }
-
-        CleanUpSourceData(&source, refid);
-
-        for (const auto& update : updates) {
-            if (ApplyEvolutionInInventory(a_info, update.count, update.oldstage->formid, update.newstage->formid) &&
-                source.IsDecayedItem(update.newstage->formid)) {
-                Register(update.newstage->formid, update.count, a_info, update.update_time, inv);
-            }
-        }
+        update_took_place |= UpdateInventorySource(*sit->second, a_info, t, inv);
     }
 
     // Time modulation: only re-snapshot if loc_to_sources[refid] changed (size or membership)
@@ -1321,16 +1442,6 @@ void Manager::SyncWithInventory(const RefInfo& a_info, const InvMap& inv) {
     locs_to_be_handled.erase(loc);
 }
 
-
-void Manager::UpdateQueuedRef(const RefInfo& ref_info, const float curr_time) {
-    switch (ref_info.update_type) {
-        case RefInfo::UpdateType::kNone:
-            return;
-        case RefInfo::UpdateType::kWorldObject:
-            UpdateQueuedWO(ref_info, curr_time);
-            return;
-    }
-}
 
 void Manager::UpdateQueuedWO(const RefInfo& ref_info, const float curr_time) {
     // Called from UpdateLoop task.
@@ -1543,15 +1654,22 @@ bool Manager::DeRegisterRef(const RefID refid) {
             found = true;
         }
     }
+    QUE_UNIQUE_GUARD;
+    if (const auto queued = _ref_stops_.find(refid);
+        queued != _ref_stops_.end() && queued->second.ref_info.update_type == RefInfo::UpdateType::kInventoryOwner) {
+        _ref_stops_.erase(queued);
+        queue_delete_.erase(refid);
+    }
     return found;
 }
 
 void Manager::ClearWOUpdateQueue() {
     QUE_UNIQUE_GUARD;
     for (auto& val : _ref_stops_ | std::views::values) {
-        PreDeleteRefStop(val);
+        if (val.ref_info.update_type == RefInfo::UpdateType::kWorldObject) PreDeleteRefStop(val);
     }
     _ref_stops_.clear();
+    queue_delete_.clear();
 }
 
 void Manager::Register(const FormID some_formid, const Count count, const RefID location_refid,
@@ -2222,12 +2340,12 @@ void Manager::HandleWOBaseChange(RE::TESObjectREFR* ref) {
     }
 }
 
-std::vector<RefInfo> Manager::GetRefStops() {
-    std::vector<RefInfo> ref_stops_copy;
-    QUE_SHARED_GUARD;
-    ref_stops_copy.reserve(_ref_stops_.size());
+std::map<RefInfo::UpdateType, std::vector<RefInfo>> Manager::GetRefStops() {
+    std::map<RefInfo::UpdateType, std::vector<RefInfo>> ref_stops_copy;
+    QUE_UNIQUE_GUARD;
+    std::erase_if(queue_delete_, [this](const RefID id) { return !_ref_stops_.contains(id); });
     for (const auto& refstop : _ref_stops_ | std::views::values) {
-        ref_stops_copy.emplace_back(refstop.ref_info);
+        ref_stops_copy[refstop.ref_info.update_type].push_back(refstop.ref_info);
     }
     return ref_stops_copy;
 }

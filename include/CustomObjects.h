@@ -288,7 +288,7 @@ struct RefStopFeatures {
 };
 
 struct RefInfo {
-    enum class UpdateType { kNone, kWorldObject };
+    enum class UpdateType { kNone, kWorldObject, kInventoryOwner };
 
     RefID ref_id = 0;
     FormID base_id = 0;

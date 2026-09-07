@@ -88,6 +88,7 @@ class Manager final : public Ticker, public SaveLoadData {
     // queueMutex_ guards these
     std::unordered_map<RefID, RefStop> _ref_stops_;
     std::unordered_set<RefID> queue_delete_;
+    std::atomic<bool> inventory_task_pending_{false};
 
     std::unordered_set<FormID> do_not_register;
 
@@ -95,9 +96,14 @@ class Manager final : public Ticker, public SaveLoadData {
 
     // Ticker thread entry. [locks: queueMutex_]
     void UpdateLoop();
+    void UpdateQueuedWorldObjects(std::vector<RefInfo>& refs);
+    void QueueInventoryOwnerUpdates(std::vector<RefInfo> refs);
+    void UpdateInventoryOwner(RefInfo info);
+    std::vector<FormID> GetInventoryOwnerSources(const RE::TESObjectREFR& owner) const;
 
     // Enqueue/merge a RefStop. [locks: queueMutex_]
     void QueueRefUpdate(const RefStop& a_refstop);
+    void QueueInventoryOwnerUpdate(const Source& source, RefID owner);
 
     static void UpdateRefStop(const Source& src, const StageInstance& wo_inst, RefStop& a_ref_stop, float stop_t);
 
@@ -153,11 +159,13 @@ class Manager final : public Ticker, public SaveLoadData {
 
     // [expects: sourceMutex_] (unique)
     bool UpdateInventory(const RefInfo& a_info, float t, const InvMap& inv);
+    bool UpdateInventorySource(Source& source, const RefInfo& info, float time, const InvMap& inv);
+    bool UpdateInventory(const RefInfo& info, const RE::TESObjectREFR& owner, float time, const InvMap& inv,
+                         std::vector<FormID>& source_ids);
 
     // [expects: sourceMutex_] (unique)
     void UpdateInventory(const RefInfo& a_info, const InvMap& inv);
 
-    void UpdateQueuedRef(const RefInfo& ref_info, float curr_time);
     void UpdateQueuedWO(const RefInfo& ref_info, float curr_time);
     // [expects: sourceMutex_] (unique)
     void UpdateWO(RE::TESObjectREFR* ref);
@@ -186,6 +194,7 @@ class Manager final : public Ticker, public SaveLoadData {
     Source* UpdateGetSource(FormID stage_formid, RefID owner_refid);
 
     std::optional<float> GetNextUpdateTime(const RefInfo& a_info);
+    static std::optional<float> GetNextUpdateTime(const Source& source, RefID owner);
 
 protected:
     void UpdateImpl(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::TESForm* what, Count count,
@@ -274,7 +283,7 @@ public:
         return isRunning();
     }
 
-    std::vector<RefInfo> GetRefStops();
+    std::map<RefInfo::UpdateType, std::vector<RefInfo>> GetRefStops();
 
     void IndexStage(FormID stage_formid, FormID source_formid);
 

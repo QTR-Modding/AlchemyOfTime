@@ -48,6 +48,8 @@ void Source::Init(const DefaultSettings* defaultsettings) {
         settings.Add(*addon);
     }
 
+    IndexInventoryOwnerTriggers();
+
     formtype = bound->GetFormType();
 
     if (!stages.empty()) {
@@ -106,6 +108,8 @@ void Source::UpdateAddons() {
     if (const auto addon = Settings::GetAddOnSettings(form); addon && addon->IsHealthy()) {
         settings.Add(*addon);
     }
+
+    IndexInventoryOwnerTriggers();
 
     if (!settings.CheckIntegrity()) {
         logger::critical("Default settings integrity check failed.");
@@ -302,7 +306,7 @@ bool Source::InitInsertInstanceInventory(const StageNo n, const Count c, const R
         return false;
     }
 
-    SetDelayOfInstance(data[a_info.ref_id].back(), t_0, a_info.base_id, inv);
+    SetDelayOfInstance(data[a_info.ref_id].back(), t_0, a_info, inv);
     return true;
 }
 
@@ -542,32 +546,88 @@ float Source::GetNextUpdateTime(const StageInstance* st_inst) {
     return st_inst->GetHittingTime(schranke);
 }
 
-FormID Source::GetModulatorInInventory(const InvMap& inv, const FormID ownerBase, const StageNo no) const {
+void Source::IndexInventoryOwnerTriggers() {
+    owner_trigger_types = {};
+    const auto index = [this](const auto& triggers) {
+        for (const auto id : triggers | std::views::keys) {
+            if (const auto form = RE::TESForm::LookupByID(id)) {
+                owner_trigger_types.location |= form->Is(RE::FormType::Location);
+                owner_trigger_types.perk |= form->Is(RE::FormType::Perk);
+            }
+        }
+    };
+    index(settings.transformers);
+    index(settings.delayers);
+}
+
+FormID Source::GetModulatorInInventory(const InvMap& inv, const RefInfo& a_info, const StageNo no) const {
     for (auto dlyr_fid : settings.delayers | std::views::keys) {
         if (!settings.delayer_allowed_stages.at(dlyr_fid).contains(no)) continue;
-        auto obj = RE::TESForm::LookupByID<RE::TESBoundObject>(dlyr_fid);
-        if (!obj) continue;
-        if (auto it = inv.find(obj); it != inv.end() && it->second.first > 0) {
-            auto contIt = settings.delayer_containers.find(dlyr_fid);
-            if (contIt == settings.delayer_containers.end() || contIt->second.empty() ||
-                contIt->second.contains(ownerBase))
-                return dlyr_fid;
+        const auto trigger = RE::TESForm::LookupByID(dlyr_fid);
+        if (!trigger) continue;
+        switch (trigger->GetFormType()) {
+            case RE::FormType::Location: {
+                const auto owner = a_info.GetRef();
+                const auto current = owner ? owner->GetCurrentLocation() : nullptr;
+                const auto location = trigger->As<RE::BGSLocation>();
+                if (!current || (current != location && !location->IsChild(current))) continue;
+                break;
+            }
+            case RE::FormType::Perk: {
+                const auto owner = a_info.GetRef();
+                const auto actor = owner ? owner->As<RE::Actor>() : nullptr;
+                const auto perk = trigger->As<RE::BGSPerk>();
+                if (!actor || !actor->HasPerk(perk)) continue;
+                if (perk->perkConditions && !perk->perkConditions.IsTrue(owner, owner)) continue;
+                break;
+            }
+            default: {
+                const auto obj = trigger->As<RE::TESBoundObject>();
+                if (!obj) continue;
+                const auto it = inv.find(obj);
+                if (it == inv.end() || it->second.first <= 0) continue;
+                break;
+            }
         }
+        const auto contIt = settings.delayer_containers.find(dlyr_fid);
+        if (contIt == settings.delayer_containers.end() || contIt->second.empty() ||
+            contIt->second.contains(a_info.base_id)) return dlyr_fid;
     }
     return 0;
 }
 
-FormID Source::GetTransformerInInventory(const InvMap& inv, const FormID ownerBase, const StageNo no) const {
+FormID Source::GetTransformerInInventory(const InvMap& inv, const RefInfo& a_info, const StageNo no) const {
     for (auto trns_fid : settings.transformers | std::views::keys) {
         if (!settings.transformer_allowed_stages.at(trns_fid).contains(no)) continue;
-        auto obj = RE::TESForm::LookupByID<RE::TESBoundObject>(trns_fid);
-        if (!obj) continue;
-        if (auto it = inv.find(obj); it != inv.end() && it->second.first > 0) {
-            auto contIt = settings.transformer_containers.find(trns_fid);
-            if (contIt == settings.transformer_containers.end() || contIt->second.empty() ||
-                contIt->second.contains(ownerBase))
-                return trns_fid;
+        const auto trigger = RE::TESForm::LookupByID(trns_fid);
+        if (!trigger) continue;
+        switch (trigger->GetFormType()) {
+            case RE::FormType::Location: {
+                const auto owner = a_info.GetRef();
+                const auto current = owner ? owner->GetCurrentLocation() : nullptr;
+                const auto location = trigger->As<RE::BGSLocation>();
+                if (!current || (current != location && !location->IsChild(current))) continue;
+                break;
+            }
+            case RE::FormType::Perk: {
+                const auto owner = a_info.GetRef();
+                const auto actor = owner ? owner->As<RE::Actor>() : nullptr;
+                const auto perk = trigger->As<RE::BGSPerk>();
+                if (!actor || !actor->HasPerk(perk)) continue;
+                if (perk->perkConditions && !perk->perkConditions.IsTrue(owner, owner)) continue;
+                break;
+            }
+            default: {
+                const auto obj = trigger->As<RE::TESBoundObject>();
+                if (!obj) continue;
+                const auto it = inv.find(obj);
+                if (it == inv.end() || it->second.first <= 0) continue;
+                break;
+            }
         }
+        const auto contIt = settings.transformer_containers.find(trns_fid);
+        if (contIt == settings.transformer_containers.end() || contIt->second.empty() ||
+            contIt->second.contains(a_info.base_id)) return trns_fid;
     }
     return 0;
 }
@@ -586,9 +646,9 @@ void Source::SetDelayOfInstances(const float t, const RefInfo& a_info, const Inv
             continue;
         }
 
-        if (const auto tr = GetTransformerInInventory(inv, ownerBase, inst.no))
+        if (const auto tr = GetTransformerInInventory(inv, a_info, inst.no))
             SetDelayOfInstance(inst, t, tr);
-        else if (const auto dl = GetModulatorInInventory(inv, ownerBase, inst.no))
+        else if (const auto dl = GetModulatorInInventory(inv, a_info, inst.no))
             SetDelayOfInstance(inst, t, dl);
         else
             inst.RemoveTimeMod(t);
@@ -813,6 +873,7 @@ void Source::PrintData() {
 }
 
 void Source::Reset() {
+    owner_trigger_types = {};
     formid = 0;
     editorid = "";
     stages.clear();
@@ -939,20 +1000,20 @@ Stage Source::GetTransformedStage(const FormID key_formid) const {
     return trnsf_st;
 }
 
-void Source::SetDelayOfInstance(StageInstance& instance, const float curr_time, const FormID inv_owner_base,
+void Source::SetDelayOfInstance(StageInstance& instance, const float curr_time, const RefInfo& a_info,
                                 const InvMap& a_inv) const {
     if (instance.count <= 0) return;
-    if (ShouldFreezeEvolution(inv_owner_base)) {
+    if (ShouldFreezeEvolution(a_info.base_id)) {
         instance.RemoveTimeMod(curr_time);
         instance.SetDelay(curr_time, 0, 0); // freeze
         return;
     }
 
     if (const auto transformer_best =
-        GetTransformerInInventory(a_inv, inv_owner_base, instance.no)) {
+        GetTransformerInInventory(a_inv, a_info, instance.no)) {
         SetDelayOfInstance(instance, curr_time, transformer_best);
     } else if (const auto delayer_best =
-        GetModulatorInInventory(a_inv, inv_owner_base, instance.no)) {
+        GetModulatorInInventory(a_inv, a_info, instance.no)) {
         SetDelayOfInstance(instance, curr_time, delayer_best);
     } else {
         instance.RemoveTimeMod(curr_time);
@@ -1266,7 +1327,28 @@ namespace {
 
         return true;
     }
-};
+
+    bool MatchesNearbyTrigger(const RE::TESObjectREFR* origin, const std::vector<CellScanner::Entry>& entries,
+                              const RE::NiPoint3& originPos, float bestD2) {
+        bool found = false;
+        for (const auto& e : entries) {
+            const float dx = e.pos.x - originPos.x;
+            const float dy = e.pos.y - originPos.y;
+            const float dz = e.pos.z - originPos.z;
+            const float d2 = dx * dx + dy * dy + dz * dz;
+            if (d2 > bestD2) continue;
+
+            const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(e.refid);
+            if (!ref || ref->IsDisabled() || ref->IsDeleted() || ref->IsMarkedForDeletion()) continue;
+
+            if (SearchModulatorInCell_Sub(origin, ref)) {
+                bestD2 = d2;
+                found = true;
+            }
+        }
+        return found;
+    }
+}
 
 FormID Source::FindWorldTrigger(const RE::TESObjectREFR* a_obj, const std::vector<FormID>& candidates) {
     if (!a_obj || candidates.empty()) {
@@ -1283,41 +1365,20 @@ FormID Source::FindWorldTrigger(const RE::TESObjectREFR* a_obj, const std::vecto
         const auto* trigger = FormReader::GetFormByID(triggerID);
         if (!trigger) continue;
 
-        if (trigger->As<RE::TESBoundObject>()) {
-            if (!cache) continue;
-            const auto it = cache->byBase.find(triggerID);
-            if (it == cache->byBase.end()) {
-                continue;
+        switch (trigger->GetFormType()) {
+            case RE::FormType::Location: {
+                const auto current = a_obj->GetCurrentLocation();
+                const auto location = trigger->As<RE::BGSLocation>();
+                if (current && (current == location || location->IsChild(current))) return triggerID;
+                break;
             }
-
-            // For this triggerID, try the closest refs first (without sorting):
-            // we scan all within r2 and keep the best hit that passes the OBB check.
-            float bestD2 = r2;
-            bool found = false;
-
-            for (const auto& e : it->second) {
-                const float dx = e.pos.x - originPos.x;
-                const float dy = e.pos.y - originPos.y;
-                const float dz = e.pos.z - originPos.z;
-                const float d2 = dx * dx + dy * dy + dz * dz;
-
-                if (d2 > bestD2) {
-                    continue;
+            default: {
+                if (!trigger->As<RE::TESBoundObject>() || !cache) break;
+                const auto it = cache->byBase.find(triggerID);
+                if (it != cache->byBase.end() && MatchesNearbyTrigger(a_obj, it->second, originPos, r2)) {
+                    return triggerID;
                 }
-
-                const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(e.refid);
-                if (!ref || ref->IsDisabled() || ref->IsDeleted() || ref->IsMarkedForDeletion()) {
-                    continue;
-                }
-
-                if (SearchModulatorInCell_Sub(a_obj, ref)) {
-                    bestD2 = d2;
-                    found = true;
-                }
-            }
-
-            if (found) {
-                return triggerID;
+                break;
             }
         }
     }
