@@ -828,7 +828,7 @@ void UI::UpdateStages(const std::vector<Source>& sources) {
             if (const auto* stage = source.TryGetStage(max_stage_no)) {
                 const auto* temp_form = RE::TESForm::LookupByID(stage->formid);
                 if (!temp_form) continue;
-                const GameObject item = {temp_form->GetName(), stage->formid};
+                const GameObject item = {.name = temp_form->GetName(), .formid = stage->formid};
                 temp_stages.insert(Stage(item, stage->name, stage->duration, source.IsFakeStage(max_stage_no),
                                          stage->crafting_allowed, max_stage_no));
             }
@@ -844,7 +844,7 @@ void UI::UpdateStages(const std::vector<Source>& sources) {
         for (const auto& container : source.settings.containers) {
             const auto temp_formid = container;
             const auto temp_name = GetName(temp_formid);
-            containers_.insert(GameObject{temp_name, temp_formid});
+            containers_.insert(GameObject{.name = temp_name, .formid = temp_formid});
         }
 
         std::set<GameObject> transformers_;
@@ -853,10 +853,10 @@ void UI::UpdateStages(const std::vector<Source>& sources) {
         for (const auto& [fst, snd] : source.settings.transformers) {
             auto temp_formid = fst;
             const auto temp_name = GetName(temp_formid);
-            transformers_.insert(GameObject{temp_name, temp_formid});
+            transformers_.insert(GameObject{.name = temp_name, .formid = temp_formid});
             const auto temp_formid2 = std::get<0>(snd);
             auto temp_name2 = GetName(temp_formid2);
-            transformer_enditems_[temp_formid] = GameObject{temp_name2, temp_formid2};
+            transformer_enditems_[temp_formid] = GameObject{.name = temp_name2, .formid = temp_formid2};
             transform_durations_[temp_formid] = std::get<1>(snd);
         }
         std::set<GameObject> time_modulators_;
@@ -865,14 +865,14 @@ void UI::UpdateStages(const std::vector<Source>& sources) {
             auto temp_formid = fst;
             const auto temp_form = RE::TESForm::LookupByID(temp_formid);
             const auto temp_name = temp_form ? temp_form->GetName() : std::format("{:x}", temp_formid);
-            time_modulators_.insert(GameObject{temp_name, temp_formid});
+            time_modulators_.insert(GameObject{.name = temp_name, .formid = temp_formid});
             time_modulator_multipliers_[temp_formid] = snd;
         }
 
         const auto qform_type = Settings::GetQFormType(source.formid);
-        mcp_sources.push_back(MCPSource{temp_stages, containers_, transformers_, transformer_enditems_,
-                                        transform_durations_, time_modulators_, time_modulator_multipliers_,
-                                        qform_type});
+        mcp_sources.push_back(MCPSource{.stages = temp_stages, .containers = containers_, .transformers = transformers_, .transformer_enditems = transformer_enditems_,
+                                        .transform_durations = transform_durations_, .time_modulators = time_modulators_, .time_modulator_multipliers = time_modulator_multipliers_,
+                                        .type = qform_type});
     }
 }
 

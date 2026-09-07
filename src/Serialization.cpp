@@ -85,7 +85,7 @@ bool SaveLoadData::Load(SKSE::SerializationInterface* serializationInterface) {
         std::uint32_t refid = 0;
         serializationInterface->ReadRecordData(refid);
 
-        SaveDataLHS lhs({formid, editorid}, refid);
+        SaveDataLHS lhs({.form_id = formid, .editor_id = editorid}, refid);
 
         std::size_t rhsSize = 0;
         serializationInterface->ReadRecordData(rhsSize);
