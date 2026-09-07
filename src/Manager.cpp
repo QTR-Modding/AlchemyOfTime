@@ -292,6 +292,7 @@ std::vector<Manager::ScanRequest> Manager::BuildCellScanRequests_(
     SRC_SHARED_GUARD;
 
     for (const auto& ref_info : refStopsCopy) {
+        if (ref_info.update_type != RefInfo::UpdateType::kWorldObject) continue;
         const auto refid = ref_info.ref_id;
         if (!refid) {
             continue;
@@ -652,14 +653,18 @@ void Manager::PreDeleteRefStop(RefStop& a_ref_stop) {
 }
 
 void Manager::UpdateLoop() {
-    if (!Settings::world_objects_evolve.load()) {
-        ClearWOUpdateQueue();
-    } else if (QUE_UNIQUE_GUARD;
-        !queue_delete_.empty() || !Settings::placed_objects_evolve.load()) {
+    if (QUE_UNIQUE_GUARD;
+        !queue_delete_.empty() || !Settings::world_objects_evolve.load() || !Settings::placed_objects_evolve.load()) {
         for (auto it = _ref_stops_.begin(); it != _ref_stops_.end();) {
-            if (const auto ref = it->second.GetRef();
-                queue_delete_.contains(it->first) ||
-                ref && !Settings::placed_objects_evolve.load() && Utils::WorldObject::IsPlacedObject(ref)) {
+            bool remove = queue_delete_.contains(it->first);
+            if (!remove && it->second.ref_info.update_type == RefInfo::UpdateType::kWorldObject) {
+                remove = !Settings::world_objects_evolve.load();
+                if (!remove && !Settings::placed_objects_evolve.load()) {
+                    const auto ref = it->second.GetRef();
+                    remove = ref && Utils::WorldObject::IsPlacedObject(ref);
+                }
+            }
+            if (remove) {
                 PreDeleteRefStop(it->second);
                 it = _ref_stops_.erase(it);
             } else ++it;
@@ -719,17 +724,17 @@ void Manager::UpdateLoop() {
         }
     }
 
-    //SKSE::GetTaskInterface()->AddTask([ref_stops_copy = std::move(ref_stops_copy)]() mutable {
     if (curr_time > 0.f) {
         for (const auto& ref_info : ref_stops_copy) {
-            M->UpdateQueuedWO(ref_info, curr_time);
+            M->UpdateQueuedRef(ref_info, curr_time);
         }
     }
-    //});
 }
 
-void Manager::QueueWOUpdate(const RefStop& a_refstop) {
-    if (!Settings::world_objects_evolve.load()) return;
+void Manager::QueueRefUpdate(const RefStop& a_refstop) {
+    if (a_refstop.ref_info.update_type == RefInfo::UpdateType::kNone) return;
+    if (a_refstop.ref_info.update_type == RefInfo::UpdateType::kWorldObject &&
+        !Settings::world_objects_evolve.load()) return;
 
     bool needStart;
     {
@@ -745,6 +750,8 @@ void Manager::QueueWOUpdate(const RefStop& a_refstop) {
 }
 
 void Manager::UpdateRefStop(const Source& src, const StageInstance& wo_inst, RefStop& a_ref_stop, const float stop_t) {
+    a_ref_stop.ref_info.source_id = src.formid;
+    a_ref_stop.ref_info.update_type = RefInfo::UpdateType::kWorldObject;
     const auto delayer = wo_inst.GetDelayerFormID();
     const bool is_transformer = src.settings.transformers.contains(delayer);
     const bool is_delayer = !is_transformer && src.settings.delayers.contains(delayer);
@@ -1315,6 +1322,16 @@ void Manager::SyncWithInventory(const RefInfo& a_info, const InvMap& inv) {
 }
 
 
+void Manager::UpdateQueuedRef(const RefInfo& ref_info, const float curr_time) {
+    switch (ref_info.update_type) {
+        case RefInfo::UpdateType::kNone:
+            return;
+        case RefInfo::UpdateType::kWorldObject:
+            UpdateQueuedWO(ref_info, curr_time);
+            return;
+    }
+}
+
 void Manager::UpdateQueuedWO(const RefInfo& ref_info, const float curr_time) {
     // Called from UpdateLoop task.
 
@@ -1409,7 +1426,7 @@ void Manager::UpdateQueuedWO(const RefInfo& ref_info, const float curr_time) {
     if (const auto next_update = source->GetNextUpdateTime(&wo_inst); next_update > curr_time) {
         RefStop a_ref_stop(refid);
         UpdateRefStop(*source, wo_inst, a_ref_stop, next_update);
-        QueueWOUpdate(a_ref_stop);
+        QueueRefUpdate(a_ref_stop);
     }
 
     CleanUpSourceData(source, refid);
@@ -1482,7 +1499,7 @@ void Manager::UpdateWO(RE::TESObjectREFR* ref) {
     if (const auto next_update = source->GetNextUpdateTime(&wo_inst); next_update > curr_time) {
         RefStop a_ref_stop(refid);
         UpdateRefStop(*source, wo_inst, a_ref_stop, next_update);
-        QueueWOUpdate(a_ref_stop);
+        QueueRefUpdate(a_ref_stop);
     }
 
     CleanUpSourceData(source, refid);
@@ -1596,7 +1613,7 @@ void Manager::Register(const FormID some_formid, const Count count, const RefID 
         const auto hitting_time = src->GetNextUpdateTime(inserted_instance);
         RefStop a_ref_stop(location_refid);
         UpdateRefStop(*src, *inserted_instance, a_ref_stop, hitting_time);
-        QueueWOUpdate(a_ref_stop);
+        QueueRefUpdate(a_ref_stop);
         UpdateLocationIndexForSource(*src, location_refid);
     }
 }

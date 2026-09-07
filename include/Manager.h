@@ -97,7 +97,7 @@ class Manager final : public Ticker, public SaveLoadData {
     void UpdateLoop();
 
     // Enqueue/merge a RefStop. [locks: queueMutex_]
-    void QueueWOUpdate(const RefStop& a_refstop);
+    void QueueRefUpdate(const RefStop& a_refstop);
 
     static void UpdateRefStop(const Source& src, const StageInstance& wo_inst, RefStop& a_ref_stop, float stop_t);
 
@@ -157,6 +157,7 @@ class Manager final : public Ticker, public SaveLoadData {
     // [expects: sourceMutex_] (unique)
     void UpdateInventory(const RefInfo& a_info, const InvMap& inv);
 
+    void UpdateQueuedRef(const RefInfo& ref_info, float curr_time);
     void UpdateQueuedWO(const RefInfo& ref_info, float curr_time);
     // [expects: sourceMutex_] (unique)
     void UpdateWO(RE::TESObjectREFR* ref);

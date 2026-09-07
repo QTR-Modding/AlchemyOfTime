@@ -566,6 +566,9 @@ void RefStop::Update(const RefStop& other) {
         return;
     }
 
+    ref_info.source_id = other.ref_info.source_id;
+    ref_info.update_type = other.ref_info.update_type;
+
     if (features.tint_color.id != other.features.tint_color.id) {
         RemoveTint();
         features.tint_color.id = other.features.tint_color.id;

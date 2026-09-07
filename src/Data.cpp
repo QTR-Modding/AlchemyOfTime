@@ -1253,7 +1253,8 @@ namespace {
             DebugAPI_IMPL::DrawDebug::DrawOBB(obb1);
 
             DebugAPI_IMPL::DrawDebug::draw_line(Utils::WorldObject::GetPosition(ref),
-                                                Utils::WorldObject::GetPosition(RE::PlayerCharacter::GetSingleton()), 3.f,
+                                                Utils::WorldObject::GetPosition(RE::PlayerCharacter::GetSingleton()),
+                                                3.f,
                                                 RE::NiColorA(0.f, 0.f, 1.f, 1.f));
 
             const RE::NiPoint3 c1{obb1.Center.x, obb1.Center.y, obb1.Center.z};

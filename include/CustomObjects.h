@@ -288,8 +288,12 @@ struct RefStopFeatures {
 };
 
 struct RefInfo {
+    enum class UpdateType { kNone, kWorldObject };
+
     RefID ref_id = 0;
     FormID base_id = 0;
+    FormID source_id = 0;
+    UpdateType update_type = UpdateType::kNone;
     mutable RE::ObjectRefHandle ref_handle{};
 
     explicit RefInfo(const RefID id) : ref_id(id) {
