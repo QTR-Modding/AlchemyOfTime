@@ -108,7 +108,7 @@ std::vector<Manager::ScanRequest> Manager::BuildCellScanRequests_(
     SRC_SHARED_GUARD;
 
     for (const auto& queue_info : refStopsCopy) {
-        if (queue_info.update_type != QueueInfo::UpdateType::kWorldObject) continue;
+        if (queue_info.update_flags.none(QueueInfo::UpdateFlag::kWorldObject)) continue;
         const auto refid = queue_info.ref_info.ref_id;
         if (!refid) {
             continue;
@@ -449,7 +449,7 @@ void Manager::RefreshRefs_(const UpdateCtx& ctx) {
 }
 
 void Manager::PreDeleteRefStop(RefStop& a_ref_stop) {
-    if (a_ref_stop.update_type != QueueInfo::UpdateType::kWorldObject) return;
+    if (a_ref_stop.update_flags.none(QueueInfo::UpdateFlag::kWorldObject)) return;
     a_ref_stop.RemoveTint();
     a_ref_stop.RemoveArtObject();
     a_ref_stop.RemoveShader();
@@ -465,7 +465,7 @@ void Manager::UpdateLoop() {
         !queue_delete_.empty() || !Settings::world_objects_evolve.load() || !Settings::placed_objects_evolve.load()) {
         for (auto it = _ref_stops_.begin(); it != _ref_stops_.end();) {
             bool remove = queue_delete_.contains(it->first);
-            if (!remove && it->second.update_type == QueueInfo::UpdateType::kWorldObject) {
+            if (!remove && it->second.update_flags.any(QueueInfo::UpdateFlag::kWorldObject)) {
                 remove = !Settings::world_objects_evolve.load();
                 if (!remove && !Settings::placed_objects_evolve.load()) {
                     const auto ref = it->second.GetRef();
@@ -501,7 +501,7 @@ void Manager::UpdateLoop() {
         curr_time = cal->GetHoursPassed();
         for (QUE_UNIQUE_GUARD; const auto& queue_info : ref_stops_copy) {
             const auto it = _ref_stops_.find(queue_info.ref_info.ref_id);
-            if (it == _ref_stops_.end() || it->second.update_type != QueueInfo::UpdateType::kWorldObject) continue;
+            if (it == _ref_stops_.end() || it->second.update_flags.none(QueueInfo::UpdateFlag::kWorldObject)) continue;
 
             if (auto& val = it->second; val.IsDue(curr_time)) {
                 PreDeleteRefStop(val);
@@ -528,8 +528,8 @@ void Manager::UpdateLoop() {
 }
 
 void Manager::QueueRefUpdate(const RefStop& a_refstop) {
-    if (a_refstop.update_type == QueueInfo::UpdateType::kNone) return;
-    if (a_refstop.update_type == QueueInfo::UpdateType::kWorldObject &&
+    if (!a_refstop.update_flags) return;
+    if (a_refstop.update_flags.any(QueueInfo::UpdateFlag::kWorldObject) &&
         !Settings::world_objects_evolve.load())
         return;
 
@@ -1012,7 +1012,7 @@ void Manager::UpdateInventory(const RefInfo& a_info, const InvMap& inv) {
     }
 
     UpdateInventory(pending, {.hours = curr, .phase = UpdatePhase::kCurrent}, inv);
-    if (pending.update_type == QueueInfo::UpdateType::kLocation) {
+    if (pending.update_flags) {
         QueueRefUpdate(RefStop(pending));
     } else {
         QueueRefDelete(a_info.ref_id);
@@ -1134,15 +1134,11 @@ void Manager::SyncWithInventory(const RefInfo& a_info, const InvMap& inv) {
 
 
 void Manager::UpdateQueuedRef(const QueueInfo& queue_info, const float curr_time) {
-    switch (queue_info.update_type) {
-        case QueueInfo::UpdateType::kNone:
-            return;
-        case QueueInfo::UpdateType::kWorldObject:
-            UpdateQueuedWO(queue_info.ref_info, curr_time);
-            break;
-        case QueueInfo::UpdateType::kLocation:
-            UpdateQueuedLocation(queue_info);
-            break;
+    if (queue_info.update_flags.any(QueueInfo::UpdateFlag::kWorldObject)) {
+        UpdateQueuedWO(queue_info.ref_info, curr_time);
+    }
+    if (queue_info.update_flags.any(QueueInfo::UpdateFlag::kLocation)) {
+        UpdateQueuedLocation(queue_info);
     }
 }
 
@@ -1277,7 +1273,7 @@ void Manager::UpdateQueuedWO(const RefInfo& ref_info, const float curr_time) {
 
     source->UpdateTimeModulationInWorld(ref, wo_inst, curr_time);
     if (const auto next_update = source->GetNextUpdateTime(&wo_inst); next_update > curr_time) {
-        RefStop a_ref_stop(refid, QueueInfo::UpdateType::kWorldObject);
+        RefStop a_ref_stop(refid, QueueInfo::UpdateFlag::kWorldObject);
         UpdateRefStop(*source, wo_inst, a_ref_stop, next_update);
         QueueRefUpdate(a_ref_stop);
     }
@@ -1348,7 +1344,7 @@ void Manager::UpdateWO(RE::TESObjectREFR* ref) {
     if (wo_inst.xtra.is_fake) ApplyStageInWorld(ref, source->GetStage(wo_inst.no), source->GetBoundObject());
     source->UpdateTimeModulationInWorld(ref, wo_inst, curr_time);
     if (const auto next_update = source->GetNextUpdateTime(&wo_inst); next_update > curr_time) {
-        RefStop a_ref_stop(refid, QueueInfo::UpdateType::kWorldObject);
+        RefStop a_ref_stop(refid, QueueInfo::UpdateFlag::kWorldObject);
         UpdateRefStop(*source, wo_inst, a_ref_stop, next_update);
         QueueRefUpdate(a_ref_stop);
     }
@@ -1462,7 +1458,7 @@ void Manager::Register(const FormID some_formid, const Count count, const RefID 
         src->UpdateTimeModulationInWorld(ref, *inserted_instance, register_time);
         // add to the queue
         const auto hitting_time = src->GetNextUpdateTime(inserted_instance);
-        RefStop a_ref_stop(location_refid, QueueInfo::UpdateType::kWorldObject);
+        RefStop a_ref_stop(location_refid, QueueInfo::UpdateFlag::kWorldObject);
         UpdateRefStop(*src, *inserted_instance, a_ref_stop, hitting_time);
         QueueRefUpdate(a_ref_stop);
         UpdateLocationIndexForSource(*src, location_refid);

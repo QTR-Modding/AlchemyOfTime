@@ -566,7 +566,7 @@ void RefStop::Update(const RefStop& other) {
     }
 
     ref_info = other.ref_info;
-    update_type = other.update_type;
+    update_flags = other.update_flags;
     location_watch = other.location_watch;
 
     if (features.tint_color.id != other.features.tint_color.id) {

@@ -35,7 +35,7 @@ namespace {
                     if (!owner) continue;
                     queue_info.location_watch = std::make_shared<LocationWatch>();
                     queue_info.location_watch->last_location = owner->GetCurrentLocation();
-                    queue_info.update_type = QueueInfo::UpdateType::kLocation;
+                    queue_info.update_flags.set(QueueInfo::UpdateFlag::kLocation);
                 }
 
                 auto& watch = *queue_info.location_watch;
