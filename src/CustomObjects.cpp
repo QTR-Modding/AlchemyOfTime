@@ -356,8 +356,7 @@ RefStopFeature& RefStopFeature::operator=(const RefStopFeature& other) {
 
 RefStop& RefStop::operator=(const RefStop& other) {
     if (this != &other) {
-        ref_info = other.ref_info;
-        stop_time = other.stop_time;
+        QueueInfo::operator=(other);
         features = other.features;
         // Manually handle any special cases for members
     }
@@ -566,8 +565,9 @@ void RefStop::Update(const RefStop& other) {
         return;
     }
 
-    ref_info.source_id = other.ref_info.source_id;
-    ref_info.update_type = other.ref_info.update_type;
+    ref_info = other.ref_info;
+    update_type = other.update_type;
+    location_watch = other.location_watch;
 
     if (features.tint_color.id != other.features.tint_color.id) {
         RemoveTint();

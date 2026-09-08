@@ -207,6 +207,10 @@ bool Utils::AreAdjacentCells(RE::TESObjectCELL* cellA, RE::TESObjectCELL* cellB)
     return false;
 }
 
+bool Utils::IsInLocation(const RE::BGSLocation* ref, const RE::BGSLocation* current) {
+    return current && ref && (current == ref || ref->IsChild(current));
+}
+
 std::string Utils::String::EncodeEscapesToAscii(const std::wstring& ws) {
     std::string out;
     for (const auto& wc : ws) {

@@ -46,6 +46,8 @@ namespace Utils {
     // https://github.com/SteveTownsend/SmartHarvestSE/blob/f709333c4cedba061ad21b4d92c90a720e20d2b1/src/WorldState/LocationTracker.cpp#L756
     bool AreAdjacentCells(RE::TESObjectCELL* cellA, RE::TESObjectCELL* cellB);
 
+    bool IsInLocation(const RE::BGSLocation* ref, const RE::BGSLocation* current);
+
     namespace String {
         std::string EncodeEscapesToAscii(const std::wstring& ws);
 
