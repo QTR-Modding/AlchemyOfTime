@@ -517,7 +517,7 @@ bool Source::IsDecayedItem(const FormID _form_id) const {
                                });
 }
 
-inline FormID Source::GetModulatorInWorld(const RE::TESObjectREFR* wo, const StageNo a_no) const {
+FormID Source::GetModulatorInWorld(const RE::TESObjectREFR* wo, const StageNo a_no) const {
     std::vector<FormID> candidates;
     candidates.reserve(settings.delayers.size());
 
@@ -535,7 +535,7 @@ inline FormID Source::GetModulatorInWorld(const RE::TESObjectREFR* wo, const Sta
     return 0;
 }
 
-inline FormID Source::GetTransformerInWorld(const RE::TESObjectREFR* wo, const StageNo a_no) const {
+FormID Source::GetTransformerInWorld(const RE::TESObjectREFR* wo, const StageNo a_no) const {
     std::vector<FormID> candidates;
     candidates.reserve(settings.transformers.size());
 
@@ -554,7 +554,21 @@ inline FormID Source::GetTransformerInWorld(const RE::TESObjectREFR* wo, const S
 }
 
 void Source::UpdateTimeModulationInWorld(RE::TESObjectREFR* wo, StageInstance& wo_inst, const float _time) const {
-    SetDelayOfInstance(wo_inst, _time, wo);
+    if (wo_inst.count <= 0) return;
+    const auto a_loc_base = wo->GetBaseObject()->GetFormID();
+    if (ShouldFreezeEvolution(a_loc_base)) {
+        wo_inst.RemoveTimeMod(_time);
+        wo_inst.SetDelay(_time, 0, 0);  // freeze
+        return;
+    }
+
+    if (const auto transformer_best = GetTransformerInWorld(wo, wo_inst.no)) {
+        SetDelayOfInstance(wo_inst, _time, transformer_best);
+    } else if (const auto delayer_best = GetModulatorInWorld(wo, wo_inst.no)) {
+        SetDelayOfInstance(wo_inst, _time, delayer_best);
+    } else {
+        wo_inst.RemoveTimeMod(_time);
+    }
 }
 
 float Source::GetNextUpdateTime(const StageInstance* st_inst) {
@@ -957,24 +971,6 @@ void Source::SetDelayOfInstance(StageInstance& instance, const UpdateTime time, 
         SetDelayOfInstance(instance, time.hours, delayer_best);
     } else {
         instance.RemoveTimeMod(time.hours);
-    }
-}
-
-void Source::SetDelayOfInstance(StageInstance& instance, const float curr_time, RE::TESObjectREFR* a_loc) const {
-    if (instance.count <= 0) return;
-    const auto a_loc_base = a_loc->GetBaseObject()->GetFormID();
-    if (ShouldFreezeEvolution(a_loc_base)) {
-        instance.RemoveTimeMod(curr_time);
-        instance.SetDelay(curr_time, 0, 0); // freeze
-        return;
-    }
-
-    if (const auto transformer_best = GetTransformerInWorld(a_loc, instance.no)) {
-        SetDelayOfInstance(instance, curr_time, transformer_best);
-    } else if (const auto delayer_best = GetModulatorInWorld(a_loc, instance.no)) {
-        SetDelayOfInstance(instance, curr_time, delayer_best);
-    } else {
-        instance.RemoveTimeMod(curr_time);
     }
 }
 

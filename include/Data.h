@@ -64,8 +64,8 @@ struct Source {
 
     [[nodiscard]] bool IsDecayedItem(FormID _form_id) const;
 
-    FormID inline GetModulatorInWorld(const RE::TESObjectREFR* wo, StageNo a_no) const;
-    inline FormID GetTransformerInWorld(const RE::TESObjectREFR* wo, StageNo a_no) const;
+    FormID GetModulatorInWorld(const RE::TESObjectREFR* wo, StageNo a_no) const;
+    FormID GetTransformerInWorld(const RE::TESObjectREFR* wo, StageNo a_no) const;
     void UpdateTimeModulationInWorld(RE::TESObjectREFR* wo, StageInstance& wo_inst, float _time) const;
 
     // always update before doing this
@@ -167,7 +167,6 @@ private:
     [[nodiscard]] Stage GetTransformedStage(FormID key_formid) const;
 
     void SetDelayOfInstance(StageInstance& instance, UpdateTime time, QueueInfo& queue_info, const InvMap& a_inv) const;
-    void SetDelayOfInstance(StageInstance& instance, float curr_time, RE::TESObjectREFR* a_loc) const;
     void SetDelayOfInstance(StageInstance& instance, float a_time, FormID a_modulator) const;
 
     [[nodiscard]] bool CheckIntegrity();
