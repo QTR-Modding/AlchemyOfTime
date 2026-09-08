@@ -7,13 +7,18 @@ struct Source {
     using SourceData = std::unordered_map<RefID, std::vector<StageInstance>>;
     using StageDict = std::map<StageNo, Stage>;
 
+    struct WorldTriggers {
+        std::vector<std::variant<RE::BGSLocation*, RE::TESBoundObject*>> ordered;
+        std::vector<RE::TESBoundObject*> scan_bases;
+    };
+
     SourceData data;
 
     FormID formid = 0;
     std::string editorid;
     std::string qFormType;
     DefaultSettings settings;
-    std::unordered_map<StageNo, std::vector<RE::TESBoundObject*>> cell_scan_bases;
+    std::unordered_map<StageNo, WorldTriggers> world_triggers;
 
 
     Source(const FormID id, const std::string& id_str, // NOLINT(modernize-pass-by-value)
@@ -93,7 +98,10 @@ struct Source {
 
 private:
     void Init(const DefaultSettings* defaultsettings);
-    void RebuildCellScanBases();
+    void RebuildWorldTriggers();
+    template <class T>
+    void AddWorldTriggers(const tsl::ordered_map<FormID, T>& triggers,
+                          const std::unordered_map<FormID, std::unordered_set<StageNo>>& allowed_stages);
 
     RE::FormType formtype;
     std::set<StageNo> fake_stages;
@@ -185,10 +193,7 @@ private:
 
     StageNo GetLastStageNo();
 
-    template <class T>
-    static FormID FindWorldTrigger(
-        const RE::TESObjectREFR* a_obj, const tsl::ordered_map<FormID, T>& triggers,
-        const std::unordered_map<FormID, std::unordered_set<StageNo>>& allowed_stages, StageNo no);
+    static FormID FindWorldTrigger(const RE::TESObjectREFR* a_obj, const WorldTriggers& triggers);
 };
 
 template <typename T>

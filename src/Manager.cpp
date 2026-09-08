@@ -129,12 +129,12 @@ std::vector<Manager::ScanRequest> Manager::BuildCellScanRequests_(
             continue;
         }
 
-        const auto bases_it = src->cell_scan_bases.find(inst.no);
-        if (bases_it == src->cell_scan_bases.end()) continue;
+        const auto triggers_it = src->world_triggers.find(inst.no);
+        if (triggers_it == src->world_triggers.end() || triggers_it->second.scan_bases.empty()) continue;
 
         std::vector<FormID> bases;
-        bases.reserve(bases_it->second.size());
-        for (const auto base : bases_it->second) {
+        bases.reserve(triggers_it->second.scan_bases.size());
+        for (const auto base : triggers_it->second.scan_bases) {
             bases.push_back(base->GetFormID());
         }
         out.emplace_back(queue_info.ref_info, std::move(bases));

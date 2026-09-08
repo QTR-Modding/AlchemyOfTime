@@ -139,7 +139,7 @@ void Source::Init(const DefaultSettings* defaultsettings) {
         InitFailed();
         return;
     }
-    RebuildCellScanBases();
+    RebuildWorldTriggers();
 }
 
 std::string_view Source::GetName() const {
@@ -162,21 +162,39 @@ void Source::UpdateAddons() {
         InitFailed();
         return;
     }
-    RebuildCellScanBases();
+    RebuildWorldTriggers();
 }
 
-void Source::RebuildCellScanBases() {
-    cell_scan_bases.clear();
-    for (const auto* allowed_stages : {&settings.transformer_allowed_stages, &settings.delayer_allowed_stages}) {
-        for (const auto& [trigger_id, stage_nos] : *allowed_stages) {
-            const auto base = FormReader::GetFormByID<RE::TESBoundObject>(trigger_id);
-            if (!base) continue;
-            for (const auto no : stage_nos) {
-                cell_scan_bases[no].push_back(base);
+template <class T>
+void Source::AddWorldTriggers(const tsl::ordered_map<FormID, T>& triggers,
+                              const std::unordered_map<FormID, std::unordered_set<StageNo>>& allowed_stages) {
+    for (const auto trigger_id : triggers | std::views::keys) {
+        const auto form = FormReader::GetFormByID(trigger_id);
+        if (!form) continue;
+        // ReSharper disable once CppDependentTemplateWithoutTemplateKeyword
+        const auto location = form->As<RE::BGSLocation>();
+        // ReSharper disable once CppDependentTemplateWithoutTemplateKeyword
+        const auto base = location ? nullptr : form->As<RE::TESBoundObject>();
+        if (!location && !base) continue;
+
+        for (const auto no : allowed_stages.at(trigger_id)) {
+            auto& prepared = world_triggers[no];
+            if (location) {
+                prepared.ordered.emplace_back(location);
+            } else {
+                prepared.ordered.emplace_back(base);
+                prepared.scan_bases.push_back(base);
             }
         }
     }
-    for (auto& bases : cell_scan_bases | std::views::values) {
+}
+
+void Source::RebuildWorldTriggers() {
+    world_triggers.clear();
+    AddWorldTriggers(settings.transformers, settings.transformer_allowed_stages);
+    AddWorldTriggers(settings.delayers, settings.delayer_allowed_stages);
+    for (auto& prepared : world_triggers | std::views::values) {
+        auto& bases = prepared.scan_bases;
         std::ranges::sort(bases);
         bases.erase(std::unique(bases.begin(), bases.end()), bases.end());
     }
@@ -547,12 +565,9 @@ void Source::UpdateTimeModulationInWorld(RE::TESObjectREFR* wo, StageInstance& w
         return;
     }
 
-    if (const auto transformer_best =
-        FindWorldTrigger(wo, settings.transformers, settings.transformer_allowed_stages, wo_inst.no)) {
-        SetDelayOfInstance(wo_inst, _time, transformer_best);
-    } else if (const auto delayer_best =
-        FindWorldTrigger(wo, settings.delayers, settings.delayer_allowed_stages, wo_inst.no)) {
-        SetDelayOfInstance(wo_inst, _time, delayer_best);
+    const auto it = world_triggers.find(wo_inst.no);
+    if (const auto trigger = it != world_triggers.end() ? FindWorldTrigger(wo, it->second) : 0) {
+        SetDelayOfInstance(wo_inst, _time, trigger);
     } else {
         wo_inst.RemoveTimeMod(_time);
     }
@@ -815,7 +830,7 @@ void Source::Reset() {
     formid = 0;
     editorid = "";
     stages.clear();
-    cell_scan_bases.clear();
+    world_triggers.clear();
     data.clear();
     init_failed = false;
 }
@@ -1253,36 +1268,24 @@ namespace {
     }
 };
 
-template <class T>
-FormID Source::FindWorldTrigger(
-    const RE::TESObjectREFR* a_obj, const tsl::ordered_map<FormID, T>& triggers,
-    const std::unordered_map<FormID, std::unordered_set<StageNo>>& allowed_stages, const StageNo no) {
-    if (!a_obj) return 0;
+FormID Source::FindWorldTrigger(const RE::TESObjectREFR* a_obj, const WorldTriggers& triggers) {
+    if (!a_obj || triggers.ordered.empty()) return 0;
 
-    auto candidates = triggers | std::views::keys | std::views::filter([&](const FormID id) {
-        return allowed_stages.at(id).contains(no);
-    });
-    if (candidates.empty()) return 0;
-
-    const auto cache = CellScanner::GetSingleton()->GetCache();
+    const auto cache = triggers.scan_bases.empty() ? nullptr : CellScanner::GetSingleton()->GetCache();
     const auto originPos = Utils::WorldObject::GetPosition(a_obj);
 
     const float r = Settings::search_radius;
     const float r2 = (r > 0.0f) ? (r * r) : std::numeric_limits<float>::infinity();
 
     const auto current_location = a_obj->GetCurrentLocation();
-    for (const auto triggerID : candidates) {
-        const auto* trigger = FormReader::GetFormByID(triggerID);
-        if (!trigger) continue;
-
-        // ReSharper disable once CppDependentTemplateWithoutTemplateKeyword
-        if (const auto location = trigger->As<RE::BGSLocation>()) {
-            if (Utils::IsInLocation(location, current_location)) {
-                return triggerID;
+    for (const auto& trigger : triggers.ordered) {
+        if (const auto location = std::get_if<RE::BGSLocation*>(&trigger)) {
+            if (Utils::IsInLocation(*location, current_location)) {
+                return (*location)->GetFormID();
             }
-            // ReSharper disable once CppDependentTemplateWithoutTemplateKeyword
-        } else if (trigger->As<RE::TESBoundObject>()) {
+        } else {
             if (!cache) continue;
+            const auto triggerID = std::get<RE::TESBoundObject*>(trigger)->GetFormID();
             const auto it = cache->byBase.find(triggerID);
             if (it == cache->byBase.end()) {
                 continue;
