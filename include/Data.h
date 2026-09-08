@@ -54,7 +54,7 @@ struct Source {
     StageInstance* InitInsertInstanceWO(StageNo n, Count c, RefID l, Duration t_0);
 
     // applies time modulation to all instances in the inventory
-    [[nodiscard]] bool InitInsertInstanceInventory(StageNo n, Count c, const RefInfo& a_info, Duration t_0,
+    [[nodiscard]] bool InitInsertInstanceInventory(StageNo n, Count c, const RefInfo& a_info, UpdateTime t_0,
                                                    const InvMap& inv);
 
     [[nodiscard]] bool MoveInstance(RefID from_ref, RefID to_ref, const StageInstance* st_inst);
@@ -69,10 +69,7 @@ struct Source {
     void UpdateTimeModulationInWorld(RE::TESObjectREFR* wo, StageInstance& wo_inst, float _time) const;
 
     // always update before doing this
-    void UpdateTimeModulationInInventory(const RefInfo& a_info, float time, const InvMap& inv);
-    FormID GetModulatorInInventory(const InvMap& inv, FormID ownerBase, StageNo no) const;
-    FormID GetTransformerInInventory(const InvMap& inv, FormID ownerBase, StageNo no) const;
-    void SetDelayOfInstances(float time, const RefInfo& a_info, const InvMap& inv);
+    void UpdateTimeModulationInInventory(QueueInfo& queue_info, UpdateTime time, const InvMap& inv);
 
 
     float GetNextUpdateTime(const StageInstance* st_inst);
@@ -169,7 +166,7 @@ private:
 
     [[nodiscard]] Stage GetTransformedStage(FormID key_formid) const;
 
-    void SetDelayOfInstance(StageInstance& instance, float curr_time, FormID inv_owner_base, const InvMap& a_inv) const;
+    void SetDelayOfInstance(StageInstance& instance, UpdateTime time, QueueInfo& queue_info, const InvMap& a_inv) const;
     void SetDelayOfInstance(StageInstance& instance, float curr_time, RE::TESObjectREFR* a_loc) const;
     void SetDelayOfInstance(StageInstance& instance, float a_time, FormID a_modulator) const;
 

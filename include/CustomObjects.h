@@ -287,13 +287,17 @@ struct RefStopFeatures {
     }
 };
 
+enum class UpdatePhase { kCatchUp, kCurrent };
+
+struct UpdateTime {
+    float hours;
+    UpdatePhase phase;
+};
+
 struct RefInfo {
-    enum class UpdateType { kNone, kWorldObject };
 
     RefID ref_id = 0;
     FormID base_id = 0;
-    FormID source_id = 0;
-    UpdateType update_type = UpdateType::kNone;
     mutable RE::ObjectRefHandle ref_handle{};
 
     explicit RefInfo(const RefID id) : ref_id(id) {
@@ -324,16 +328,26 @@ struct RefInfo {
     }
 };
 
+struct LocationWatch {
+    RE::BGSLocation* last_location = nullptr;
+    std::unordered_set<RE::BGSLocation*> triggers;
+};
 
-struct RefStop {
+struct QueueInfo {
+    enum class UpdateType { kNone, kWorldObject, kLocation };
+    RefInfo ref_info;
+    UpdateType update_type = UpdateType::kNone;
+    float stop_time = 0;
+    std::shared_ptr<LocationWatch> location_watch;
+};
+
+struct RefStop : QueueInfo {
     ~RefStop() = default;
 
     bool operator<(const RefStop& other) const { return ref_info.ref_id < other.ref_info.ref_id; }
 
     RefStop& operator=(const RefStop& other);
 
-    RefInfo ref_info;
-    float stop_time = 0;
     RefStopFeatures features;
 
     //RE::ShaderReferenceEffect* shader_ref_eff;
@@ -342,12 +356,13 @@ struct RefStop {
     std::unordered_set<FormID> applied_art_objects;
     std::unordered_set<FormID> applied_effect_shaders;
 
-    explicit RefStop(const RefID ref_id_) : ref_info(ref_id_) {
-    }
+    explicit RefStop(const QueueInfo& queue_info) : QueueInfo(queue_info) {}
 
-    RefStop(const RefID ref_id_, const float stop_t, const RefStopFeatures& a_features)
-        : ref_info(ref_id_), stop_time(stop_t), features(a_features) {
-    }
+    explicit RefStop(const RefInfo& a_info, const UpdateType a_update_type)
+        : RefStop(QueueInfo{.ref_info = a_info, .update_type = a_update_type}) {}
+
+    explicit RefStop(const RefID a_ref_id, const UpdateType a_update_type)
+        : RefStop(RefInfo(a_ref_id), a_update_type) {}
 
     [[nodiscard]] bool IsDue(float curr_time) const;
 

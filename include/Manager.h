@@ -99,6 +99,9 @@ class Manager final : public Ticker, public SaveLoadData {
     // Enqueue/merge a RefStop. [locks: queueMutex_]
     void QueueRefUpdate(const RefStop& a_refstop);
 
+    // Request removal on the next tick. [locks: queueMutex_]
+    void QueueRefDelete(RefID refid);
+
     static void UpdateRefStop(const Source& src, const StageInstance& wo_inst, RefStop& a_ref_stop, float stop_t);
 
     [[nodiscard]] uint32_t GetNInstances();
@@ -152,13 +155,16 @@ class Manager final : public Ticker, public SaveLoadData {
     std::set<float> GetUpdateTimes(const RE::TESObjectREFR* inventory_owner);
 
     // [expects: sourceMutex_] (unique)
-    bool UpdateInventory(const RefInfo& a_info, float t, const InvMap& inv);
+    bool UpdateInventory(QueueInfo& queue_info, UpdateTime t, const InvMap& inv);
 
     // [expects: sourceMutex_] (unique)
     void UpdateInventory(const RefInfo& a_info, const InvMap& inv);
 
-    void UpdateQueuedRef(const RefInfo& ref_info, float curr_time);
+    void UpdateQueuedRef(const QueueInfo& queue_info, float curr_time);
     void UpdateQueuedWO(const RefInfo& ref_info, float curr_time);
+    void UpdateQueuedLocation(const QueueInfo& queue_info);
+    // [expects: sourceMutex_] (shared)
+    void RestoreLocationWatches();
     // [expects: sourceMutex_] (unique)
     void UpdateWO(RE::TESObjectREFR* ref);
     // [expects: sourceMutex_] (unique)
@@ -178,7 +184,7 @@ class Manager final : public Ticker, public SaveLoadData {
     using ScanRequest = std::pair<RefInfo, std::vector<FormID>>;
 
     [[nodiscard]] std::vector<ScanRequest> BuildCellScanRequests_(
-        const std::vector<RefInfo>& refStopsCopy);
+        const std::vector<QueueInfo>& refStopsCopy);
 
     static bool LocHasStage(Source* src, RefID loc, FormID stage_formid);
 
@@ -215,7 +221,7 @@ public:
 
     // Registers instances; may mutate sources. [expects: sourceMutex_] (unique)
     void Register(FormID some_formid, Count count, const RefInfo& ref_info,
-                  Duration register_time, const InvMap& a_inv);
+                  UpdateTime register_time, const InvMap& a_inv);
     // Registers instances; may mutate sources. [expects: sourceMutex_] (unique)
     void Register(FormID some_formid, Count count, RefID location_refid, Duration register_time);
 
@@ -274,7 +280,7 @@ public:
         return isRunning();
     }
 
-    std::vector<RefInfo> GetRefStops();
+    std::vector<QueueInfo> GetRefStops();
 
     void IndexStage(FormID stage_formid, FormID source_formid);
 
