@@ -64,8 +64,6 @@ struct Source {
 
     [[nodiscard]] bool IsDecayedItem(FormID _form_id) const;
 
-    FormID GetModulatorInWorld(const RE::TESObjectREFR* wo, StageNo a_no) const;
-    FormID GetTransformerInWorld(const RE::TESObjectREFR* wo, StageNo a_no) const;
     void UpdateTimeModulationInWorld(RE::TESObjectREFR* wo, StageInstance& wo_inst, float _time) const;
 
     // always update before doing this
@@ -185,7 +183,10 @@ private:
 
     StageNo GetLastStageNo();
 
-    static FormID FindWorldTrigger(const RE::TESObjectREFR* a_obj, const std::vector<FormID>& candidates);
+    template <class T>
+    static FormID FindWorldTrigger(
+        const RE::TESObjectREFR* a_obj, const tsl::ordered_map<FormID, T>& triggers,
+        const std::unordered_map<FormID, std::unordered_set<StageNo>>& allowed_stages, StageNo no);
 };
 
 template <typename T>

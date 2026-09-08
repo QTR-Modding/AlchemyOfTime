@@ -517,42 +517,6 @@ bool Source::IsDecayedItem(const FormID _form_id) const {
                                });
 }
 
-FormID Source::GetModulatorInWorld(const RE::TESObjectREFR* wo, const StageNo a_no) const {
-    std::vector<FormID> candidates;
-    candidates.reserve(settings.delayers.size());
-
-    for (const auto& dlyr_fid : settings.delayers | std::views::keys) {
-        if (!settings.delayer_allowed_stages.at(dlyr_fid).contains(a_no)) {
-            continue;
-        }
-        candidates.push_back(dlyr_fid);
-    }
-
-    if (const auto hit = FindWorldTrigger(wo, candidates); hit) {
-        return hit;
-    }
-
-    return 0;
-}
-
-FormID Source::GetTransformerInWorld(const RE::TESObjectREFR* wo, const StageNo a_no) const {
-    std::vector<FormID> candidates;
-    candidates.reserve(settings.transformers.size());
-
-    for (const auto& trns_fid : settings.transformers | std::views::keys) {
-        if (!settings.transformer_allowed_stages.at(trns_fid).contains(a_no)) {
-            continue;
-        }
-        candidates.push_back(trns_fid);
-    }
-
-    if (const auto hit = FindWorldTrigger(wo, candidates); hit) {
-        return hit;
-    }
-
-    return 0;
-}
-
 void Source::UpdateTimeModulationInWorld(RE::TESObjectREFR* wo, StageInstance& wo_inst, const float _time) const {
     if (wo_inst.count <= 0) return;
     const auto a_loc_base = wo->GetBaseObject()->GetFormID();
@@ -562,9 +526,11 @@ void Source::UpdateTimeModulationInWorld(RE::TESObjectREFR* wo, StageInstance& w
         return;
     }
 
-    if (const auto transformer_best = GetTransformerInWorld(wo, wo_inst.no)) {
+    if (const auto transformer_best =
+        FindWorldTrigger(wo, settings.transformers, settings.transformer_allowed_stages, wo_inst.no)) {
         SetDelayOfInstance(wo_inst, _time, transformer_best);
-    } else if (const auto delayer_best = GetModulatorInWorld(wo, wo_inst.no)) {
+    } else if (const auto delayer_best =
+        FindWorldTrigger(wo, settings.delayers, settings.delayer_allowed_stages, wo_inst.no)) {
         SetDelayOfInstance(wo_inst, _time, delayer_best);
     } else {
         wo_inst.RemoveTimeMod(_time);
@@ -590,7 +556,7 @@ float Source::GetNextUpdateTime(const StageInstance* st_inst) {
     const auto delay_slope = st_inst->GetDelaySlope();
     if (std::abs(delay_slope) < EPSILON) {
         //logger::warn("Delay slope is 0.");
-        return 0;
+        return st_inst->GetDelayerFormID() ? std::numeric_limits<float>::infinity() : 0.f;
     }
 
     if (st_inst->xtra.is_transforming) {
@@ -633,7 +599,7 @@ float Source::GetNextUpdateTime(const StageInstance* st_inst) const {
     const auto delay_slope = st_inst->GetDelaySlope();
     if (std::abs(delay_slope) < EPSILON) {
         //logger::warn("Delay slope is 0.");
-        return 0;
+        return st_inst->GetDelayerFormID() ? std::numeric_limits<float>::infinity() : 0.f;
     }
 
     if (st_inst->xtra.is_transforming) {
@@ -1265,10 +1231,16 @@ namespace {
     }
 };
 
-FormID Source::FindWorldTrigger(const RE::TESObjectREFR* a_obj, const std::vector<FormID>& candidates) {
-    if (!a_obj || candidates.empty()) {
-        return 0;
-    }
+template <class T>
+FormID Source::FindWorldTrigger(
+    const RE::TESObjectREFR* a_obj, const tsl::ordered_map<FormID, T>& triggers,
+    const std::unordered_map<FormID, std::unordered_set<StageNo>>& allowed_stages, const StageNo no) {
+    if (!a_obj) return 0;
+
+    auto candidates = triggers | std::views::keys | std::views::filter([&](const FormID id) {
+        return allowed_stages.at(id).contains(no);
+    });
+    if (candidates.empty()) return 0;
 
     const auto cache = CellScanner::GetSingleton()->GetCache();
     const auto originPos = Utils::WorldObject::GetPosition(a_obj);
@@ -1276,11 +1248,18 @@ FormID Source::FindWorldTrigger(const RE::TESObjectREFR* a_obj, const std::vecto
     const float r = Settings::search_radius;
     const float r2 = (r > 0.0f) ? (r * r) : std::numeric_limits<float>::infinity();
 
+    const auto current_location = a_obj->GetCurrentLocation();
     for (const auto triggerID : candidates) {
         const auto* trigger = FormReader::GetFormByID(triggerID);
         if (!trigger) continue;
 
-        if (trigger->As<RE::TESBoundObject>()) {
+        // ReSharper disable once CppDependentTemplateWithoutTemplateKeyword
+        if (const auto location = trigger->As<RE::BGSLocation>()) {
+            if (Utils::IsInLocation(location, current_location)) {
+                return triggerID;
+            }
+            // ReSharper disable once CppDependentTemplateWithoutTemplateKeyword
+        } else if (trigger->As<RE::TESBoundObject>()) {
             if (!cache) continue;
             const auto it = cache->byBase.find(triggerID);
             if (it == cache->byBase.end()) {
