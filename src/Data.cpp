@@ -23,24 +23,32 @@ namespace {
             const auto trigger = RE::TESForm::LookupByID(trigger_fid);
             if (!trigger) continue;
 
-            // ReSharper disable once CppDependentTemplateWithoutTemplateKeyword
-            if (const auto location = trigger->As<RE::BGSLocation>()) {
+            if (trigger->Is(RE::FormType::Location, RE::FormType::Perk)) {
                 if (phase == UpdatePhase::kCatchUp) {
                     if (trigger_fid == instance.GetDelayerFormID()) return trigger_fid;
                     continue;
                 }
 
-                if (!queue_info.location_watch) {
-                    const auto owner = queue_info.ref_info.GetRef();
-                    if (!owner) continue;
-                    queue_info.location_watch = std::make_shared<LocationWatch>();
-                    queue_info.location_watch->last_location = owner->GetCurrentLocation();
-                    queue_info.update_flags.set(QueueInfo::UpdateFlag::kLocation);
+                const auto owner = queue_info.ref_info.GetRef();
+                if (!owner) continue;
+                if (!queue_info.inventory_watch) {
+                    queue_info.inventory_watch = std::make_shared<InventoryWatch>();
+                    queue_info.inventory_watch->last_location = owner->GetCurrentLocation();
                 }
 
-                auto& watch = *queue_info.location_watch;
-                watch.triggers.insert(location);
-                if (Utils::IsInLocation(location, watch.last_location)) return trigger_fid;
+                auto& watch = *queue_info.inventory_watch;
+                // ReSharper disable once CppDependentTemplateWithoutTemplateKeyword
+                if (const auto location = trigger->As<RE::BGSLocation>()) {
+                    queue_info.update_flags.set(QueueInfo::UpdateFlag::kLocation);
+                    watch.locations.insert(location);
+                    if (Utils::IsInLocation(location, watch.last_location)) return trigger_fid;
+                    // ReSharper disable once CppDependentTemplateWithoutTemplateKeyword
+                } else if (const auto perk = trigger->As<RE::BGSPerk>()) {
+                    queue_info.update_flags.set(QueueInfo::UpdateFlag::kPerk);
+                    const auto [it, inserted] = watch.perks.try_emplace(perk);
+                    if (inserted) it->second = perk->perkConditions.IsTrue(owner, owner);
+                    if (it->second) return trigger_fid;
+                }
                 // ReSharper disable once CppDependentTemplateWithoutTemplateKeyword
             } else if (const auto obj = trigger->As<RE::TESBoundObject>()) {
                 if (const auto it = inv.find(obj); it != inv.end() && it->second.first > 0) {
@@ -174,13 +182,17 @@ void Source::AddWorldTriggers(const tsl::ordered_map<FormID, T>& triggers,
         // ReSharper disable once CppDependentTemplateWithoutTemplateKeyword
         const auto location = form->As<RE::BGSLocation>();
         // ReSharper disable once CppDependentTemplateWithoutTemplateKeyword
-        const auto base = location ? nullptr : form->As<RE::TESBoundObject>();
-        if (!location && !base) continue;
+        const auto perk = location ? nullptr : form->As<RE::BGSPerk>();
+        // ReSharper disable once CppDependentTemplateWithoutTemplateKeyword
+        const auto base = location || perk ? nullptr : form->As<RE::TESBoundObject>();
+        if (!location && !perk && !base) continue;
 
         for (const auto no : allowed_stages.at(trigger_id)) {
             auto& prepared = world_triggers[no];
             if (location) {
                 prepared.ordered.emplace_back(location);
+            } else if (perk) {
+                prepared.ordered.emplace_back(perk);
             } else {
                 prepared.ordered.emplace_back(base);
                 prepared.scan_bases.push_back(base);
@@ -196,7 +208,7 @@ void Source::RebuildWorldTriggers() {
     for (auto& prepared : world_triggers | std::views::values) {
         auto& bases = prepared.scan_bases;
         std::ranges::sort(bases);
-        bases.erase(std::unique(bases.begin(), bases.end()), bases.end());
+        bases.erase(std::ranges::unique(bases).begin(), bases.end());
     }
 }
 
@@ -1268,7 +1280,7 @@ namespace {
     }
 };
 
-FormID Source::FindWorldTrigger(const RE::TESObjectREFR* a_obj, const WorldTriggers& triggers) {
+FormID Source::FindWorldTrigger(RE::TESObjectREFR* a_obj, const WorldTriggers& triggers) {
     if (!a_obj || triggers.ordered.empty()) return 0;
 
     const auto cache = triggers.scan_bases.empty() ? nullptr : CellScanner::GetSingleton()->GetCache();
@@ -1282,6 +1294,10 @@ FormID Source::FindWorldTrigger(const RE::TESObjectREFR* a_obj, const WorldTrigg
         if (const auto location = std::get_if<RE::BGSLocation*>(&trigger)) {
             if (Utils::IsInLocation(*location, current_location)) {
                 return (*location)->GetFormID();
+            }
+        } else if (const auto perk = std::get_if<RE::BGSPerk*>(&trigger)) {
+            if ((*perk)->perkConditions.IsTrue(a_obj, a_obj)) {
+                return (*perk)->GetFormID();
             }
         } else {
             if (!cache) continue;

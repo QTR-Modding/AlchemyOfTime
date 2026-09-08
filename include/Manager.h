@@ -162,9 +162,9 @@ class Manager final : public Ticker, public SaveLoadData {
 
     void UpdateQueuedRef(const QueueInfo& queue_info, float curr_time);
     void UpdateQueuedWO(const RefInfo& ref_info, float curr_time);
-    void UpdateQueuedLocation(const QueueInfo& queue_info);
+    void UpdateQueuedInventory(const QueueInfo& queue_info);
     // [expects: sourceMutex_] (shared)
-    void RestoreLocationWatches();
+    void RestoreInventoryWatches();
     // [expects: sourceMutex_] (unique)
     void UpdateWO(RE::TESObjectREFR* ref);
     // [expects: sourceMutex_] (unique)

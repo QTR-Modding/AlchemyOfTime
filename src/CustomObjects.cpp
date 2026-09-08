@@ -354,6 +354,24 @@ RefStopFeature& RefStopFeature::operator=(const RefStopFeature& other) {
     return *this;
 }
 
+bool InventoryWatch::HasChanged(RE::TESObjectREFR* owner) {
+    if (!locations.empty()) {
+        const auto current = owner->GetCurrentLocation();
+        if (current != last_location) {
+            for (const auto location : locations) {
+                if (Utils::IsInLocation(location, last_location) != Utils::IsInLocation(location, current)) {
+                    return true;
+                }
+            }
+            last_location = current;
+        }
+    }
+    for (const auto& [perk, matched] : perks) {
+        if (perk->perkConditions.IsTrue(owner, owner) != matched) return true;
+    }
+    return false;
+}
+
 RefStop& RefStop::operator=(const RefStop& other) {
     if (this != &other) {
         QueueInfo::operator=(other);
@@ -567,7 +585,7 @@ void RefStop::Update(const RefStop& other) {
 
     ref_info = other.ref_info;
     update_flags = other.update_flags;
-    location_watch = other.location_watch;
+    inventory_watch = other.inventory_watch;
 
     if (features.tint_color.id != other.features.tint_color.id) {
         RemoveTint();

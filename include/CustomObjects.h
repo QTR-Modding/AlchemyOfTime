@@ -328,20 +328,24 @@ struct RefInfo {
     }
 };
 
-struct LocationWatch {
+struct InventoryWatch { // inventory owner watch
     RE::BGSLocation* last_location = nullptr;
-    std::unordered_set<RE::BGSLocation*> triggers;
+    std::unordered_set<RE::BGSLocation*> locations;
+    std::unordered_map<RE::BGSPerk*, bool> perks;
+
+    [[nodiscard]] bool HasChanged(RE::TESObjectREFR* owner);
 };
 
 struct QueueInfo {
     enum class UpdateFlag : std::uint32_t {
         kWorldObject = 1u << 0,
-        kLocation = 1u << 1
+        kLocation = 1u << 1,
+        kPerk = 1u << 2
     };
     RefInfo ref_info;
     REX::EnumSet<UpdateFlag> update_flags;
     float stop_time = 0;
-    std::shared_ptr<LocationWatch> location_watch;
+    std::shared_ptr<InventoryWatch> inventory_watch;
 };
 
 struct RefStop : QueueInfo {

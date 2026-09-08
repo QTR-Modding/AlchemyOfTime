@@ -8,7 +8,7 @@ struct Source {
     using StageDict = std::map<StageNo, Stage>;
 
     struct WorldTriggers {
-        std::vector<std::variant<RE::BGSLocation*, RE::TESBoundObject*>> ordered;
+        std::vector<std::variant<RE::BGSLocation*, RE::BGSPerk*, RE::TESBoundObject*>> ordered;
         std::vector<RE::TESBoundObject*> scan_bases;
     };
 
@@ -41,9 +41,9 @@ struct Source {
     // daha once yaratilmis bi stage olmasi gerekiyo
     bool IsStage(FormID some_formid) const;
 
-    [[nodiscard]] inline bool IsStageNo(StageNo no) const;
+    [[nodiscard]] bool IsStageNo(StageNo no) const;
 
-    [[nodiscard]] inline bool IsFakeStage(StageNo no) const;
+    [[nodiscard]] bool IsFakeStage(StageNo no) const;
 
     // assumes that the formid exists as a stage!
     [[nodiscard]] StageNo GetStageNo(FormID formid_) const;
@@ -193,7 +193,7 @@ private:
 
     StageNo GetLastStageNo();
 
-    static FormID FindWorldTrigger(const RE::TESObjectREFR* a_obj, const WorldTriggers& triggers);
+    static FormID FindWorldTrigger(RE::TESObjectREFR* a_obj, const WorldTriggers& triggers);
 };
 
 template <typename T>

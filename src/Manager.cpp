@@ -1137,45 +1137,41 @@ void Manager::UpdateQueuedRef(const QueueInfo& queue_info, const float curr_time
     if (queue_info.update_flags.any(QueueInfo::UpdateFlag::kWorldObject)) {
         UpdateQueuedWO(queue_info.ref_info, curr_time);
     }
-    if (queue_info.update_flags.any(QueueInfo::UpdateFlag::kLocation)) {
-        UpdateQueuedLocation(queue_info);
+    if (queue_info.update_flags.any(QueueInfo::UpdateFlag::kLocation, QueueInfo::UpdateFlag::kPerk)) {
+        UpdateQueuedInventory(queue_info);
     }
 }
 
-void Manager::UpdateQueuedLocation(const QueueInfo& queue_info) {
-    auto& watch = *queue_info.location_watch;
+void Manager::UpdateQueuedInventory(const QueueInfo& queue_info) {
+    auto& watch = *queue_info.inventory_watch;
     const auto owner = queue_info.ref_info.ref_handle.get();
     if (!owner || owner->IsDeleted() || owner->IsMarkedForDeletion() || !owner->HasContainer()) {
         QueueRefDelete(queue_info.ref_info.ref_id);
         return;
     }
 
-    const auto current = owner->GetCurrentLocation();
-    if (current == watch.last_location) return;
-
-    for (const auto location : watch.triggers) {
-        if (Utils::IsInLocation(location, watch.last_location) != Utils::IsInLocation(location, current)) {
-            {
-                QUE_UNIQUE_GUARD;
-                const auto it = _ref_stops_.find(queue_info.ref_info.ref_id);
-                // check if stale
-                if (it == _ref_stops_.end() || it->second.location_watch.get() != &watch) return;
-                // if deletion was already requested, stop here instead of calling MarkDirty_ again.
-                if (!queue_delete_.insert(queue_info.ref_info.ref_id).second) return;
-            }
-            MarkDirty_(owner.get());
-            return;
-        }
+    if (!watch.HasChanged(owner.get())) return;
+    {
+        QUE_UNIQUE_GUARD;
+        const auto it = _ref_stops_.find(queue_info.ref_info.ref_id);
+        // check if stale
+        if (it == _ref_stops_.end() || it->second.inventory_watch.get() != &watch) return;
+        // if deletion was already requested, stop here instead of calling MarkDirty_ again.
+        if (!queue_delete_.insert(queue_info.ref_info.ref_id).second) return;
     }
-    watch.last_location = current;
+    MarkDirty_(owner.get());
 }
 
-void Manager::RestoreLocationWatches() {
-    const auto is_location = [](const FormID id) { return RE::TESForm::LookupByID<RE::BGSLocation>(id) != nullptr; };
+void Manager::RestoreInventoryWatches() {
+    const auto needs_watch = [](const Source::WorldTriggers& triggers) {
+        return std::ranges::any_of(triggers.ordered, [](const auto& trigger) {
+            return std::holds_alternative<RE::BGSLocation*>(trigger) ||
+                   std::holds_alternative<RE::BGSPerk*>(trigger);
+        });
+    };
     for (const auto& source : sources | std::views::values) {
         if (!source->IsHealthy()) continue;
-        if (!std::ranges::any_of(source->settings.transformers | std::views::keys, is_location) &&
-            !std::ranges::any_of(source->settings.delayers | std::views::keys, is_location)) continue;
+        if (!std::ranges::any_of(source->world_triggers | std::views::values, needs_watch)) continue;
         for (const auto owner_id : source->data | std::views::keys) {
             if (const auto owner = RE::TESForm::LookupByID<RE::TESObjectREFR>(owner_id);
                 owner && owner->HasContainer()) {
@@ -1949,7 +1945,7 @@ void Manager::ReceiveData() {
     HandleLoc(player_ref);
     SRC_UNIQUE_GUARD;
     locs_to_be_handled.erase(player_refid);
-    RestoreLocationWatches();
+    RestoreInventoryWatches();
     Print();
 
     logger::info("--------Data received. Number of instances: {}---------", GetNInstancesFast());
