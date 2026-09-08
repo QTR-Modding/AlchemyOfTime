@@ -13,6 +13,7 @@ struct Source {
     std::string editorid;
     std::string qFormType;
     DefaultSettings settings;
+    std::unordered_map<StageNo, std::vector<RE::TESBoundObject*>> cell_scan_bases;
 
 
     Source(const FormID id, const std::string& id_str, // NOLINT(modernize-pass-by-value)
@@ -92,6 +93,7 @@ struct Source {
 
 private:
     void Init(const DefaultSettings* defaultsettings);
+    void RebuildCellScanBases();
 
     RE::FormType formtype;
     std::set<StageNo> fake_stages;

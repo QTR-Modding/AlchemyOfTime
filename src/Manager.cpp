@@ -129,26 +129,15 @@ std::vector<Manager::ScanRequest> Manager::BuildCellScanRequests_(
             continue;
         }
 
-        const StageNo no = inst.no;
+        const auto bases_it = src->cell_scan_bases.find(inst.no);
+        if (bases_it == src->cell_scan_bases.end()) continue;
 
         std::vector<FormID> bases;
-        bases.reserve(src->settings.transformers.size() + src->settings.delayers.size());
-
-        // Include all bases we want CellScanner to collect for this WO.
-        for (const auto trns : src->settings.transformers | std::views::keys) {
-            if (src->settings.transformer_allowed_stages.at(trns).contains(no)) {
-                bases.push_back(trns);
-            }
+        bases.reserve(bases_it->second.size());
+        for (const auto base : bases_it->second) {
+            bases.push_back(base->GetFormID());
         }
-        for (const auto dlyr : src->settings.delayers | std::views::keys) {
-            if (src->settings.delayer_allowed_stages.at(dlyr).contains(no)) {
-                bases.push_back(dlyr);
-            }
-        }
-
-        if (!bases.empty()) {
-            out.emplace_back(queue_info.ref_info, std::move(bases));
-        }
+        out.emplace_back(queue_info.ref_info, std::move(bases));
     }
 
     return out;

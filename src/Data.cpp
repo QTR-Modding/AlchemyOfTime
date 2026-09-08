@@ -137,7 +137,9 @@ void Source::Init(const DefaultSettings* defaultsettings) {
     if (!CheckIntegrity()) {
         logger::critical("CheckIntegrity failed");
         InitFailed();
+        return;
     }
+    RebuildCellScanBases();
 }
 
 std::string_view Source::GetName() const {
@@ -158,6 +160,25 @@ void Source::UpdateAddons() {
     if (!settings.CheckIntegrity()) {
         logger::critical("Default settings integrity check failed.");
         InitFailed();
+        return;
+    }
+    RebuildCellScanBases();
+}
+
+void Source::RebuildCellScanBases() {
+    cell_scan_bases.clear();
+    for (const auto* allowed_stages : {&settings.transformer_allowed_stages, &settings.delayer_allowed_stages}) {
+        for (const auto& [trigger_id, stage_nos] : *allowed_stages) {
+            const auto base = FormReader::GetFormByID<RE::TESBoundObject>(trigger_id);
+            if (!base) continue;
+            for (const auto no : stage_nos) {
+                cell_scan_bases[no].push_back(base);
+            }
+        }
+    }
+    for (auto& bases : cell_scan_bases | std::views::values) {
+        std::ranges::sort(bases);
+        bases.erase(std::unique(bases.begin(), bases.end()), bases.end());
     }
 }
 
@@ -794,6 +815,7 @@ void Source::Reset() {
     formid = 0;
     editorid = "";
     stages.clear();
+    cell_scan_bases.clear();
     data.clear();
     init_failed = false;
 }
