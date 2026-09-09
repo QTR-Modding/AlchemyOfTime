@@ -276,12 +276,13 @@ void Manager::UpdateImpl(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const R
 
 void Manager::RequestRefUpdate(RE::TESObjectREFR* ref, const bool skip_if_queued) {
     if (!ref || isLoading.load() || isUninstalled.load()) return;
-    if (skip_if_queued) {
-        const auto refid = ref->GetFormID();
-        QUE_SHARED_GUARD;
-        if (_ref_stops_.contains(refid) && !queue_delete_.contains(refid)) return;
-    }
+    if (skip_if_queued && IsRefQueued(ref->GetFormID())) return;
     MarkDirty_(ref);
+}
+
+bool Manager::IsRefQueued(const RefID refid) {
+    QUE_SHARED_GUARD;
+    return _ref_stops_.contains(refid) && !queue_delete_.contains(refid);
 }
 
 void Manager::MarkDirty_(RE::TESObjectREFR* r) {
@@ -1297,12 +1298,7 @@ void Manager::UpdateWO(RE::TESObjectREFR* ref) {
         return;
     }
 
-    {
-        QUE_SHARED_GUARD;
-        if (_ref_stops_.contains(refid) && !queue_delete_.contains(refid)) {
-            return;
-        }
-    }
+    if (IsRefQueued(refid)) return;
 
     const auto curr_time = RE::Calendar::GetSingleton()->GetHoursPassed();
 

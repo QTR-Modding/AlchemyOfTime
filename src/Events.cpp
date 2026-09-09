@@ -74,6 +74,7 @@ RE::BSEventNotifyControl EventSink::ProcessEvent(const RE::TESObjectLoadedEvent*
     if (!event) return RE::BSEventNotifyControl::kContinue;
     logger::trace("TESObjectLoadedEvent: ref {:x}, loaded {}", event->formID, event->loaded);
     if (M->isLoading.load() || !event->loaded) return RE::BSEventNotifyControl::kContinue;
+    if (M->IsRefQueued(event->formID)) return RE::BSEventNotifyControl::kContinue;
 
     HandleRef(RE::TESForm::LookupByID<RE::TESObjectREFR>(event->formID), true);
 

@@ -237,6 +237,8 @@ public:
     // Defer a reference check; discovery can skip references already being watched.
     void RequestRefUpdate(RE::TESObjectREFR* ref, bool skip_if_queued = false);
 
+    [[nodiscard]] bool IsRefQueued(RefID refid);
+
     void UpdateNow(RE::TESObjectREFR* a_ref);
 
     // Swap based on stage instance. Holds sourceMutex_ internally. (shared)
