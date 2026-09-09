@@ -147,6 +147,8 @@ class Manager final : public Ticker, public SaveLoadData {
 
     static void RemoveItem(const RefInfo& moveFromInfo, FormID item_id, Count count);
 
+    static void AddItem(const RefInfo& addToInfo, const RefInfo& addFromInfo, FormID item_id, Count count);
+
     void Init();
 
     // [expects: sourceMutex_] (shared)
@@ -165,8 +167,6 @@ class Manager final : public Ticker, public SaveLoadData {
     void RestoreInventoryWatches();
     // [expects: sourceMutex_] (unique)
     void UpdateWO(RE::TESObjectREFR* ref);
-    // Restore saved dynamic items before taking the update snapshot. [expects: sourceMutex_] (unique)
-    void RestoreDynamicInventory(RE::TESObjectREFR* owner);
     // [expects: sourceMutex_] (unique)
     void SyncWithInventory(const RefInfo& a_info, const InvMap& inv);
 
@@ -252,6 +252,10 @@ public:
 
     // Serialisation helpers. [locks: sourceMutex_] (shared)
     void SendData();
+
+    // for syncing the previous session's (fake form) data with the current session
+    // [expects: sourceMutex_] (unique)
+    void HandleLoc(RE::TESObjectREFR* loc_ref);
 
     // Restore instances on load; mutates sources. [expects: sourceMutex_] (unique)
     StageInstance* RegisterAtReceiveData(FormID source_formid, RefID loc,

@@ -853,6 +853,22 @@ void Manager::RemoveItem(const RefInfo& moveFromInfo, const FormID item_id, cons
         {}, RemoveItemTask{.from = moveFromInfo.ref_id, .item_id = item_id, .count = count});
 }
 
+void Manager::AddItem(const RefInfo& addToInfo, const RefInfo& addFromInfo, const FormID item_id,
+                      const Count count) {
+    if (count <= 0) {
+        logger::error("Count is 0 or less.");
+        return;
+    }
+    const auto to_id = addToInfo.ref_id;
+    if (!to_id) {
+        logger::error("AddItem: to_id is null.");
+        return;
+    }
+    const auto from_id = addFromInfo.ref_id;
+    QueueManager::GetSingleton()->QueueAddRemoveItemTask(
+        AddItemTask{.to = to_id, .from = from_id, .item_id = item_id, .count = count}, {});
+}
+
 
 void Manager::Init() {
     if (Settings::INI_settings.contains("Other Settings")) {
@@ -1014,51 +1030,9 @@ void Manager::UpdateInventory(const RefInfo& a_info, const InvMap& inv) {
     }
 }
 
-void Manager::RestoreDynamicInventory(RE::TESObjectREFR* owner) {
-    const auto refid = owner->GetFormID();
-    if (!locs_to_be_handled.contains(refid)) return;
-
-    ListenGuard lg(Hooks::listen_disable_depth);
-    std::unordered_map<RE::TESBoundObject*, Count> adjustments;
-    if (const auto lit = loc_to_sources.find(refid); lit != loc_to_sources.end()) {
-        for (const auto sid : lit->second) {
-            const auto sit = sources.find(sid);
-            if (sit == sources.end()) continue;
-            const auto dit = sit->second->data.find(refid);
-            if (dit == sit->second->data.end()) continue;
-            for (const auto& inst : dit->second) {
-                if (!inst.xtra.is_fake || inst.xtra.is_decayed || inst.count <= 0) continue;
-                if (const auto bound = inst.GetBound()) adjustments[bound] += inst.count;
-            }
-        }
-    }
-
-    // Finish reading inventory entries before adding or removing anything.
-    {
-        const auto inv = owner->GetInventory();
-        for (const auto& [bound, entry] : inv) {
-            if (const auto it = adjustments.find(bound); it != adjustments.end()) {
-                it->second = std::max<Count>(0, it->second - entry.first);
-            } else if (bound->IsDynamicForm() && entry.first > 0 &&
-                       (!entry.second || !entry.second->IsQuestObject())) {
-                const auto name = bound->GetName();
-                if (!name || !*name) adjustments[bound] = -entry.first;
-            }
-        }
-    }
-
-    for (const auto& [bound, count] : adjustments) {
-        if (count > 0) {
-            owner->AddObjectToContainer(bound, nullptr, count, nullptr);
-        } else if (count < 0) {
-            owner->RemoveItem(bound, -count, RE::ITEM_REMOVE_REASON::kRemove, nullptr, nullptr);
-        }
-    }
-    locs_to_be_handled.erase(refid);
-}
-
 void Manager::SyncWithInventory(const RefInfo& a_info, const InvMap& inv) {
     const RefID loc = a_info.ref_id;
+    const bool needHandling = locs_to_be_handled.contains(loc);
     const float now = RE::Calendar::GetSingleton()->GetHoursPassed();
 
     // Inventory formids for O(1) membership checks
@@ -1068,8 +1042,9 @@ void Manager::SyncWithInventory(const RefInfo& a_info, const InvMap& inv) {
         inv_fids.insert(bound->GetFormID());
     }
 
-    // Registry totals per stage formid
+    // Registry totals per stage formid, and whether ANY fake exists for that formid at this loc
     std::unordered_map<FormID, Count> reg_total;
+    std::unordered_map<FormID, bool> reg_has_fake;
     reg_total.reserve(inv.size());
 
     if (auto lit = loc_to_sources.find(loc); lit != loc_to_sources.end()) {
@@ -1084,11 +1059,24 @@ void Manager::SyncWithInventory(const RefInfo& a_info, const InvMap& inv) {
             for (auto& inst : dit->second) {
                 if (inst.xtra.is_decayed || inst.count <= 0) continue;
                 reg_total[inst.xtra.form_id] += inst.count;
+                if (inst.xtra.is_fake) reg_has_fake[inst.xtra.form_id] = true;
             }
         }
     }
 
-    // Counts to remove from the registry
+    if (needHandling) {
+        for (auto& [bound, entry] : inv) {
+            if (bound->IsDynamicForm()) {
+                const auto name = bound->GetName();
+                if (!name || std::strlen(name) == 0) {
+                    QueueManager::GetSingleton()->QueueAddRemoveItemTask(
+                        {}, RemoveItemTask(loc, bound->GetFormID(), std::max(1, entry.first)));
+                }
+            }
+        }
+    }
+
+    // how much we need to remove from registry for each formid (when we are NOT "adding back" due to fake)
     std::unordered_map<FormID, Count> remove_from_reg;
     remove_from_reg.reserve(inv.size());
 
@@ -1107,7 +1095,12 @@ void Manager::SyncWithInventory(const RefInfo& a_info, const InvMap& inv) {
         if (regCount < invCount) {
             Register(fid, invCount - regCount, a_info, {.hours = now, .phase = UpdatePhase::kCurrent}, inv);
         } else if (regCount > invCount) {
-            remove_from_reg[fid] = regCount - invCount;
+            const Count diff = regCount - invCount;
+            if (needHandling && reg_has_fake[fid]) {
+                AddItem(a_info, {0, 0}, fid, diff); // fix inventory, keep registry
+            } else {
+                remove_from_reg[fid] = diff; // later decrement instances in one pass
+            }
         }
     }
 
@@ -1129,7 +1122,11 @@ void Manager::SyncWithInventory(const RefInfo& a_info, const InvMap& inv) {
                 const FormID fid = inst.xtra.form_id;
 
                 if (!inv_fids.contains(fid)) {
-                    inst.count = 0;
+                    // registry item not present in inventory
+                    if (needHandling && inst.xtra.is_fake)
+                        AddItem(a_info, {0, 0}, fid, inst.count);
+                    else
+                        inst.count = 0;
                     continue;
                 }
 
@@ -1142,6 +1139,8 @@ void Manager::SyncWithInventory(const RefInfo& a_info, const InvMap& inv) {
             }
         }
     }
+
+    locs_to_be_handled.erase(loc);
 }
 
 
@@ -1357,7 +1356,6 @@ void Manager::UpdateWO(RE::TESObjectREFR* ref) {
 
 void Manager::UpdateRef(RE::TESObjectREFR* loc) {
     if (loc->HasContainer()) {
-        RestoreDynamicInventory(loc);
         const auto base = loc->GetBaseObject();
         const RefInfo info(loc->GetFormID(), base ? base->GetFormID() : 0);
         const auto inv = loc->GetInventory();
@@ -1533,7 +1531,7 @@ void Manager::HandleCraftingEnter(const unsigned int bench_type) {
         return;
     }
 
-    UpdateNow(player_ref);
+    UpdateRef(player_ref);
     ListenGuard lg(Hooks::listen_disable_depth);
 
     const auto& q_form_types = Settings::qform_bench_map.at(bench_type);
@@ -1763,6 +1761,42 @@ void Manager::SendData() {
     logger::info("Data sent. Number of instances: {}", n_instances);
 }
 
+void Manager::HandleLoc(RE::TESObjectREFR* loc_ref) {
+    SRC_UNIQUE_GUARD;
+    ListenGuard lg(Hooks::listen_disable_depth);
+
+    if (!loc_ref) {
+        logger::error("Loc ref is null.");
+        return;
+    }
+    const auto loc_refid = loc_ref->GetFormID();
+
+    if (!locs_to_be_handled.contains(loc_refid)) {
+        return;
+    }
+
+    if (!loc_ref->HasContainer()) {
+        // remove the loc refid key from locs_to_be_handled map
+        locs_to_be_handled.erase(loc_refid);
+        return;
+    }
+
+    const auto loc_inventory_temp = loc_ref->GetInventory();
+    for (const auto& [bound, entry] : loc_inventory_temp) {
+        if (bound && bound->IsDynamicForm() && std::strlen(bound->GetName()) == 0) {
+            QueueManager::GetSingleton()->QueueAddRemoveItemTask(
+                {},
+                RemoveItemTask(loc_refid, bound->GetFormID(), std::max(1, entry.first))
+                );
+        }
+    }
+
+    const auto loc_base = loc_ref->GetObjectReference()->GetFormID();
+    SyncWithInventory(RefInfo(loc_refid, loc_base), loc_inventory_temp);
+    Update(loc_ref);
+    locs_to_be_handled.erase(loc_refid);
+}
+
 StageInstance* Manager::RegisterAtReceiveData(const FormID source_formid, const RefID loc,
                                               const StageInstancePlain& st_plain) {
     if (!source_formid) {
@@ -1914,8 +1948,9 @@ void Manager::ReceiveData() {
         return;
     }
 
+    HandleLoc(player_ref);
     SRC_UNIQUE_GUARD;
-    MarkDirty_(player_ref);
+    locs_to_be_handled.erase(player_refid);
     RestoreInventoryWatches();
     Print();
 
