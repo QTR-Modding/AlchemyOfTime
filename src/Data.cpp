@@ -1307,18 +1307,13 @@ FormID Source::FindWorldTrigger(RE::TESObjectREFR* a_obj, const WorldTriggers& t
                 continue;
             }
 
-            // For this triggerID, try the closest refs first (without sorting):
-            // we scan all within r2 and keep the best hit that passes the OBB check.
-            float bestD2 = r2;
-            bool found = false;
-
             for (const auto& e : it->second) {
                 const float dx = e.pos.x - originPos.x;
                 const float dy = e.pos.y - originPos.y;
                 const float dz = e.pos.z - originPos.z;
                 const float d2 = dx * dx + dy * dy + dz * dz;
 
-                if (d2 > bestD2) {
+                if (d2 > r2) {
                     continue;
                 }
 
@@ -1328,13 +1323,8 @@ FormID Source::FindWorldTrigger(RE::TESObjectREFR* a_obj, const WorldTriggers& t
                 }
 
                 if (SearchModulatorInCell_Sub(a_obj, ref)) {
-                    bestD2 = d2;
-                    found = true;
+                    return triggerID;
                 }
-            }
-
-            if (found) {
-                return triggerID;
             }
         }
     }
