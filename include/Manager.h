@@ -234,6 +234,9 @@ public:
     void Update(RE::TESObjectREFR* from, RE::TESObjectREFR* to = nullptr, const RE::TESForm* what = nullptr,
                 Count count = 0, RefID from_refid = 0);
 
+    // Defer a reference check; discovery can skip references already being watched.
+    void RequestRefUpdate(RE::TESObjectREFR* ref, bool skip_if_queued = false);
+
     void UpdateNow(RE::TESObjectREFR* a_ref);
 
     // Swap based on stage instance. Holds sourceMutex_ internally. (shared)

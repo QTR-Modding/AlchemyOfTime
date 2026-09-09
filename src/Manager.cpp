@@ -274,6 +274,16 @@ void Manager::UpdateImpl(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const R
     RefreshRefs_(ctx);
 }
 
+void Manager::RequestRefUpdate(RE::TESObjectREFR* ref, const bool skip_if_queued) {
+    if (!ref || isLoading.load() || isUninstalled.load()) return;
+    if (skip_if_queued) {
+        const auto refid = ref->GetFormID();
+        QUE_SHARED_GUARD;
+        if (_ref_stops_.contains(refid) && !queue_delete_.contains(refid)) return;
+    }
+    MarkDirty_(ref);
+}
+
 void Manager::MarkDirty_(RE::TESObjectREFR* r) {
     if (!r) return;
     if (std::shared_lock lk(dirty_mtx_);
@@ -1289,7 +1299,7 @@ void Manager::UpdateWO(RE::TESObjectREFR* ref) {
 
     {
         QUE_SHARED_GUARD;
-        if (_ref_stops_.contains(refid)) {
+        if (_ref_stops_.contains(refid) && !queue_delete_.contains(refid)) {
             return;
         }
     }

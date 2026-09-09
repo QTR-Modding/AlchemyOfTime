@@ -357,7 +357,6 @@ RE::TESObjectREFR* Utils::WorldObject::DropObjectIntoTheWorld(RE::TESBoundObject
 }
 
 void Utils::WorldObject::SwapObjects(RE::TESObjectREFR* a_from, RE::TESBoundObject* a_to, const bool apply_havok) {
-    logger::trace("SwapObjects");
     if (!a_from) {
         logger::error("Ref is null.");
         return;
