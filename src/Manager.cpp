@@ -1148,7 +1148,6 @@ void Manager::SyncWithInventory(const RefInfo& a_info, InvMap& inv) {
         for (const auto& [bound, count] : inventory_adjustments) {
             if (count > 0) owner->AddObjectToContainer(bound, nullptr, count, nullptr);
             else if (count < 0) owner->RemoveItem(bound, -count, RE::ITEM_REMOVE_REASON::kRemove, nullptr, nullptr);
-            logger::info("[Inventory restore] owner={:08X}, item={:08X}, adjustment={}", loc, bound->GetFormID(), count);
         }
         inv = owner->GetInventory();
         locs_to_be_handled.erase(loc);

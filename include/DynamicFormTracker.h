@@ -715,10 +715,7 @@ public:
                     const std::pair base{base_formid, base_editorid};
                     // This save owns the ID; remove associations retained from the previous save.
                     for (auto& [previous_base, formset] : forms) {
-                        if (previous_base != base && formset.erase(dyn_formid)) {
-                            logger::info("[DFT load] Reassigning {:08X}: {:08X} ({}) -> {:08X} ({})",
-                                         dyn_formid, previous_base.first, previous_base.second, base_formid, base_editorid);
-                        }
+                        if (previous_base != base) formset.erase(dyn_formid);
                     }
                     forms[base].insert(dyn_formid);
                 }
