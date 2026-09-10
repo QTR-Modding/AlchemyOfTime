@@ -466,6 +466,7 @@ std::wstring Lorebox::BuildFrozenLore(const std::wstring& currentStageName) {
 }
 
 const wchar_t* Lorebox::OnDynamicTranslationRequest(std::string_view) {
+    if (!enabled.load(std::memory_order_relaxed)) return return_str.c_str();
     const auto item_data = Utils::Menu::GetSelectedItemDataInMenu();
     if (!item_data) {
         return return_str.c_str();

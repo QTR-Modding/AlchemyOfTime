@@ -174,6 +174,10 @@ void __stdcall UI::RenderLoreBox() {
     }
 
     ImGuiMCP::Text("LoreBox");
+    bool enabled = Lorebox::enabled.load(std::memory_order_relaxed);
+    if (ImGuiMCP::Checkbox("Enable AoT Lorebox", &enabled)) {
+        Lorebox::enabled.store(enabled, std::memory_order_relaxed);
+    }
     if (ImGuiMCP::BeginTable("table_lorebox_section", 2, table_flags)) {
         ImGuiMCP::TableNextRow();
         ImGuiMCP::TableNextColumn();
@@ -300,6 +304,7 @@ void __stdcall UI::RenderLoreBox() {
             CSimpleIniA ini;
             ini.SetUnicode();
             ini.LoadFile(Settings::INI_path);
+            ini.SetBoolValue("LoreBox", "Enabled", enabled);
             ini.SetBoolValue("LoreBox", "ShowTitle", lorebox_show_title);
             ini.SetBoolValue("LoreBox", "ShowPercentage", lorebox_show_percentage);
             ini.SetBoolValue("LoreBox", "ShowModulatorName", show_mod_name);

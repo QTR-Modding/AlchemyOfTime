@@ -947,11 +947,13 @@ void PresetParse::LoadINISettings() {
                                                         Settings::unowned_objects_evolve);
 
     // LoreBox settings (defaults true, except ShowModulatorName and ShowMultiplier)
+    const bool lb_enabled = ini.GetBoolValue("LoreBox", "Enabled", true);
     const bool lb_title = ini.GetBoolValue("LoreBox", "ShowTitle", true);
     const bool lb_pct = ini.GetBoolValue("LoreBox", "ShowPercentage", true);
     const bool lb_mod = ini.GetBoolValue("LoreBox", "ShowModulatorName", false);
     const bool lb_col = ini.GetBoolValue("LoreBox", "ColorizeRows", true);
     const bool lb_mul = ini.GetBoolValue("LoreBox", "ShowMultiplier", false);
+    Lorebox::enabled.store(lb_enabled);
     Lorebox::show_title.store(lb_title);
     Lorebox::show_percentage.store(lb_pct);
     Lorebox::show_modulator_name.store(lb_mod);
@@ -988,6 +990,7 @@ void PresetParse::LoadINISettings() {
     }
 
     // Ensure keys exist with defaults if they were missing
+    ini.SetBoolValue("LoreBox", "Enabled", lb_enabled);
     ini.SetBoolValue("LoreBox", "ShowTitle", lb_title);
     ini.SetBoolValue("LoreBox", "ShowPercentage", lb_pct);
     ini.SetBoolValue("LoreBox", "ShowModulatorName", lb_mod);

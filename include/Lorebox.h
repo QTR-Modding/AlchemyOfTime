@@ -27,6 +27,8 @@ namespace Lorebox {
 
     inline std::unordered_set<HandledKey, HandledKeyHash> handled_item_data; // formid of the item and its owner
 
+    inline std::atomic enabled{true};
+
     // UI toggle: show a title before rows in lorebox
     inline std::atomic show_title{true};
     // UI toggle: show progress percentage per instance (default true)
