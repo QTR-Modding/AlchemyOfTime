@@ -251,10 +251,13 @@ class DynamicFormTracker : public DFSaveLoadData {
         const auto formset = GetFormSet(base_formid, base_editorid);
         if (formset.empty()) return 0;
         std::shared_lock lock(customIDforms_mutex);
+        FormID result = 0;
         for (const auto _formid : formset) {
-            if (customIDforms.contains(_formid) && customIDforms.at(_formid) == custom_id) return _formid;
+            if (!customIDforms.contains(_formid) || customIDforms.at(_formid) != custom_id) continue;
+            if (IsActive(_formid)) return _formid;
+            if (!result || _formid < result) result = _formid;
         }
-        return 0;
+        return result;
     }
 
     // makes it active
@@ -538,12 +541,14 @@ public:
 
         // before creating new one, try to find one from the bank without custom id
         if (const auto dyn_form = FormReader::GetFormByID<T>(Fetch(baseFormID, baseEditorID, {}))) {
-            return dyn_form->GetFormID();
+            const auto new_formid = dyn_form->GetFormID();
+            if (customID.has_value()) EditCustomID(new_formid, customID.value());
+            return new_formid;
         }
 
         if (const auto dyn_form = _yield(Create<T>(base_form), base_form)) {
             const auto new_formid = dyn_form->GetFormID();
-            if (customID.has_value()) customIDforms[new_formid] = customID.value();
+            if (customID.has_value()) EditCustomID(new_formid, customID.value());
             return new_formid;
         }
 
@@ -585,7 +590,11 @@ public:
         ReviveDynamicForm(form, base_form);
         std::unique_lock lock(protected_forms_mutex);
         std::unique_lock lock2(forms_mutex);
-        forms[{baseID, baseEditorID}].insert(dynamic_formid);
+        const std::pair base{baseID, baseEditorID};
+        for (auto& [previous_base, formset] : forms) {
+            if (previous_base != base) formset.erase(dynamic_formid);
+        }
+        forms[base].insert(dynamic_formid);
         protected_forms.insert(dynamic_formid);
     }
 
@@ -667,9 +676,12 @@ public:
         for (const auto& [lhs, rhs] : m_Data) {
             auto base_formid = lhs.first;
             const auto& base_editorid = lhs.second;
-            const auto temp_form = FormReader::GetFormByID(0, base_editorid);
-            if (!temp_form) logger::critical("Failed to get base form.");
-            else base_formid = temp_form->GetFormID();
+            const auto temp_form = FormReader::GetFormByID(base_formid, base_editorid);
+            if (!temp_form) {
+                logger::critical("Failed to get base form {:08X} ({}).", base_formid, base_editorid);
+                continue;
+            }
+            base_formid = temp_form->GetFormID();
             for (const auto& [dyn_formid, custom_id, act_eff_elpsd] : rhs) {
                 const auto [has_customid, customid] = custom_id;
                 if (act_eff_elpsd >= 0.f) {
@@ -698,17 +710,23 @@ public:
                     }
                 }
 
-                if (auto lock = std::unique_lock(forms_mutex); forms.contains({base_formid, base_editorid}) &&
-                                                               forms.at({base_formid, base_editorid}).contains(
-                                                                   dyn_formid)) {
-                    logger::trace("Form with ID {:x} already exist for baseid {} and editorid {}.", dyn_formid,
-                                  base_formid, base_editorid);
-                } else if (!forms[{base_formid, base_editorid}].insert(dyn_formid).second) {
-                    logger::error("Failed to insert new form into forms.");
-                    continue;
+                {
+                    std::unique_lock lock(forms_mutex);
+                    const std::pair base{base_formid, base_editorid};
+                    // This save owns the ID; remove associations retained from the previous save.
+                    for (auto& [previous_base, formset] : forms) {
+                        if (previous_base != base && formset.erase(dyn_formid)) {
+                            logger::info("[DFT load] Reassigning {:08X}: {:08X} ({}) -> {:08X} ({})",
+                                         dyn_formid, previous_base.first, previous_base.second, base_formid, base_editorid);
+                        }
+                    }
+                    forms[base].insert(dyn_formid);
                 }
-                if (auto lock = std::unique_lock(customIDforms_mutex); has_customid)
-                    customIDforms[dyn_formid] = customid;
+                {
+                    std::unique_lock lock(customIDforms_mutex);
+                    if (has_customid) customIDforms[dyn_formid] = customid;
+                    else customIDforms.erase(dyn_formid);
+                }
                 n_fakes++;
             }
         }

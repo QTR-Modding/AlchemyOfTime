@@ -1007,7 +1007,7 @@ bool Manager::UpdateInventory(QueueInfo& queue_info, const UpdateTime t, const I
     return update_took_place;
 }
 
-void Manager::UpdateInventory(const RefInfo& a_info, const InvMap& inv) {
+void Manager::UpdateInventory(const RefInfo& a_info, InvMap& inv) {
     SyncWithInventory(a_info, inv);
 
     const auto curr = RE::Calendar::GetSingleton()->GetHoursPassed();
@@ -1030,9 +1030,12 @@ void Manager::UpdateInventory(const RefInfo& a_info, const InvMap& inv) {
     }
 }
 
-void Manager::SyncWithInventory(const RefInfo& a_info, const InvMap& inv) {
+void Manager::SyncWithInventory(const RefInfo& a_info, InvMap& inv) {
     const RefID loc = a_info.ref_id;
     const bool needHandling = locs_to_be_handled.contains(loc);
+    const auto owner = needHandling ? a_info.GetRef() : nullptr;
+    if (needHandling && !owner) return;
+    std::unordered_map<RE::TESBoundObject*, Count> inventory_adjustments;
     const float now = RE::Calendar::GetSingleton()->GetHoursPassed();
 
     // Inventory formids for O(1) membership checks
@@ -1066,12 +1069,10 @@ void Manager::SyncWithInventory(const RefInfo& a_info, const InvMap& inv) {
 
     if (needHandling) {
         for (auto& [bound, entry] : inv) {
-            if (bound->IsDynamicForm()) {
+            if (bound->IsDynamicForm() && !reg_total.contains(bound->GetFormID()) && entry.first > 0 &&
+                (!entry.second || !entry.second->IsQuestObject())) {
                 const auto name = bound->GetName();
-                if (!name || std::strlen(name) == 0) {
-                    QueueManager::GetSingleton()->QueueAddRemoveItemTask(
-                        {}, RemoveItemTask(loc, bound->GetFormID(), std::max(1, entry.first)));
-                }
+                if (!name || std::strlen(name) == 0) inventory_adjustments[bound] = -entry.first;
             }
         }
     }
@@ -1097,7 +1098,7 @@ void Manager::SyncWithInventory(const RefInfo& a_info, const InvMap& inv) {
         } else if (regCount > invCount) {
             const Count diff = regCount - invCount;
             if (needHandling && reg_has_fake[fid]) {
-                AddItem(a_info, {0, 0}, fid, diff); // fix inventory, keep registry
+                inventory_adjustments[bound] += diff; // restore inventory, keep saved progress
             } else {
                 remove_from_reg[fid] = diff; // later decrement instances in one pass
             }
@@ -1123,10 +1124,11 @@ void Manager::SyncWithInventory(const RefInfo& a_info, const InvMap& inv) {
 
                 if (!inv_fids.contains(fid)) {
                     // registry item not present in inventory
-                    if (needHandling && inst.xtra.is_fake)
-                        AddItem(a_info, {0, 0}, fid, inst.count);
-                    else
+                    if (needHandling && inst.xtra.is_fake) {
+                        if (const auto bound = inst.GetBound()) inventory_adjustments[bound] += inst.count;
+                    } else {
                         inst.count = 0;
+                    }
                     continue;
                 }
 
@@ -1140,7 +1142,17 @@ void Manager::SyncWithInventory(const RefInfo& a_info, const InvMap& inv) {
         }
     }
 
-    locs_to_be_handled.erase(loc);
+    if (needHandling) {
+        // InventoryEntryData has been read; finish restoration before ordinary updates can reconcile again.
+        ListenGuard lg(Hooks::listen_disable_depth);
+        for (const auto& [bound, count] : inventory_adjustments) {
+            if (count > 0) owner->AddObjectToContainer(bound, nullptr, count, nullptr);
+            else if (count < 0) owner->RemoveItem(bound, -count, RE::ITEM_REMOVE_REASON::kRemove, nullptr, nullptr);
+            logger::info("[Inventory restore] owner={:08X}, item={:08X}, adjustment={}", loc, bound->GetFormID(), count);
+        }
+        inv = owner->GetInventory();
+        locs_to_be_handled.erase(loc);
+    }
 }
 
 
@@ -1358,7 +1370,7 @@ void Manager::UpdateRef(RE::TESObjectREFR* loc) {
     if (loc->HasContainer()) {
         const auto base = loc->GetBaseObject();
         const RefInfo info(loc->GetFormID(), base ? base->GetFormID() : 0);
-        const auto inv = loc->GetInventory();
+        auto inv = loc->GetInventory();
         UpdateInventory(info, inv);
     } else {
         UpdateWO(loc);
@@ -1781,15 +1793,7 @@ void Manager::HandleLoc(RE::TESObjectREFR* loc_ref) {
         return;
     }
 
-    const auto loc_inventory_temp = loc_ref->GetInventory();
-    for (const auto& [bound, entry] : loc_inventory_temp) {
-        if (bound && bound->IsDynamicForm() && std::strlen(bound->GetName()) == 0) {
-            QueueManager::GetSingleton()->QueueAddRemoveItemTask(
-                {},
-                RemoveItemTask(loc_refid, bound->GetFormID(), std::max(1, entry.first))
-                );
-        }
-    }
+    auto loc_inventory_temp = loc_ref->GetInventory();
 
     const auto loc_base = loc_ref->GetObjectReference()->GetFormID();
     SyncWithInventory(RefInfo(loc_refid, loc_base), loc_inventory_temp);
@@ -1882,6 +1886,18 @@ void Manager::ReceiveData() {
     // I need to deal with the fake forms from last session
     // trying to make sure that the fake forms in bank will be used when needed
     const auto DFT = DynamicFormTracker::GetSingleton();
+    // Saved instances identify the source and stage even if an older DFT bank contains stale associations.
+    for (const auto& [lhs, instances] : m_Data) {
+        const auto base = FormReader::GetFormByID(lhs.first.form_id, lhs.first.editor_id);
+        if (!base || !IsSource(base->GetFormID())) continue;
+        for (const auto& instance : instances) {
+            if (!instance.is_fake || instance.count <= 0) continue;
+            DFT->Reserve(base->GetFormID(), lhs.first.editor_id, instance.form_id);
+            if (DFT->GetFormSet(base->GetFormID(), lhs.first.editor_id).contains(instance.form_id)) {
+                DFT->EditCustomID(instance.form_id, static_cast<uint32_t>(instance.no));
+            }
+        }
+    }
     for (const auto source_forms = DFT->GetSourceForms(); const auto& [source_formid, source_editorid] : source_forms) {
         if (IsSource(source_formid)) {
             for (const auto dynamic_formid : DFT->GetFormSet(source_formid, source_editorid)) {
