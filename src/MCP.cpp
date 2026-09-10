@@ -458,7 +458,7 @@ void __stdcall UI::RenderUpdateQ() {
             ImGuiMCP::TableNextColumn();
             ImGuiMCP::Text(fst.c_str());
             ImGuiMCP::TableNextColumn();
-            ImGuiMCP::Text(std::format("{}", snd).c_str());
+            ImGuiMCP::Text(snd ? std::format("{}", *snd).c_str() : "Watching conditions");
         }
         ImGuiMCP::EndTable();
     }

@@ -272,7 +272,7 @@ public:
     std::vector<Source> GetSourcesByStageAndOwner(FormID stage_formid, RefID location_id);
 
     // Snapshot of the update queue. [locks: queueMutex_] (shared)
-    std::unordered_map<RefID, float> GetUpdateQueue();
+    std::unordered_map<RefID, std::optional<float>> GetUpdateQueue();
 
     // [expects: sourceMutex_] (shared)
     void HandleDynamicWO(RE::TESObjectREFR* ref);

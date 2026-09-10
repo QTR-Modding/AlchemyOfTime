@@ -2048,11 +2048,13 @@ std::vector<Source> Manager::GetSourcesByStageAndOwner(const FormID stage_formid
     return out;
 }
 
-std::unordered_map<RefID, float> Manager::GetUpdateQueue() {
-    std::unordered_map<RefID, float> _ref_stops_copy;
+std::unordered_map<RefID, std::optional<float>> Manager::GetUpdateQueue() {
+    std::unordered_map<RefID, std::optional<float>> _ref_stops_copy;
     QUE_SHARED_GUARD;
     for (const auto& [key, value] : _ref_stops_) {
-        _ref_stops_copy[key] = value.stop_time;
+        _ref_stops_copy[key] = value.update_flags.any(QueueInfo::UpdateFlag::kWorldObject)
+                                   ? std::optional{value.stop_time}
+                                   : std::nullopt;
     }
     return _ref_stops_copy;
 }
