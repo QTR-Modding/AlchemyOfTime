@@ -155,7 +155,7 @@ RE::BSEventNotifyControl EventSink::ProcessEvent(const RE::TESFormDeleteEvent* a
     if (!a_event) return RE::BSEventNotifyControl::kContinue;
     if (!a_event->formID) return RE::BSEventNotifyControl::kContinue;
     if (M->HandleFormDelete(a_event->formID)) {
-        logger::info("Form deleted: {:x}", a_event->formID);
+        logger::trace("Form deleted: {:x}", a_event->formID);
     }
     return RE::BSEventNotifyControl::kContinue;
 }

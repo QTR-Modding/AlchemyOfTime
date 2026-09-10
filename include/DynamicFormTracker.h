@@ -648,7 +648,7 @@ public:
             DFSaveDataRHS rhs;
             for (const auto dyn_formid : dyn_formset) {
                 if (!IsActive(dyn_formid) && !IsProtected(dyn_formid))
-                    logger::info(
+                    logger::trace(
                         "Inactive form {:x} found in forms set.", dyn_formid);
                 std::shared_lock lock(customIDforms_mutex);
                 const auto has_customid = customIDforms.contains(dyn_formid);
@@ -692,12 +692,12 @@ public:
                     n_act_effs++;
                 }
                 if (const auto dyn_form = RE::TESForm::LookupByID(dyn_formid); !dyn_form) {
-                    logger::info("Dynamic form {:x} does not exist.", dyn_formid);
+                    logger::trace("Dynamic form {:x} does not exist.", dyn_formid);
                     continue;
                 } else {
                     if ([[maybe_unused]] const auto dyn_form_ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(
                         dyn_formid)) {
-                        logger::info("Dynamic form {:x} is a refr with name {}.", dyn_formid, dyn_form->GetName());
+                        logger::trace("Dynamic form {:x} is a refr with name {}.", dyn_formid, dyn_form->GetName());
                         continue;
                     }
                     if (!underlying_check(temp_form, dyn_form)) {

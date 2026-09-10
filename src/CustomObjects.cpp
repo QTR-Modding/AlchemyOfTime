@@ -642,10 +642,7 @@ bool SoundHelper::Play(const RE::TESObjectREFR* ref, const FormID sound_id, cons
         return false;
     }
     const auto ref_node = ref->Get3D();
-    if (!ref_node) {
-        logger::warn("Ref has no 3D.");
-        return false;
-    }
+    if (!ref_node) return false;
     std::unique_lock lock(mutex);
     auto& sound_handle = handles[ref->GetFormID()];
 
