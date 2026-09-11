@@ -1866,10 +1866,26 @@ StageInstance* Manager::RegisterAtReceiveData(const FormID source_formid, const 
     return instance;
 }
 
+void Manager::RestoreActiveEffectForms(const std::vector<clib_utilsQTR::ActEff>& effects) {
+    SRC_UNIQUE_GUARD;
+    for (const auto& effect : effects) {
+        if (!effect.custom_id.first) continue;
+        const auto source = ForceGetSource(effect.baseFormid);
+        if (!source || !source->IsFakeStage(effect.custom_id.second)) continue;
+        const auto& stage = source->GetStage(effect.custom_id.second);
+        if (!stage.formid) continue;
+        IndexStage(stage.formid, source->formid);
+        logger::trace("Restored active-effect form {:08X} for source {:08X}, stage {}.",
+                      stage.formid, source->formid, effect.custom_id.second);
+    }
+}
+
 void Manager::ReceiveData() {
     logger::info("-------- Receiving data (Manager) ---------");
 
-    if (m_Data.empty()) {
+    const auto DFT = clib_utilsQTR::DynamicFormTracker::GetSingleton();
+    const auto pending_effects = DFT->GetPendingActiveEffects();
+    if (m_Data.empty() && pending_effects.empty()) {
         logger::warn("ReceiveData: No data to receive.");
         return;
     }
@@ -1884,7 +1900,6 @@ void Manager::ReceiveData() {
 
     // I need to deal with the fake forms from last session
     // trying to make sure that the fake forms in bank will be used when needed
-    const auto DFT = clib_utilsQTR::DynamicFormTracker::GetSingleton();
     // Saved instances identify the source and stage even if an older DFT bank contains stale associations.
     for (const auto& [lhs, instances] : m_Data) {
         const auto base = FormReader::GetFormByID(lhs.first.form_id, lhs.first.editor_id);
@@ -1904,8 +1919,6 @@ void Manager::ReceiveData() {
             }
         }
     }
-
-    DFT->ApplyMissingActiveEffects();
 
     /////////////////////////////////
 
@@ -1943,6 +1956,9 @@ void Manager::ReceiveData() {
             }
         }
     }
+
+    RestoreActiveEffectForms(pending_effects);
+    DFT->ApplyMissingActiveEffects();
 
     {
         ListenGuard lg(Hooks::listen_disable_depth);
