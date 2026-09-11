@@ -9,6 +9,12 @@
 namespace {
     // ReSharper disable once CppParameterMayBeConstPtrOrRef
     void OnMessage(SKSE::MessagingInterface::Message* message) {
+        if (message->type == SKSE::MessagingInterface::kPreLoadGame)
+            DynamicFormTracker::GetSingleton()->TraceMiscTest("before_engine_load");
+        if (message->type == SKSE::MessagingInterface::kPostLoadGame)
+            DynamicFormTracker::GetSingleton()->TraceMiscTest("post_load_message");
+        if (message->type == SKSE::MessagingInterface::kSaveGame)
+            DynamicFormTracker::GetSingleton()->TraceMiscTest("save_message");
         if (message->type == SKSE::MessagingInterface::kDataLoaded) {
             // 0) Check Po3's Tweaks
             if (!Utils::IsPo3Installed()) {

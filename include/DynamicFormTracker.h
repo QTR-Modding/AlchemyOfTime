@@ -28,6 +28,9 @@ class DynamicFormTracker : public DFSaveLoadData {
 
     bool block_create = false;
 
+    // Temporary MISC serialization experiment; remove with the test fixture.
+    static constexpr RE::FormID misc_test_formid = 0xFF200800;
+
     //std::map<FormID,float> act_effs;
     std::vector<ActEff> act_effs; // save file specific
 
@@ -87,6 +90,11 @@ class DynamicFormTracker : public DFSaveLoadData {
 
     static void ReviveDynamicForm(RE::TESForm* fake, RE::TESForm* base, const FormID setFormID = 0) {
         using namespace Utils::DynamicForm;
+        logger::trace("[DFT test] Copy base: dynamic={:08X}, ptr={}, type={}, name='{}', "
+                      "base={:08X}, base_name='{}', requested_id={:08X}",
+                      fake->GetFormID(), static_cast<const void*>(fake),
+                      RE::FormTypeToString(fake->GetFormType()), fake->GetName(),
+                      base->GetFormID(), base->GetName(), setFormID);
         fake->Copy(base);
         const auto weaponBaseForm = base->As<RE::TESObjectWEAP>();
 
@@ -184,6 +192,9 @@ class DynamicFormTracker : public DFSaveLoadData {
         copyComponent<RE::TESBipedModelForm>(base, fake);
 
         if (setFormID != 0) fake->SetFormID(setFormID, false);
+        logger::trace("[DFT test] Copy complete: dynamic={:08X}, ptr={}, type={}, name='{}'",
+                      fake->GetFormID(), static_cast<const void*>(fake),
+                      RE::FormTypeToString(fake->GetFormType()), fake->GetName());
     }
 
     template <typename T>
@@ -203,6 +214,21 @@ class DynamicFormTracker : public DFSaveLoadData {
             return 0;
         }
 
+        // The selected test base uses the same vacant ID in two separate game launches.
+        static const std::string misc_test_base = [] {
+            std::ifstream input("Data/SKSE/Plugins/AoT_DFT_MiscTest.txt");
+            std::string selected;
+            input >> selected;
+            return selected;
+        }();
+        const bool is_misc_test = baseForm->GetFormType() == RE::FormType::Misc &&
+            (misc_test_base == "IngotGold" || misc_test_base == "ingotSilver") && base_editorid == misc_test_base;
+        const RE::FormID assigned_formid = is_misc_test ? misc_test_formid : setFormID;
+        if (is_misc_test && RE::TESForm::LookupByID(assigned_formid)) {
+            logger::error("[DFT MISC test] Creation refused: test ID {:08X} is already occupied; base={}",
+                          assigned_formid, base_editorid);
+            return 0;
+        }
         auto factory = RE::IFormFactory::GetFormFactoryByType(baseForm->GetFormType());
 
         RE::TESForm* new_form = factory->Create();
@@ -213,18 +239,21 @@ class DynamicFormTracker : public DFSaveLoadData {
             logger::error("Failed to create new form.");
             return 0;
         }
-        logger::trace("Original form id: {:x}", new_form->GetFormID());
+        logger::trace("[DFT test] Factory created: dynamic={:08X}, ptr={}, type={}, "
+                      "base={:08X}, editor_id='{}', base_name='{}'",
+                      new_form->GetFormID(), static_cast<const void*>(new_form),
+                      RE::FormTypeToString(new_form->GetFormType()), base_formid, base_editorid, baseForm->GetName());
 
-        if (forms[{base_formid, base_editorid}].contains(setFormID)) {
-            logger::warn("Form with ID {:x} already exist for baseid {} and editorid {}.", setFormID, base_formid,
+        if (forms[{base_formid, base_editorid}].contains(assigned_formid)) {
+            logger::warn("Form with ID {:x} already exist for baseid {} and editorid {}.", assigned_formid, base_formid,
                          base_editorid);
             ReviveDynamicForm(new_form, baseForm);
-        } else ReviveDynamicForm(new_form, baseForm, setFormID);
+        } else ReviveDynamicForm(new_form, baseForm, assigned_formid);
 
         const auto new_formid = new_form->GetFormID();
 
-        logger::trace("Created form with type: {}, Base ID: {:x}, Name: {}",
-                      RE::FormTypeToString(new_form->GetFormType()), new_form->GetFormID(), new_form->GetName());
+        logger::trace("[DFT test] Creation complete: dynamic={:08X}, ptr={}, base={:08X}, name='{}'",
+                      new_formid, static_cast<const void*>(new_form), base_formid, new_form->GetName());
 
         if (auto lock = std::unique_lock(forms_mutex); !forms[{base_formid, base_editorid}].insert(new_formid).second) {
             lock.unlock();
@@ -263,11 +292,16 @@ class DynamicFormTracker : public DFSaveLoadData {
     // makes it active
     const RE::TESForm* _yield(const FormID dynamic_formid, RE::TESForm* base_form) {
         if (const auto newForm = RE::TESForm::LookupByID(dynamic_formid)) {
+            logger::trace("[DFT test] Fetch before changes: dynamic={:08X}, ptr={}, type={}, name='{}', base={:08X}",
+                          dynamic_formid, static_cast<const void*>(newForm),
+                          RE::FormTypeToString(newForm->GetFormType()), newForm->GetName(), base_form->GetFormID());
             if (!underlying_check(base_form, newForm)) {
                 logger::error("Underlying check failed for form with ID {:x}.", dynamic_formid);
                 return nullptr;
             }
             if (std::strlen(newForm->GetName()) == 0) {
+                logger::trace("[DFT test] Empty-name repair: dynamic={:08X}, base={:08X}",
+                              dynamic_formid, base_form->GetFormID());
                 ReviveDynamicForm(newForm, base_form);
             }
             if (auto lock = std::unique_lock(active_forms_mutex); active_forms.insert(dynamic_formid).second) {
@@ -281,6 +315,8 @@ class DynamicFormTracker : public DFSaveLoadData {
 
             return newForm;
         }
+        logger::trace("[DFT test] Fetch missing: dynamic={:08X}, base={:08X}",
+                      dynamic_formid, base_form->GetFormID());
         return nullptr;
     }
 
@@ -756,6 +792,22 @@ public:
 
         act_effs.clear();
         block_create = false;
+    }
+
+    // Read the fixed test ID even when this launch's DFT bank has no entry for it.
+    void TraceMiscTest(const char* phase) {
+        const auto form = RE::TESForm::LookupByID(misc_test_formid);
+        const auto model = form ? form->As<RE::TESModel>() : nullptr;
+        logger::trace("[DFT MISC test] phase={}, id={:08X}, ptr={}, type={}, name='{}', model='{}'",
+                      phase, misc_test_formid, static_cast<const void*>(form),
+                      form ? RE::FormTypeToString(form->GetFormType()) : "<missing>",
+                      form ? form->GetName() : "<missing>", model ? model->GetModel() : "<none>");
+        std::shared_lock lock(forms_mutex);
+        for (const auto& [base, formset] : forms) {
+            if (formset.contains(misc_test_formid))
+                logger::trace("[DFT MISC test] phase={}, recorded_base={:08X}, editor_id='{}'",
+                              phase, base.first, base.second);
+        }
     }
 
     void Print() {

@@ -220,6 +220,7 @@ void LoadCallback(SKSE::SerializationInterface* serializationInterface) {
 
     M->isLoading.store(true);
     logger::info("Loading Data from skse co-save.");
+    DynamicFormTracker::GetSingleton()->TraceMiscTest("before_aot_reset");
 
     M->Reset();
     auto* DFT = DynamicFormTracker::GetSingleton();
@@ -272,7 +273,9 @@ void LoadCallback(SKSE::SerializationInterface* serializationInterface) {
 
     if (cosave_found == 2) {
         DFT->ReceiveData();
+        DFT->TraceMiscTest("after_dft_receive");
         M->ReceiveData();
+        DFT->TraceMiscTest("after_aot_restore");
         logger::info("Data loaded from skse co-save.");
     } else
         logger::info("No cosave data found.");
