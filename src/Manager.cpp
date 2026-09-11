@@ -560,7 +560,7 @@ void Manager::QueueRefUpdate(const RefStop& a_refstop) {
 
 void Manager::QueueRefDelete(const RefID refid) {
     QUE_UNIQUE_GUARD;
-    queue_delete_.insert(refid);
+    if (_ref_stops_.contains(refid)) queue_delete_.insert(refid);
 }
 
 void Manager::UpdateRefStop(const Source& src, const StageInstance& wo_inst, RefStop& a_ref_stop, const float stop_t) {
