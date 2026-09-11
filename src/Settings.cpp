@@ -789,8 +789,6 @@ DefaultSettings PresetParse::parseDefaults_(const YAML::Node& config) {
                     const auto temp_duration = effectNode["duration"].as<DurationMGEFF>();
                     effects.emplace_back(temp_effect_formid, temp_magnitude, temp_duration);
                 } else effects.emplace_back(temp_effect_formid, 0.f, 0);
-                // currently only one allowed
-                break;
             }
         }
         settings.effects[a_stage_no] = effects;
