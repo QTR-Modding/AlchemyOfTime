@@ -896,7 +896,7 @@ void UI::RefreshButton() {
 void UI::Refresh() {
     last_generated = std::format("{} (in-game hours)", RE::Calendar::GetSingleton()->GetHoursPassed());
     dynamic_forms.clear();
-    for (const auto DFT = DynamicFormTracker::GetSingleton(); const auto& df : DFT->GetDynamicForms()) {
+    for (const auto DFT = clib_utilsQTR::DynamicFormTracker::GetSingleton(); const auto& df : DFT->GetDynamicForms()) {
         if (const auto form = RE::TESForm::LookupByID(df); form) {
             auto status = DFT->IsActive(df) ? 2 : DFT->IsProtected(df) ? 1 : 0;
             dynamic_forms[df] = {form->GetName(), status};

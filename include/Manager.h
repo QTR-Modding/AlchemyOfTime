@@ -1,5 +1,6 @@
 #pragma once
 #include "Data.h"
+#include "Serialization.h"
 #include "ClibUtilsQTR/Ticker.hpp"
 
 class QueueManager;

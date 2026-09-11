@@ -98,7 +98,7 @@ namespace UI {
     void Register();
 
     inline std::map<FormID, std::pair<std::string, int>> dynamic_forms;
-    inline int dft_form_limit = DynamicFormTracker::GetSingleton()->form_limit;
+    inline int dft_form_limit = clib_utilsQTR::DynamicFormTracker::GetSingleton()->form_limit;
 
     // LoreBox UI state
     inline bool lorebox_show_title = true;

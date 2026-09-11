@@ -1884,7 +1884,7 @@ void Manager::ReceiveData() {
 
     // I need to deal with the fake forms from last session
     // trying to make sure that the fake forms in bank will be used when needed
-    const auto DFT = DynamicFormTracker::GetSingleton();
+    const auto DFT = clib_utilsQTR::DynamicFormTracker::GetSingleton();
     // Saved instances identify the source and stage even if an older DFT bank contains stale associations.
     for (const auto& [lhs, instances] : m_Data) {
         const auto base = FormReader::GetFormByID(lhs.first.form_id, lhs.first.editor_id);

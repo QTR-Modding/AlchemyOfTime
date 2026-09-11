@@ -1,5 +1,6 @@
 #pragma once
-#include "DynamicFormTracker.h"
+#include "Settings.h"
+#include "CLibUtilsQTR/DynamicFormTracker.hpp"
 #include "Lorebox.h"
 #include "CLibUtilsQTR/FormReader.hpp"
 
@@ -198,7 +199,7 @@ private:
 
 template <typename T>
 FormID Source::FetchFake(const StageNo st_no) {
-    auto* DFT = DynamicFormTracker::GetSingleton();
+    auto* DFT = clib_utilsQTR::DynamicFormTracker::GetSingleton();
     if (editorid.empty()) {
         logger::error("Editorid is empty.");
         return 0;
