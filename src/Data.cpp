@@ -5,6 +5,62 @@
 #include "MCP.h"
 #include "Manager.h"
 
+namespace {
+    template <class T>
+    FormID GetTriggerInInventory(const tsl::ordered_map<FormID, T>& triggers,
+                                 const std::unordered_map<FormID, std::unordered_set<StageNo>>& allowed_stages,
+                                 const std::unordered_map<FormID, std::unordered_set<FormID>>& containers,
+                                 const InvMap& inv, QueueInfo& queue_info, const StageInstance& instance,
+                                 const UpdatePhase phase) {
+        if (inv.empty()) return 0;
+
+        for (const auto trigger_fid : triggers | std::views::keys) {
+            if (!allowed_stages.at(trigger_fid).contains(instance.no)) continue;
+            if (const auto it = containers.find(trigger_fid);
+                it != containers.end() && !it->second.empty() &&
+                !it->second.contains(queue_info.ref_info.base_id)) continue;
+
+            const auto trigger = RE::TESForm::LookupByID(trigger_fid);
+            if (!trigger) continue;
+
+            if (trigger->Is(RE::FormType::Location, RE::FormType::Perk)) {
+                if (phase == UpdatePhase::kCatchUp) {
+                    if (trigger_fid == instance.GetDelayerFormID()) return trigger_fid;
+                    continue;
+                }
+
+                const auto owner = queue_info.ref_info.GetRef();
+                if (!owner) continue;
+                if (!queue_info.inventory_watch) {
+                    queue_info.inventory_watch = std::make_shared<InventoryWatch>();
+                    queue_info.inventory_watch->last_location = owner->GetCurrentLocation();
+                }
+
+                auto& watch = *queue_info.inventory_watch;
+                // ReSharper disable once CppDependentTemplateWithoutTemplateKeyword
+                if (const auto location = trigger->As<RE::BGSLocation>()) {
+                    queue_info.update_flags.set(QueueInfo::UpdateFlag::kLocation);
+                    watch.locations.insert(location);
+                    if (Utils::IsInLocation(location, watch.last_location)) return trigger_fid;
+                    // ReSharper disable once CppDependentTemplateWithoutTemplateKeyword
+                } else if (const auto perk = trigger->As<RE::BGSPerk>()) {
+                    queue_info.update_flags.set(QueueInfo::UpdateFlag::kPerk);
+                    const auto [it, inserted] = watch.perks.try_emplace(perk);
+                    if (inserted) it->second = perk->perkConditions.IsTrue(owner, owner);
+                    if (it->second) return trigger_fid;
+                }
+                // ReSharper disable once CppDependentTemplateWithoutTemplateKeyword
+            } else if (const auto obj = trigger->As<RE::TESBoundObject>()) {
+                if (const auto it = inv.find(obj); it != inv.end() && it->second.first > 0) {
+                    return trigger_fid;
+                }
+            }
+        }
+        return 0;
+    }
+
+}
+
 void Source::Init(const DefaultSettings* defaultsettings) {
     if (!defaultsettings) {
         logger::error("Default settings is null.");
@@ -89,7 +145,9 @@ void Source::Init(const DefaultSettings* defaultsettings) {
     if (!CheckIntegrity()) {
         logger::critical("CheckIntegrity failed");
         InitFailed();
+        return;
     }
+    RebuildWorldTriggers();
 }
 
 std::string_view Source::GetName() const {
@@ -110,6 +168,47 @@ void Source::UpdateAddons() {
     if (!settings.CheckIntegrity()) {
         logger::critical("Default settings integrity check failed.");
         InitFailed();
+        return;
+    }
+    RebuildWorldTriggers();
+}
+
+template <class T>
+void Source::AddWorldTriggers(const tsl::ordered_map<FormID, T>& triggers,
+                              const std::unordered_map<FormID, std::unordered_set<StageNo>>& allowed_stages) {
+    for (const auto trigger_id : triggers | std::views::keys) {
+        const auto form = FormReader::GetFormByID(trigger_id);
+        if (!form) continue;
+        // ReSharper disable once CppDependentTemplateWithoutTemplateKeyword
+        const auto location = form->As<RE::BGSLocation>();
+        // ReSharper disable once CppDependentTemplateWithoutTemplateKeyword
+        const auto perk = location ? nullptr : form->As<RE::BGSPerk>();
+        // ReSharper disable once CppDependentTemplateWithoutTemplateKeyword
+        const auto base = location || perk ? nullptr : form->As<RE::TESBoundObject>();
+        if (!location && !perk && !base) continue;
+
+        for (const auto no : allowed_stages.at(trigger_id)) {
+            auto& prepared = world_triggers[no];
+            if (location) {
+                prepared.ordered.emplace_back(location);
+            } else if (perk) {
+                prepared.ordered.emplace_back(perk);
+            } else {
+                prepared.ordered.emplace_back(base);
+                prepared.scan_bases.push_back(base);
+            }
+        }
+    }
+}
+
+void Source::RebuildWorldTriggers() {
+    world_triggers.clear();
+    AddWorldTriggers(settings.transformers, settings.transformer_allowed_stages);
+    AddWorldTriggers(settings.delayers, settings.delayer_allowed_stages);
+    for (auto& prepared : world_triggers | std::views::values) {
+        auto& bases = prepared.scan_bases;
+        std::ranges::sort(bases);
+        bases.erase(std::ranges::unique(bases).begin(), bases.end());
     }
 }
 
@@ -295,14 +394,15 @@ StageInstance* Source::InitInsertInstanceWO(StageNo n, const Count c, const RefI
 }
 
 bool Source::InitInsertInstanceInventory(const StageNo n, const Count c, const RefInfo& a_info,
-                                         const Duration t_0, const InvMap& inv) {
+                                         const UpdateTime t_0, const InvMap& inv) {
     // isme takilma
-    if (!InitInsertInstanceWO(n, c, a_info.ref_id, t_0)) {
+    if (!InitInsertInstanceWO(n, c, a_info.ref_id, t_0.hours)) {
         logger::error("InitInsertInstance failed.");
         return false;
     }
 
-    SetDelayOfInstance(data[a_info.ref_id].back(), t_0, a_info.base_id, inv);
+    QueueInfo queue_info{.ref_info = a_info};
+    SetDelayOfInstance(data[a_info.ref_id].back(), t_0, queue_info, inv);
     return true;
 }
 
@@ -311,7 +411,7 @@ bool Source::MoveInstance(const RefID from_ref, const RefID to_ref, const StageI
         return false;
     }
 
-    auto mit = data.find(from_ref);
+    const auto mit = data.find(from_ref);
     if (mit == data.end()) {
         return false;
     }
@@ -468,44 +568,21 @@ bool Source::IsDecayedItem(const FormID _form_id) const {
                                });
 }
 
-inline FormID Source::GetModulatorInWorld(const RE::TESObjectREFR* wo, const StageNo a_no) const {
-    std::vector<FormID> candidates;
-    candidates.reserve(settings.delayers.size());
-
-    for (const auto& dlyr_fid : settings.delayers | std::views::keys) {
-        if (!settings.delayer_allowed_stages.at(dlyr_fid).contains(a_no)) {
-            continue;
-        }
-        candidates.push_back(dlyr_fid);
-    }
-
-    if (const auto hit = FindWorldTrigger(wo, candidates); hit) {
-        return hit;
-    }
-
-    return 0;
-}
-
-inline FormID Source::GetTransformerInWorld(const RE::TESObjectREFR* wo, const StageNo a_no) const {
-    std::vector<FormID> candidates;
-    candidates.reserve(settings.transformers.size());
-
-    for (const auto& trns_fid : settings.transformers | std::views::keys) {
-        if (!settings.transformer_allowed_stages.at(trns_fid).contains(a_no)) {
-            continue;
-        }
-        candidates.push_back(trns_fid);
-    }
-
-    if (const auto hit = FindWorldTrigger(wo, candidates); hit) {
-        return hit;
-    }
-
-    return 0;
-}
-
 void Source::UpdateTimeModulationInWorld(RE::TESObjectREFR* wo, StageInstance& wo_inst, const float _time) const {
-    SetDelayOfInstance(wo_inst, _time, wo);
+    if (wo_inst.count <= 0) return;
+    const auto a_loc_base = wo->GetBaseObject()->GetFormID();
+    if (ShouldFreezeEvolution(a_loc_base)) {
+        wo_inst.RemoveTimeMod(_time);
+        wo_inst.SetDelay(_time, 0, 0);  // freeze
+        return;
+    }
+
+    const auto it = world_triggers.find(wo_inst.no);
+    if (const auto trigger = it != world_triggers.end() ? FindWorldTrigger(wo, it->second) : 0) {
+        SetDelayOfInstance(wo_inst, _time, trigger);
+    } else {
+        wo_inst.RemoveTimeMod(_time);
+    }
 }
 
 float Source::GetNextUpdateTime(const StageInstance* st_inst) {
@@ -527,7 +604,7 @@ float Source::GetNextUpdateTime(const StageInstance* st_inst) {
     const auto delay_slope = st_inst->GetDelaySlope();
     if (std::abs(delay_slope) < EPSILON) {
         //logger::warn("Delay slope is 0.");
-        return 0;
+        return st_inst->GetDelayerFormID() ? std::numeric_limits<float>::infinity() : 0.f;
     }
 
     if (st_inst->xtra.is_transforming) {
@@ -542,65 +619,14 @@ float Source::GetNextUpdateTime(const StageInstance* st_inst) {
     return st_inst->GetHittingTime(schranke);
 }
 
-FormID Source::GetModulatorInInventory(const InvMap& inv, const FormID ownerBase, const StageNo no) const {
-    for (auto dlyr_fid : settings.delayers | std::views::keys) {
-        if (!settings.delayer_allowed_stages.at(dlyr_fid).contains(no)) continue;
-        auto obj = RE::TESForm::LookupByID<RE::TESBoundObject>(dlyr_fid);
-        if (!obj) continue;
-        if (auto it = inv.find(obj); it != inv.end() && it->second.first > 0) {
-            auto contIt = settings.delayer_containers.find(dlyr_fid);
-            if (contIt == settings.delayer_containers.end() || contIt->second.empty() ||
-                contIt->second.contains(ownerBase))
-                return dlyr_fid;
-        }
-    }
-    return 0;
-}
+void Source::UpdateTimeModulationInInventory(QueueInfo& queue_info, const UpdateTime time, const InvMap& inv) {
+    const auto it = data.find(queue_info.ref_info.ref_id);
+    if (it == data.end()) return;
 
-FormID Source::GetTransformerInInventory(const InvMap& inv, const FormID ownerBase, const StageNo no) const {
-    for (auto trns_fid : settings.transformers | std::views::keys) {
-        if (!settings.transformer_allowed_stages.at(trns_fid).contains(no)) continue;
-        auto obj = RE::TESForm::LookupByID<RE::TESBoundObject>(trns_fid);
-        if (!obj) continue;
-        if (auto it = inv.find(obj); it != inv.end() && it->second.first > 0) {
-            auto contIt = settings.transformer_containers.find(trns_fid);
-            if (contIt == settings.transformer_containers.end() || contIt->second.empty() ||
-                contIt->second.contains(ownerBase))
-                return trns_fid;
-        }
-    }
-    return 0;
-}
-
-void Source::SetDelayOfInstances(const float t, const RefInfo& a_info, const InvMap& inv) {
-    const auto loc = a_info.ref_id;
-    if (!data.contains(loc)) return;
-
-    const auto ownerBase = a_info.base_id;
-
-    for (auto& inst : data.at(loc)) {
-        if (inst.count <= 0) continue;
-        if (ShouldFreezeEvolution(ownerBase)) {
-            inst.RemoveTimeMod(t);
-            inst.SetDelay(t, 0, 0);
-            continue;
-        }
-
-        if (const auto tr = GetTransformerInInventory(inv, ownerBase, inst.no))
-            SetDelayOfInstance(inst, t, tr);
-        else if (const auto dl = GetModulatorInInventory(inv, ownerBase, inst.no))
-            SetDelayOfInstance(inst, t, dl);
-        else
-            inst.RemoveTimeMod(t);
+    for (auto& inst : it->second) {
+        SetDelayOfInstance(inst, time, queue_info, inv);
     }
 }
-
-void Source::UpdateTimeModulationInInventory(const RefInfo& a_info, const float t, const InvMap& inv) {
-    if (!data.contains(a_info.ref_id)) return;
-    if (data.at(a_info.ref_id).empty()) return;
-    SetDelayOfInstances(t, a_info, inv);
-}
-
 
 float Source::GetNextUpdateTime(const StageInstance* st_inst) const {
     if (!st_inst) {
@@ -621,7 +647,7 @@ float Source::GetNextUpdateTime(const StageInstance* st_inst) const {
     const auto delay_slope = st_inst->GetDelaySlope();
     if (std::abs(delay_slope) < EPSILON) {
         //logger::warn("Delay slope is 0.");
-        return 0;
+        return st_inst->GetDelayerFormID() ? std::numeric_limits<float>::infinity() : 0.f;
     }
 
     if (st_inst->xtra.is_transforming) {
@@ -816,6 +842,7 @@ void Source::Reset() {
     formid = 0;
     editorid = "";
     stages.clear();
+    world_triggers.clear();
     data.clear();
     init_failed = false;
 }
@@ -939,41 +966,26 @@ Stage Source::GetTransformedStage(const FormID key_formid) const {
     return trnsf_st;
 }
 
-void Source::SetDelayOfInstance(StageInstance& instance, const float curr_time, const FormID inv_owner_base,
+void Source::SetDelayOfInstance(StageInstance& instance, const UpdateTime time, QueueInfo& queue_info,
                                 const InvMap& a_inv) const {
-    if (instance.count <= 0) return;
-    if (ShouldFreezeEvolution(inv_owner_base)) {
-        instance.RemoveTimeMod(curr_time);
-        instance.SetDelay(curr_time, 0, 0); // freeze
+    if (instance.count <= 0 || instance.xtra.is_decayed) return;
+
+    if (ShouldFreezeEvolution(queue_info.ref_info.base_id)) {
+        instance.RemoveTimeMod(time.hours);
+        instance.SetDelay(time.hours, 0, 0); // freeze
         return;
     }
 
     if (const auto transformer_best =
-        GetTransformerInInventory(a_inv, inv_owner_base, instance.no)) {
-        SetDelayOfInstance(instance, curr_time, transformer_best);
+        GetTriggerInInventory(settings.transformers, settings.transformer_allowed_stages,
+                              settings.transformer_containers, a_inv, queue_info, instance, time.phase)) {
+        SetDelayOfInstance(instance, time.hours, transformer_best);
     } else if (const auto delayer_best =
-        GetModulatorInInventory(a_inv, inv_owner_base, instance.no)) {
-        SetDelayOfInstance(instance, curr_time, delayer_best);
+        GetTriggerInInventory(settings.delayers, settings.delayer_allowed_stages,
+                              settings.delayer_containers, a_inv, queue_info, instance, time.phase)) {
+        SetDelayOfInstance(instance, time.hours, delayer_best);
     } else {
-        instance.RemoveTimeMod(curr_time);
-    }
-}
-
-void Source::SetDelayOfInstance(StageInstance& instance, const float curr_time, RE::TESObjectREFR* a_loc) const {
-    if (instance.count <= 0) return;
-    const auto a_loc_base = a_loc->GetBaseObject()->GetFormID();
-    if (ShouldFreezeEvolution(a_loc_base)) {
-        instance.RemoveTimeMod(curr_time);
-        instance.SetDelay(curr_time, 0, 0); // freeze
-        return;
-    }
-
-    if (const auto transformer_best = GetTransformerInWorld(a_loc, instance.no)) {
-        SetDelayOfInstance(instance, curr_time, transformer_best);
-    } else if (const auto delayer_best = GetModulatorInWorld(a_loc, instance.no)) {
-        SetDelayOfInstance(instance, curr_time, delayer_best);
-    } else {
-        instance.RemoveTimeMod(curr_time);
+        instance.RemoveTimeMod(time.hours);
     }
 }
 
@@ -1268,32 +1280,32 @@ namespace {
     }
 };
 
-FormID Source::FindWorldTrigger(const RE::TESObjectREFR* a_obj, const std::vector<FormID>& candidates) {
-    if (!a_obj || candidates.empty()) {
-        return 0;
-    }
+FormID Source::FindWorldTrigger(RE::TESObjectREFR* a_obj, const WorldTriggers& triggers) {
+    if (!a_obj || triggers.ordered.empty()) return 0;
 
-    const auto cache = CellScanner::GetSingleton()->GetCache();
+    const auto cache = triggers.scan_bases.empty() ? nullptr : CellScanner::GetSingleton()->GetCache();
     const auto originPos = Utils::WorldObject::GetPosition(a_obj);
 
     const float r = Settings::search_radius;
     const float r2 = (r > 0.0f) ? (r * r) : std::numeric_limits<float>::infinity();
 
-    for (const auto triggerID : candidates) {
-        const auto* trigger = FormReader::GetFormByID(triggerID);
-        if (!trigger) continue;
-
-        if (trigger->As<RE::TESBoundObject>()) {
+    const auto current_location = a_obj->GetCurrentLocation();
+    for (const auto& trigger : triggers.ordered) {
+        if (const auto location = std::get_if<RE::BGSLocation*>(&trigger)) {
+            if (Utils::IsInLocation(*location, current_location)) {
+                return (*location)->GetFormID();
+            }
+        } else if (const auto perk = std::get_if<RE::BGSPerk*>(&trigger)) {
+            if ((*perk)->perkConditions.IsTrue(a_obj, a_obj)) {
+                return (*perk)->GetFormID();
+            }
+        } else {
             if (!cache) continue;
+            const auto triggerID = std::get<RE::TESBoundObject*>(trigger)->GetFormID();
             const auto it = cache->byBase.find(triggerID);
             if (it == cache->byBase.end()) {
                 continue;
             }
-
-            // For this triggerID, try the closest refs first (without sorting):
-            // we scan all within r2 and keep the best hit that passes the OBB check.
-            float bestD2 = r2;
-            bool found = false;
 
             for (const auto& e : it->second) {
                 const float dx = e.pos.x - originPos.x;
@@ -1301,7 +1313,7 @@ FormID Source::FindWorldTrigger(const RE::TESObjectREFR* a_obj, const std::vecto
                 const float dz = e.pos.z - originPos.z;
                 const float d2 = dx * dx + dy * dy + dz * dz;
 
-                if (d2 > bestD2) {
+                if (d2 > r2) {
                     continue;
                 }
 
@@ -1311,13 +1323,8 @@ FormID Source::FindWorldTrigger(const RE::TESObjectREFR* a_obj, const std::vecto
                 }
 
                 if (SearchModulatorInCell_Sub(a_obj, ref)) {
-                    bestD2 = d2;
-                    found = true;
+                    return triggerID;
                 }
-            }
-
-            if (found) {
-                return triggerID;
             }
         }
     }

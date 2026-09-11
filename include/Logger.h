@@ -1,12 +1,15 @@
 #pragma once
-#include <spdlog/sinks/basic_file_sink.h>
+#include <spdlog/sinks/rotating_file_sink.h>
 
 inline void SetupLog() {
     const auto logsFolder = SKSE::log::log_directory();
     if (!logsFolder) SKSE::stl::report_and_fail("SKSE log_directory not provided, logs disabled.");
     auto pluginName = SKSE::PluginDeclaration::GetSingleton()->GetName();
     const auto logFilePath = *logsFolder / std::format("{}.log", pluginName);
-    auto fileLoggerPtr = std::make_shared<spdlog::sinks::basic_file_sink_mt>(logFilePath.string(), true);
+    constexpr std::size_t max_log_size = 2 * 1024 * 1024; // 2 MiB per file
+    constexpr std::size_t log_backup_count = 2;
+    auto fileLoggerPtr = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
+        logFilePath.string(), max_log_size, log_backup_count, true);
     auto loggerPtr = std::make_shared<spdlog::logger>("log", std::move(fileLoggerPtr));
     spdlog::set_default_logger(std::move(loggerPtr));
     #ifndef NDEBUG

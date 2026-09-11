@@ -173,7 +173,7 @@ void QueueManager::PruneAddRemoveItemTasks(
         for (const auto& task : tasks) {
             if (task.add.item_id && task.remove.item_id && task.add.count > 0 && task.remove.count > 0) {
                 if (task.add.count == task.remove.count) {
-                    edges.push_back(Edge{task.remove.item_id, task.add.item_id, task.add.count, true});
+                    edges.push_back(Edge{.from = task.remove.item_id, .to = task.add.item_id, .count = task.add.count, .active = true});
                 } else {
                     passthrough.push_back(task);
                 }
@@ -250,8 +250,8 @@ void QueueManager::PruneAddRemoveItemTasks(
         for (const auto& edge : edges) {
             if (!edge.active || edge.count <= 0 || edge.from == edge.to) continue;
             pruned.push_back(AddRemoveItemTask{
-                AddItemTask{owner, 0, edge.to, edge.count},
-                RemoveItemTask{owner, edge.from, edge.count}});
+                .add = AddItemTask{.to = owner, .from = 0, .item_id = edge.to, .count = edge.count},
+                .remove = RemoveItemTask{.from = owner, .item_id = edge.from, .count = edge.count}});
         }
 
         tasks.swap(pruned);
@@ -289,7 +289,7 @@ void QueueManager::QueueAddRemoveItemTask(const AddItemTask& add_task, const Rem
         }
 
         std::lock_guard lock(mutex_moveitem_);
-        pending_moveitem_[owner].push_back(AddRemoveItemTask{add_task, remove_task});
+        pending_moveitem_[owner].push_back(AddRemoveItemTask{.add = add_task, .remove = remove_task});
     }
 }
 

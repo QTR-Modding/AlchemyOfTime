@@ -1,5 +1,6 @@
 #pragma once
 #include "Data.h"
+#include "Serialization.h"
 #include "ClibUtilsQTR/Ticker.hpp"
 
 class QueueManager;
@@ -99,6 +100,9 @@ class Manager final : public Ticker, public SaveLoadData {
     // Enqueue/merge a RefStop. [locks: queueMutex_]
     void QueueRefUpdate(const RefStop& a_refstop);
 
+    // Request removal on the next tick. [locks: queueMutex_]
+    void QueueRefDelete(RefID refid);
+
     static void UpdateRefStop(const Source& src, const StageInstance& wo_inst, RefStop& a_ref_stop, float stop_t);
 
     [[nodiscard]] uint32_t GetNInstances();
@@ -152,17 +156,21 @@ class Manager final : public Ticker, public SaveLoadData {
     std::set<float> GetUpdateTimes(const RE::TESObjectREFR* inventory_owner);
 
     // [expects: sourceMutex_] (unique)
-    bool UpdateInventory(const RefInfo& a_info, float t, const InvMap& inv);
+    bool UpdateInventory(QueueInfo& queue_info, UpdateTime t, const InvMap& inv);
 
     // [expects: sourceMutex_] (unique)
-    void UpdateInventory(const RefInfo& a_info, const InvMap& inv);
+    void UpdateInventory(const RefInfo& a_info, InvMap& inv);
 
-    void UpdateQueuedRef(const RefInfo& ref_info, float curr_time);
+    void UpdateQueuedRef(const QueueInfo& queue_info, float curr_time);
     void UpdateQueuedWO(const RefInfo& ref_info, float curr_time);
+    void UpdateQueuedInventory(const QueueInfo& queue_info);
+    // [expects: sourceMutex_] (shared)
+    void RestoreInventoryWatches();
+    void RestoreActiveEffectForms(const std::vector<clib_utilsQTR::ActEff>& effects);
     // [expects: sourceMutex_] (unique)
     void UpdateWO(RE::TESObjectREFR* ref);
     // [expects: sourceMutex_] (unique)
-    void SyncWithInventory(const RefInfo& a_info, const InvMap& inv);
+    void SyncWithInventory(const RefInfo& a_info, InvMap& inv);
 
 
     // [expects: sourceMutex_] (unique)
@@ -178,7 +186,7 @@ class Manager final : public Ticker, public SaveLoadData {
     using ScanRequest = std::pair<RefInfo, std::vector<FormID>>;
 
     [[nodiscard]] std::vector<ScanRequest> BuildCellScanRequests_(
-        const std::vector<RefInfo>& refStopsCopy);
+        const std::vector<QueueInfo>& refStopsCopy);
 
     static bool LocHasStage(Source* src, RefID loc, FormID stage_formid);
 
@@ -215,7 +223,7 @@ public:
 
     // Registers instances; may mutate sources. [expects: sourceMutex_] (unique)
     void Register(FormID some_formid, Count count, const RefInfo& ref_info,
-                  Duration register_time, const InvMap& a_inv);
+                  UpdateTime register_time, const InvMap& a_inv);
     // Registers instances; may mutate sources. [expects: sourceMutex_] (unique)
     void Register(FormID some_formid, Count count, RefID location_refid, Duration register_time);
 
@@ -227,6 +235,11 @@ public:
     // External entry point. Handles queue + source locking internally.
     void Update(RE::TESObjectREFR* from, RE::TESObjectREFR* to = nullptr, const RE::TESForm* what = nullptr,
                 Count count = 0, RefID from_refid = 0);
+
+    // Defer a reference check; discovery can skip references already being watched.
+    void RequestRefUpdate(RE::TESObjectREFR* ref, bool skip_if_queued = false);
+
+    [[nodiscard]] bool IsRefQueued(RefID refid);
 
     void UpdateNow(RE::TESObjectREFR* a_ref);
 
@@ -261,7 +274,7 @@ public:
     std::vector<Source> GetSourcesByStageAndOwner(FormID stage_formid, RefID location_id);
 
     // Snapshot of the update queue. [locks: queueMutex_] (shared)
-    std::unordered_map<RefID, float> GetUpdateQueue();
+    std::unordered_map<RefID, std::optional<float>> GetUpdateQueue();
 
     // [expects: sourceMutex_] (shared)
     void HandleDynamicWO(RE::TESObjectREFR* ref);
@@ -274,7 +287,7 @@ public:
         return isRunning();
     }
 
-    std::vector<RefInfo> GetRefStops();
+    std::vector<QueueInfo> GetRefStops();
 
     void IndexStage(FormID stage_formid, FormID source_formid);
 

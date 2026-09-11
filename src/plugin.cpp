@@ -44,12 +44,14 @@ namespace {
             const auto eventSink = EventSink::GetSingleton();
             auto* eventSourceHolder = RE::ScriptEventSourceHolder::GetSingleton();
             eventSourceHolder->AddEventSink<RE::TESActivateEvent>(eventSink);
+            eventSourceHolder->AddEventSink<RE::TESCellAttachDetachEvent>(eventSink);
+            eventSourceHolder->AddEventSink<RE::TESObjectLoadedEvent>(eventSink);
+            eventSourceHolder->AddEventSink<RE::TESInitScriptEvent>(eventSink);
+            eventSourceHolder->AddEventSink<RE::TESMoveAttachDetachEvent>(eventSink);
+            eventSourceHolder->AddEventSink<RE::TESResetEvent>(eventSink);
             eventSourceHolder->AddEventSink<RE::TESFurnitureEvent>(eventSink);
-            eventSourceHolder->AddEventSink<RE::TESSleepStopEvent>(eventSink);
-            eventSourceHolder->AddEventSink<RE::TESWaitStopEvent>(eventSink);
             eventSourceHolder->AddEventSink<RE::TESFormDeleteEvent>(eventSink);
             SKSE::GetCrosshairRefEventSource()->AddEventSink(eventSink);
-            RE::PlayerCharacter::GetSingleton()->AsBGSActorCellEventSource()->AddEventSink(eventSink);
             logger::info("Event sinks added.");
 
             // 5) Start MCP
@@ -70,7 +72,7 @@ namespace {
             }
             if (!M || M->isUninstalled.load()) return;
             M->Update(RE::PlayerCharacter::GetSingleton());
-            EventSink::GetSingleton()->HandleWOsInCell();
+            EventSink::HandleRefsInCell();
         }
     }
 }
@@ -79,7 +81,7 @@ namespace {
 SKSEPluginLoad(const SKSE::LoadInterface *skse) {
     SetupLog();
     logger::info("Plugin loaded");
-    SKSE::Init(skse);
+    SKSE::Init(skse, false);
     InitializeSerialization();
     if (!SKSE::GetMessagingInterface()->RegisterListener(OnMessage)) {
         SKSE::stl::report_and_fail("Failed to register message listener");

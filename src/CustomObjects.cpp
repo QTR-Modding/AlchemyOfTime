@@ -354,10 +354,27 @@ RefStopFeature& RefStopFeature::operator=(const RefStopFeature& other) {
     return *this;
 }
 
+bool InventoryWatch::HasChanged(RE::TESObjectREFR* owner) {
+    if (!locations.empty()) {
+        const auto current = owner->GetCurrentLocation();
+        if (current != last_location) {
+            for (const auto location : locations) {
+                if (Utils::IsInLocation(location, last_location) != Utils::IsInLocation(location, current)) {
+                    return true;
+                }
+            }
+            last_location = current;
+        }
+    }
+    for (const auto& [perk, matched] : perks) {
+        if (perk->perkConditions.IsTrue(owner, owner) != matched) return true;
+    }
+    return false;
+}
+
 RefStop& RefStop::operator=(const RefStop& other) {
     if (this != &other) {
-        ref_info = other.ref_info;
-        stop_time = other.stop_time;
+        QueueInfo::operator=(other);
         features = other.features;
         // Manually handle any special cases for members
     }
@@ -566,8 +583,9 @@ void RefStop::Update(const RefStop& other) {
         return;
     }
 
-    ref_info.source_id = other.ref_info.source_id;
-    ref_info.update_type = other.ref_info.update_type;
+    ref_info = other.ref_info;
+    update_flags = other.update_flags;
+    inventory_watch = other.inventory_watch;
 
     if (features.tint_color.id != other.features.tint_color.id) {
         RemoveTint();
@@ -624,10 +642,7 @@ bool SoundHelper::Play(const RE::TESObjectREFR* ref, const FormID sound_id, cons
         return false;
     }
     const auto ref_node = ref->Get3D();
-    if (!ref_node) {
-        logger::warn("Ref has no 3D.");
-        return false;
-    }
+    if (!ref_node) return false;
     std::unique_lock lock(mutex);
     auto& sound_handle = handles[ref->GetFormID()];
 

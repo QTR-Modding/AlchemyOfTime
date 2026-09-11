@@ -207,6 +207,10 @@ bool Utils::AreAdjacentCells(RE::TESObjectCELL* cellA, RE::TESObjectCELL* cellB)
     return false;
 }
 
+bool Utils::IsInLocation(const RE::BGSLocation* ref, const RE::BGSLocation* current) {
+    return current && ref && (current == ref || ref->IsChild(current));
+}
+
 std::string Utils::String::EncodeEscapesToAscii(const std::wstring& ws) {
     std::string out;
     for (const auto& wc : ws) {
@@ -353,7 +357,6 @@ RE::TESObjectREFR* Utils::WorldObject::DropObjectIntoTheWorld(RE::TESBoundObject
 }
 
 void Utils::WorldObject::SwapObjects(RE::TESObjectREFR* a_from, RE::TESBoundObject* a_to, const bool apply_havok) {
-    logger::trace("SwapObjects");
     if (!a_from) {
         logger::error("Ref is null.");
         return;

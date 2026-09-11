@@ -3,28 +3,29 @@
 #include "Settings.h"
 #include "Threading.h"
 
-void EventSink::HandleWO(RE::TESObjectREFR* ref) {
+void EventSink::HandleRef(RE::TESObjectREFR* ref, const bool skip_if_queued) {
     if (!ref) return;
-    if (!Settings::IsItem(ref)) return;
-    if (!Settings::placed_objects_evolve.load() && Utils::WorldObject::IsPlacedObject(ref)) return;
+    if (!ref->HasContainer()) {
+        if (!Settings::IsItem(ref)) return;
+        if (!Settings::placed_objects_evolve.load() && Utils::WorldObject::IsPlacedObject(ref)) return;
+    }
 
-    M->Update(ref);
+    M->RequestRefUpdate(ref, skip_if_queued);
 }
 
-void EventSink::HandleWOsInCell(const RE::TESObjectCELL* a_cell) {
+void EventSink::HandleRefsInCell(const RE::TESObjectCELL* a_cell) {
     const auto cell = a_cell ? a_cell : RE::PlayerCharacter::GetSingleton()->GetParentCell();
     if (!cell) return;
 
     std::vector<RE::ObjectRefHandle> refs;
     cell->ForEachReference([&refs](RE::TESObjectREFR* a_obj) {
         if (!a_obj) return RE::BSContainer::ForEachResult::kContinue;
-        if (a_obj->HasContainer()) return RE::BSContainer::ForEachResult::kContinue;
         refs.push_back(a_obj->GetHandle());
         return RE::BSContainer::ForEachResult::kContinue;
     });
 
     for (auto& a_handle : refs) {
-        HandleWO(a_handle.get().get());
+        HandleRef(a_handle.get().get());
     }
 }
 
@@ -49,10 +50,67 @@ RE::BSEventNotifyControl EventSink::ProcessEvent(const SKSE::CrosshairRefEvent* 
                                                  RE::BSTEventSource<SKSE::CrosshairRefEvent>*) {
     if (M->isLoading.load()) return RE::BSEventNotifyControl::kContinue;
     if (!event) return RE::BSEventNotifyControl::kContinue;
-    if (!event->crosshairRef) return RE::BSEventNotifyControl::kContinue;
 
-    if (!event->crosshairRef->HasContainer()) HandleWO(event->crosshairRef.get());
-    else M->Update(event->crosshairRef.get());
+    HandleRef(event->crosshairRef.get());
+
+    return RE::BSEventNotifyControl::kContinue;
+}
+
+RE::BSEventNotifyControl EventSink::ProcessEvent(const RE::TESCellAttachDetachEvent* event,
+                                                 RE::BSTEventSource<RE::TESCellAttachDetachEvent>*) {
+    logger::trace("TESCellAttachDetachEvent");
+    if (M->isLoading.load()) return RE::BSEventNotifyControl::kContinue;
+    if (!event || !event->attached || !event->reference) return RE::BSEventNotifyControl::kContinue;
+
+    logger::trace("TESCellAttachDetachEvent: Attached ref {:x}", event->reference->GetFormID());
+
+    HandleRef(event->reference.get(), true);
+
+    return RE::BSEventNotifyControl::kContinue;
+}
+
+RE::BSEventNotifyControl EventSink::ProcessEvent(const RE::TESObjectLoadedEvent* event,
+                                                 RE::BSTEventSource<RE::TESObjectLoadedEvent>*) {
+    if (!event) return RE::BSEventNotifyControl::kContinue;
+    logger::trace("TESObjectLoadedEvent: ref {:x}, loaded {}", event->formID, event->loaded);
+    if (M->isLoading.load() || !event->loaded) return RE::BSEventNotifyControl::kContinue;
+    if (M->IsRefQueued(event->formID)) return RE::BSEventNotifyControl::kContinue;
+
+    HandleRef(RE::TESForm::LookupByID<RE::TESObjectREFR>(event->formID), true);
+
+    return RE::BSEventNotifyControl::kContinue;
+}
+
+RE::BSEventNotifyControl EventSink::ProcessEvent(const RE::TESInitScriptEvent* event,
+                                                 RE::BSTEventSource<RE::TESInitScriptEvent>*) {
+    if (M->isLoading.load()) return RE::BSEventNotifyControl::kContinue;
+    if (!event || !event->objectInitialized) return RE::BSEventNotifyControl::kContinue;
+    logger::trace("TESInitScriptEvent: Initialized ref {:x}", event->objectInitialized->GetFormID());
+
+    HandleRef(event->objectInitialized.get(), true);
+
+    return RE::BSEventNotifyControl::kContinue;
+}
+
+RE::BSEventNotifyControl EventSink::ProcessEvent(const RE::TESMoveAttachDetachEvent* event,
+                                                 RE::BSTEventSource<RE::TESMoveAttachDetachEvent>*) {
+    if (M->isLoading.load()) return RE::BSEventNotifyControl::kContinue;
+    if (!event || !event->isCellAttached) return RE::BSEventNotifyControl::kContinue;
+    logger::trace("TESMoveAttachDetachEvent: Moved ref {:x}", event->movedRef->GetFormID());
+
+    HandleRef(event->movedRef.get(), true);
+
+    return RE::BSEventNotifyControl::kContinue;
+}
+
+RE::BSEventNotifyControl EventSink::ProcessEvent(const RE::TESResetEvent* event,
+                                                 RE::BSTEventSource<RE::TESResetEvent>*) {
+    if (M->isLoading.load()) return RE::BSEventNotifyControl::kContinue;
+    if (!event) return RE::BSEventNotifyControl::kContinue;
+    logger::trace("TESResetEvent: Reset ref {:x}", event->object->GetFormID());
+
+    // A reset can replace inventory contents without calling our add/remove hooks.
+    HandleRef(event->object.get());
 
     return RE::BSEventNotifyControl::kContinue;
 }
@@ -92,38 +150,12 @@ RE::BSEventNotifyControl EventSink::ProcessEvent(const RE::TESFurnitureEvent* ev
     return RE::BSEventNotifyControl::kContinue;
 }
 
-RE::BSEventNotifyControl EventSink::ProcessEvent(const RE::TESSleepStopEvent*,
-                                                 RE::BSTEventSource<RE::TESSleepStopEvent>*) {
-    if (M->isLoading.load()) return RE::BSEventNotifyControl::kContinue;
-    HandleWOsInCell();
-    return RE::BSEventNotifyControl::kContinue;
-}
-
-RE::BSEventNotifyControl EventSink::ProcessEvent(const RE::TESWaitStopEvent*,
-                                                 RE::BSTEventSource<RE::TESWaitStopEvent>*) {
-    if (M->isLoading.load()) return RE::BSEventNotifyControl::kContinue;
-    HandleWOsInCell();
-    return RE::BSEventNotifyControl::kContinue;
-}
-
-RE::BSEventNotifyControl EventSink::ProcessEvent(const RE::BGSActorCellEvent* a_event,
-                                                 RE::BSTEventSource<RE::BGSActorCellEvent>*) {
-    if (M->isLoading.load()) return RE::BSEventNotifyControl::kContinue;
-
-    if (const auto a_cell = RE::TESForm::LookupByID<RE::TESObjectCELL>(a_event->cellID)) {
-        if (a_event->flags.get() == RE::BGSActorCellEvent::CellFlag::kEnter) {
-            HandleWOsInCell(a_cell);
-        }
-    }
-    return RE::BSEventNotifyControl::kContinue;
-}
-
 RE::BSEventNotifyControl EventSink::ProcessEvent(const RE::TESFormDeleteEvent* a_event,
                                                  RE::BSTEventSource<RE::TESFormDeleteEvent>*) {
     if (!a_event) return RE::BSEventNotifyControl::kContinue;
     if (!a_event->formID) return RE::BSEventNotifyControl::kContinue;
     if (M->HandleFormDelete(a_event->formID)) {
-        logger::info("Form deleted: {:x}", a_event->formID);
+        logger::trace("Form deleted: {:x}", a_event->formID);
     }
     return RE::BSEventNotifyControl::kContinue;
 }
