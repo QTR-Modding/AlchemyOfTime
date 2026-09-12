@@ -489,20 +489,21 @@ namespace {
     }
 
     void mergeAddOnSettings(std::unordered_map<FormID, AddOnSettings>& dest,
-                            const std::unordered_map<FormID, AddOnSettings>& src) {
+                            std::unordered_map<FormID, AddOnSettings> src) {
+        dest.merge(src);
         for (const auto& [formID, settings] : src) {
-            dest[formID] = settings;
+            dest.at(formID).Merge(settings);
         }
     }
 
-    void processAddOnFile(const std::string& filename, std::unordered_map<FormID, AddOnSettings>& combinedSettings) {
+    std::unordered_map<FormID, AddOnSettings> processAddOnFile(const std::string& filename) {
         logger::info("Parsing file: {}", filename);
 
         std::unordered_map<FormID, AddOnSettings> fileResult;
 
         if (Utils::FileIsEmpty(filename)) {
             logger::info("File is empty: {}", filename);
-            return;
+            return {};
         }
 
         YAML::Node config = YAML::LoadFile(filename);
@@ -510,22 +511,24 @@ namespace {
 
         if (!config["formsLists"] || config["formsLists"].IsNull()) {
             logger::warn("formsLists not found in {}", filename);
-            return;
+            return {};
         }
         if (config["formsLists"].size() == 0) {
             logger::warn("formsLists is empty in {}", filename);
-            return;
+            return {};
         }
 
         for (const auto& Node_ : config["formsLists"]) {
             if (!Node_["forms"] || Node_["forms"].IsNull()) {
                 logger::warn("Forms not found in {}", filename);
-                return;
+                return {};
             }
             // we have list of owners at each node or a scalar owner
             if (auto temp_settings = PresetParse::parseAddOns_(Node_); temp_settings.CheckIntegrity()) {
                 for (const auto owner : PresetHelpers::YAML_Helpers::CollectFrom<FormID, std::string>(Node_, "forms")) {
-                    fileResult[owner] = temp_settings;
+                    if (const auto [it, inserted] = fileResult.try_emplace(owner, temp_settings); !inserted) {
+                        it->second.Merge(temp_settings);
+                    }
                 }
             } else {
                 logger::error("Settings integrity check failed for forms starting with {}",
@@ -535,10 +538,7 @@ namespace {
             }
         }
 
-        if (!fileResult.empty()) {
-            std::lock_guard lock(PresetParse::g_settingsMutex);
-            mergeAddOnSettings(combinedSettings, fileResult);
-        }
+        return fileResult;
     }
 
     std::unordered_map<FormID, AddOnSettings> parseAddOnsParallel(const std::string& _type) {
@@ -552,19 +552,20 @@ namespace {
                 filenames.push_back(entry.path().string());
             }
         }
-        std::vector<std::future<void>> futures;
+        std::ranges::sort(filenames);
+        std::vector<std::future<std::unordered_map<FormID, AddOnSettings>>> futures;
         futures.reserve(filenames.size());
         ThreadPool pool(numThreads);
         for (const auto& filename : filenames) {
             futures.emplace_back(
-                pool.enqueue([filename, &combinedSettings]() {
-                    processAddOnFile(filename, combinedSettings);
+                pool.enqueue([filename]() {
+                    return processAddOnFile(filename);
                 })
                 );
         }
-        // Wait for all tasks to complete
+        // Merge in filename order, regardless of which parser finishes first.
         for (auto& fut : futures) {
-            fut.get();
+            mergeAddOnSettings(combinedSettings, fut.get());
         }
         return combinedSettings;
     }
