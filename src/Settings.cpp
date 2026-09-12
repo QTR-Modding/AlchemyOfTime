@@ -488,9 +488,10 @@ namespace {
     }
 
     void mergeAddOnSettings(std::unordered_map<FormID, AddOnSettings>& dest,
-                            const std::unordered_map<FormID, AddOnSettings>& src) {
+                            std::unordered_map<FormID, AddOnSettings> src) {
+        dest.merge(src);
         for (const auto& [formID, settings] : src) {
-            dest[formID].Merge(settings);
+            dest.at(formID).Merge(settings);
         }
     }
 
@@ -523,7 +524,9 @@ namespace {
             // we have list of owners at each node or a scalar owner
             if (auto temp_settings = PresetParse::parseAddOns_(Node_); temp_settings.CheckIntegrity()) {
                 for (const auto owner : PresetHelpers::YAML_Helpers::CollectFrom<FormID, std::string>(Node_, "forms")) {
-                    fileResult[owner].Merge(temp_settings);
+                    if (const auto [it, inserted] = fileResult.try_emplace(owner, temp_settings); !inserted) {
+                        it->second.Merge(temp_settings);
+                    }
                 }
             } else {
                 logger::error("Settings integrity check failed for forms starting with {}",
