@@ -22,3 +22,22 @@
 Automatically imports:
 - [CLibUtil](https://github.com/powerof3/CLibUtil) by powerof3
 - [SKSE Menu Framework](https://www.nexusmods.com/skyrimspecialedition/mods/120352) by Thiago099
+
+### Shared YAML fields
+
+Use `<<` to inherit fields from an anchored mapping. Fields written on the entry override the template:
+
+```yaml
+fire: &fire
+  FormEditorID: LIFAoTFires
+  duration: 0.0611111
+  sound: LIFAoTThawSound
+  art_object: LIFAoTThawSteam
+
+# Within a food rule:
+transformers:
+  - <<: *fire
+    finalFormEditorID: FoodBeef
+```
+
+This works in default, custom, and addon presets. `<<: [*first, *second]` combines templates with the first taking precedence. Explicit nested maps replace inherited maps; they are not deeply merged. Templates stay within their YAML file.
