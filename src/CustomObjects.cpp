@@ -384,6 +384,32 @@ RefStop& RefStop::operator=(const RefStop& other) {
 bool RefStop::IsDue(const float curr_time) const { return stop_time <= curr_time; }
 
 // check it
+void AddOnSettings::Merge(const AddOnSettings& addon) {
+    containers.insert(addon.containers.begin(), addon.containers.end());
+    for (const auto& [id, value] : addon.delayers) delayers[id] = value;
+    for (const auto& [id, value] : addon.transformers) transformers[id] = value;
+
+    // A redefined trigger replaces its optional fields too, including omitted ones.
+    const auto replace = [](auto& dest, const auto& src, const auto& triggers) {
+        for (const auto id : triggers | std::views::keys) {
+            if (const auto it = src.find(id); it != src.end()) dest[id] = it->second;
+            else dest.erase(id);
+        }
+    };
+    replace(delayer_colors, addon.delayer_colors, addon.delayers);
+    replace(delayer_sounds, addon.delayer_sounds, addon.delayers);
+    replace(delayer_artobjects, addon.delayer_artobjects, addon.delayers);
+    replace(delayer_effect_shaders, addon.delayer_effect_shaders, addon.delayers);
+    replace(delayer_containers, addon.delayer_containers, addon.delayers);
+    replace(delayer_allowed_stages, addon.delayer_allowed_stages, addon.delayers);
+    replace(transformer_colors, addon.transformer_colors, addon.transformers);
+    replace(transformer_sounds, addon.transformer_sounds, addon.transformers);
+    replace(transformer_artobjects, addon.transformer_artobjects, addon.transformers);
+    replace(transformer_effect_shaders, addon.transformer_effect_shaders, addon.transformers);
+    replace(transformer_containers, addon.transformer_containers, addon.transformers);
+    replace(transformer_allowed_stages, addon.transformer_allowed_stages, addon.transformers);
+}
+
 bool AddOnSettings::CheckIntegrity() {
     for (const auto& _formID : containers) {
         if (!FormReader::GetFormByID(_formID)) {
