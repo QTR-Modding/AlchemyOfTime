@@ -204,6 +204,8 @@ struct AddOnSettings {
 
     [[nodiscard]] bool CheckIntegrity();
 
+    void Merge(const AddOnSettings& addon);
+
 private:
     bool init_failed = false;
 };
