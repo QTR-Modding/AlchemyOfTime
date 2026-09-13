@@ -38,7 +38,7 @@ namespace Hooks {
         static void install(const bool is_actor = true) {
             REL::Relocation<std::uintptr_t> _vtbl{RefType::VTABLE[0]};
             if (is_actor) {
-                pick_up_object_ = _vtbl.write_vfunc(0xCC, pickUpObject);
+                pick_up_object_ = _vtbl.write_vfunc(REL::Relocate(0xCC, 0xCC, 0xCE), pickUpObject);
             }
             remove_item_ = _vtbl.write_vfunc(0x56, RemoveItem);
             add_object_to_container_ = _vtbl.write_vfunc(0x5A, addObjectToContainer);

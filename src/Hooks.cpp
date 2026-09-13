@@ -79,7 +79,7 @@ void Hooks::UpdateHook::Update(RE::Actor* a_this, float a_delta) {
 
 void Hooks::UpdateHook::Install() {
     REL::Relocation<std::uintptr_t> PlayerCharacterVtbl{RE::VTABLE_PlayerCharacter[0]};
-    Update_ = PlayerCharacterVtbl.write_vfunc(0xAD, Update);
+    Update_ = PlayerCharacterVtbl.write_vfunc(REL::Relocate(0xAD, 0xAD, 0xAF), Update);
 }
 
 void Hooks::add_item_functor(RE::TESObjectREFR* a_this, RE::TESObjectREFR* a_object, int32_t a_count, bool a4,
