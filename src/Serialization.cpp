@@ -59,22 +59,18 @@ bool SaveLoadData::Save(SKSE::SerializationInterface* serializationInterface, co
 bool SaveLoadData::Load(SKSE::SerializationInterface* serializationInterface) {
     assert(serializationInterface);
 
-    std::size_t recordDataSize;
-    serializationInterface->ReadRecordData(recordDataSize);
-    logger::info("Loading data from serialization interface with size: {}", recordDataSize);
-
     Locker locker(m_Lock);
     m_Data.clear();
 
-    for (auto i = 0; std::cmp_less(i, recordDataSize); i++) {
+    std::size_t recordDataSize;
+    if (serializationInterface->ReadRecordData(recordDataSize) != sizeof(recordDataSize)) return false;
+    logger::info("Loading data from serialization interface with size: {}", recordDataSize);
+
+    for (std::size_t i = 0; i < recordDataSize; i++) {
         SaveDataRHS rhs;
 
-        std::uint32_t formid = 0;
-        serializationInterface->ReadRecordData(formid);
-        if (!serializationInterface->ResolveFormID(formid, formid)) {
-            logger::error("Failed to resolve form ID, 0x{:X}.", formid);
-            continue;
-        }
+        FormID formid = 0;
+        if (serializationInterface->ReadRecordData(formid) != sizeof(formid)) return false;
 
         std::string editorid;
         if (!Serialization::read_string(serializationInterface, editorid)) {
@@ -82,17 +78,15 @@ bool SaveLoadData::Load(SKSE::SerializationInterface* serializationInterface) {
             return false;
         }
 
-        std::uint32_t refid = 0;
-        serializationInterface->ReadRecordData(refid);
-
-        SaveDataLHS lhs({.form_id = formid, .editor_id = editorid}, refid);
+        RefID refid = 0;
+        if (serializationInterface->ReadRecordData(refid) != sizeof(refid)) return false;
 
         std::size_t rhsSize = 0;
-        serializationInterface->ReadRecordData(rhsSize);
+        if (serializationInterface->ReadRecordData(rhsSize) != sizeof(rhsSize)) return false;
 
-        for (auto j = 0; std::cmp_less(j, rhsSize); j++) {
+        for (std::size_t j = 0; j < rhsSize; j++) {
             StageInstancePlain rhs_;
-            serializationInterface->ReadRecordData(rhs_);
+            if (serializationInterface->ReadRecordData(rhs_) != sizeof(rhs_)) return false;
             if (rhs_._delay_formid > 0 && !serializationInterface->
                 ResolveFormID(rhs_._delay_formid, rhs_._delay_formid)) {
                 logger::error("Failed to resolve delay form ID 0x{:X} (parent form ID 0x{:X}).", rhs_._delay_formid,
@@ -102,7 +96,13 @@ bool SaveLoadData::Load(SKSE::SerializationInterface* serializationInterface) {
             rhs.push_back(rhs_);
         }
 
-        m_Data[lhs] = rhs;
+        // Consume the complete entry before skipping a missing source form.
+        if (!serializationInterface->ResolveFormID(formid, formid)) {
+            logger::error("Failed to resolve form ID, 0x{:X}.", formid);
+            continue;
+        }
+        const SaveDataLHS lhs({.form_id = formid, .editor_id = editorid}, refid);
+        m_Data[lhs] = std::move(rhs);
     }
 
     return true;
