@@ -8,7 +8,7 @@ template <typename MenuType>
 void Hooks::MenuHook<MenuType>::InstallHook(const REL::VariantID& varID) {
     REL::Relocation<std::uintptr_t> vTable(varID);
     _ProcessMessage = vTable.write_vfunc(0x4, &MenuHook<MenuType>::ProcessMessage_Hook);
-    _AdvanceMovie = vTable.write_vfunc(0x6, &MenuHook<MenuType>::AdvanceMovie_Hook);
+    _AdvanceMovie = vTable.write_vfunc(0x5, &MenuHook<MenuType>::AdvanceMovie_Hook);
 }
 
 template <typename MenuType>
