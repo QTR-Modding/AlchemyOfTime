@@ -17,7 +17,7 @@ namespace Utils {
 
     std::string DecodeTypeCode(std::uint32_t typeCode);
 
-    bool FileIsEmpty(const std::string& filename);
+    bool FileIsEmpty(const std::filesystem::path& filename);
 
     std::vector<std::pair<int, bool>> encodeString(const std::string& inputString);
     std::string decodeString(const std::vector<std::pair<int, bool>>& encodedValues);

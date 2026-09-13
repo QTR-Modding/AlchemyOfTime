@@ -44,7 +44,8 @@ This works in default, custom, and addon presets. `<<: [*first, *second]` combin
 
 #### ADDON ORDER
 
-Addon `.yml` files are combined in alphabetical filename order (case-sensitive).
+Addon `.yml` files are combined in alphabetical filename order, ignoring letter case.
+Names differing only in case use their exact spelling as a deterministic tie-breaker.
 For example, put cooking rules in `10_Cooking.yml` and freezing rules in
 `20_Freezing.yml`. For a food named in both files, the cooking triggers are
 checked before the appended freezing triggers of the same kind.

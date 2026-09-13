@@ -13,7 +13,7 @@ std::string Utils::DecodeTypeCode(const std::uint32_t typeCode) {
     return std::string(buf, buf + 4);
 }
 
-bool Utils::FileIsEmpty(const std::string& filename) {
+bool Utils::FileIsEmpty(const std::filesystem::path& filename) {
     std::ifstream file(filename);
     if (!file.is_open()) {
         return false; // File could not be opened, treat as not empty or handle error
