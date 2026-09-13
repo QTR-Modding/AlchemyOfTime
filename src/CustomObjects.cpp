@@ -259,7 +259,7 @@ void DefaultSettings::Add(AddOnSettings& addon) {
         delayers[a_formID] = _delay;
 
         if (addon.delayer_allowed_stages.contains(a_formID)) {
-            AddHelper(delayer_allowed_stages[a_formID], addon.delayer_allowed_stages.at(a_formID));
+            delayer_allowed_stages[a_formID].insert_range(addon.delayer_allowed_stages.at(a_formID));
         }
         if (delayer_allowed_stages.at(a_formID).empty()) {
             delayer_allowed_stages[a_formID] = std::unordered_set(numbers.begin(), numbers.end());
@@ -273,7 +273,7 @@ void DefaultSettings::Add(AddOnSettings& addon) {
         }
         transformers[a_formID] = _transformer;
         if (addon.transformer_allowed_stages.contains(a_formID)) {
-            AddHelper(transformer_allowed_stages[a_formID], addon.transformer_allowed_stages.at(a_formID));
+            transformer_allowed_stages[a_formID].insert_range(addon.transformer_allowed_stages.at(a_formID));
         }
         if (transformer_allowed_stages.at(a_formID).empty()) {
             transformer_allowed_stages.at(a_formID) = std::unordered_set(numbers.begin(), numbers.end());
