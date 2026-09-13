@@ -552,7 +552,10 @@ namespace {
                 filenames.push_back(entry.path().string());
             }
         }
-        std::ranges::sort(filenames);
+        std::ranges::sort(filenames, [](const std::string& lhs, const std::string& rhs) {
+            const auto order = _stricmp(lhs.c_str(), rhs.c_str());
+            return order == 0 ? lhs < rhs : order < 0;
+        });
         std::vector<std::future<std::unordered_map<FormID, AddOnSettings>>> futures;
         futures.reserve(filenames.size());
         ThreadPool pool(numThreads);
