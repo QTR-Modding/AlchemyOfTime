@@ -496,31 +496,34 @@ namespace {
         }
     }
 
-    std::unordered_map<FormID, AddOnSettings> processAddOnFile(const std::string& filename) {
-        logger::info("Parsing file: {}", filename);
+    std::unordered_map<FormID, AddOnSettings> processAddOnFile(const std::filesystem::path& filename) {
+        const auto displayName = SKSE::stl::utf16_to_utf8(filename.native()).value_or("<invalid filename>");
+        logger::info("Parsing file: {}", displayName);
 
         std::unordered_map<FormID, AddOnSettings> fileResult;
 
         if (Utils::FileIsEmpty(filename)) {
-            logger::info("File is empty: {}", filename);
+            logger::info("File is empty: {}", displayName);
             return {};
         }
 
-        YAML::Node config = YAML::LoadFile(filename);
+        std::ifstream file(filename);
+        if (!file.is_open()) throw YAML::BadFile(displayName);
+        YAML::Node config = YAML::Load(file);
         PresetHelpers::YAML_Helpers::ResolveMergeKeys(config);
 
         if (!config["formsLists"] || config["formsLists"].IsNull()) {
-            logger::warn("formsLists not found in {}", filename);
+            logger::warn("formsLists not found in {}", displayName);
             return {};
         }
         if (config["formsLists"].size() == 0) {
-            logger::warn("formsLists is empty in {}", filename);
+            logger::warn("formsLists is empty in {}", displayName);
             return {};
         }
 
         for (const auto& Node_ : config["formsLists"]) {
             if (!Node_["forms"] || Node_["forms"].IsNull()) {
-                logger::warn("Forms not found in {}", filename);
+                logger::warn("Forms not found in {}", displayName);
                 return {};
             }
             // we have list of owners at each node or a scalar owner
@@ -546,15 +549,15 @@ namespace {
         const auto folder_path = "Data/SKSE/Plugins/AlchemyOfTime/" + _type + "/addon";
         std::filesystem::create_directories(folder_path);
         // Gather all .yml filenames in the directory
-        std::vector<std::string> filenames;
+        std::vector<std::filesystem::path> filenames;
         for (const auto& entry : std::filesystem::directory_iterator(folder_path)) {
             if (entry.is_regular_file() && entry.path().extension() == ".yml") {
-                filenames.push_back(entry.path().string());
+                filenames.push_back(entry.path());
             }
         }
-        std::ranges::sort(filenames, [](const std::string& lhs, const std::string& rhs) {
-            const auto order = _stricmp(lhs.c_str(), rhs.c_str());
-            return order == 0 ? lhs < rhs : order < 0;
+        std::ranges::sort(filenames, [](const std::filesystem::path& lhs, const std::filesystem::path& rhs) {
+            const auto order = CompareStringOrdinal(lhs.c_str(), -1, rhs.c_str(), -1, TRUE);
+            return order == CSTR_EQUAL ? lhs.native() < rhs.native() : order == CSTR_LESS_THAN;
         });
         std::vector<std::future<std::unordered_map<FormID, AddOnSettings>>> futures;
         futures.reserve(filenames.size());
