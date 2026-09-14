@@ -64,7 +64,7 @@ void Hooks::Install() {
     constexpr size_t NUM_TRAMPOLINE_HOOKS = 2;
     trampoline.create(size_per_hook * NUM_TRAMPOLINE_HOOKS);
 
-    const REL::Relocation<std::uintptr_t> add_item_functor_hook{RELOCATION_ID(55946, 56490)};
+    const REL::Relocation<std::uintptr_t> add_item_functor_hook{REL::VariantID(55946, 56490, 0x9DEDD0)};
     add_item_functor_ = trampoline.write_call<5>(add_item_functor_hook.address() + 0x15D, add_item_functor);
 }
 
