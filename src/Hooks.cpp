@@ -8,7 +8,7 @@ template <typename MenuType>
 void Hooks::MenuHook<MenuType>::InstallHook(const REL::VariantID& varID) {
     REL::Relocation<std::uintptr_t> vTable(varID);
     _ProcessMessage = vTable.write_vfunc(0x4, &MenuHook<MenuType>::ProcessMessage_Hook);
-    _AdvanceMovie = vTable.write_vfunc(0x6, &MenuHook<MenuType>::AdvanceMovie_Hook);
+    _AdvanceMovie = vTable.write_vfunc(0x5, &MenuHook<MenuType>::AdvanceMovie_Hook);
 }
 
 template <typename MenuType>
@@ -64,7 +64,7 @@ void Hooks::Install() {
     constexpr size_t NUM_TRAMPOLINE_HOOKS = 2;
     trampoline.create(size_per_hook * NUM_TRAMPOLINE_HOOKS);
 
-    const REL::Relocation<std::uintptr_t> add_item_functor_hook{RELOCATION_ID(55946, 56490)};
+    const REL::Relocation<std::uintptr_t> add_item_functor_hook{REL::VariantID(55946, 56490, 0x9DEDD0)};
     add_item_functor_ = trampoline.write_call<5>(add_item_functor_hook.address() + 0x15D, add_item_functor);
 }
 
@@ -79,7 +79,7 @@ void Hooks::UpdateHook::Update(RE::Actor* a_this, float a_delta) {
 
 void Hooks::UpdateHook::Install() {
     REL::Relocation<std::uintptr_t> PlayerCharacterVtbl{RE::VTABLE_PlayerCharacter[0]};
-    Update_ = PlayerCharacterVtbl.write_vfunc(0xAD, Update);
+    Update_ = PlayerCharacterVtbl.write_vfunc(REL::Relocate(0xAD, 0xAD, 0xAF), Update);
 }
 
 void Hooks::add_item_functor(RE::TESObjectREFR* a_this, RE::TESObjectREFR* a_object, int32_t a_count, bool a4,
@@ -88,9 +88,11 @@ void Hooks::add_item_functor(RE::TESObjectREFR* a_this, RE::TESObjectREFR* a_obj
         return add_item_functor_(a_this, a_object, a_count, a4, a5);
     }
 
+    const auto from_refid = a_object->GetFormID();
+
     add_item_functor_(a_this, a_object, a_count, a4, a5);
 
-    M->Update(nullptr, a_this, a_object, a_count);
+    M->Update(nullptr, a_this, a_object->GetBaseObject(), a_count, from_refid);
 }
 
 template <typename RefType>
