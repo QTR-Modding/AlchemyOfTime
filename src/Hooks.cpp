@@ -88,9 +88,11 @@ void Hooks::add_item_functor(RE::TESObjectREFR* a_this, RE::TESObjectREFR* a_obj
         return add_item_functor_(a_this, a_object, a_count, a4, a5);
     }
 
+    const auto from_refid = a_object->GetFormID();
+
     add_item_functor_(a_this, a_object, a_count, a4, a5);
 
-    M->Update(nullptr, a_this, a_object, a_count);
+    M->Update(nullptr, a_this, a_object->GetBaseObject(), a_count, from_refid);
 }
 
 template <typename RefType>
