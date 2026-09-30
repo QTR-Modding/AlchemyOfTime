@@ -23,36 +23,16 @@ Automatically imports:
 - [CLibUtil](https://github.com/powerof3/CLibUtil) by powerof3
 - [SKSE Menu Framework](https://www.nexusmods.com/skyrimspecialedition/mods/120352) by Thiago099
 
+### Preset author guide
+
+See the [AoT wiki](https://github.com/QTR-Modding/AlchemyOfTime/wiki) for configuration examples, including [location triggers](https://github.com/QTR-Modding/AlchemyOfTime/wiki#location-triggers), [perk conditions](https://github.com/QTR-Modding/AlchemyOfTime/wiki#perk-condition-triggers), [addon ordering](https://github.com/QTR-Modding/AlchemyOfTime/wiki#addon-order), and [shared YAML fields](https://github.com/QTR-Modding/AlchemyOfTime/wiki#shared-yaml-fields).
+
+The wiki source is [docs/wiki/Home.md](docs/wiki/Home.md). Documentation changes are reviewed in pull requests and published to the same wiki page after merging to `main`.
+
 ### Shared YAML fields
 
-Use `<<` to inherit fields from an anchored mapping. Fields written on the entry override the template:
-
-```yaml
-fire: &fire
-  FormEditorID: LIFAoTFires
-  duration: 0.0611111
-  sound: LIFAoTThawSound
-  art_object: LIFAoTThawSteam
-
-# Within a food rule:
-transformers:
-  - <<: *fire
-    finalFormEditorID: FoodBeef
-```
-
-This works in default, custom, and addon presets. `<<: [*first, *second]` combines templates with the first taking precedence. Explicit nested maps replace inherited maps; they are not deeply merged. Templates stay within their YAML file.
+See [Shared YAML fields in the guide](https://github.com/QTR-Modding/AlchemyOfTime/wiki#shared-yaml-fields) for anchors, aliases, and merge examples.
 
 #### ADDON ORDER
 
-Addon `.yml` files are combined in alphabetical filename order, ignoring letter case.
-Names differing only in case use their exact spelling as a deterministic tie-breaker.
-For example, put cooking rules in `10_Cooking.yml` and freezing rules in
-`20_Freezing.yml`. For a food named in both files, the cooking triggers are
-checked before the appended freezing triggers of the same kind.
-
-Repeated entries for the same food also combine in their order within a file.
-If a later entry redefines the same trigger of the same kind, its complete
-settings replace the earlier definition without moving its priority. Omitted
-optional fields are cleared; an empty allowed-stage or container list remains
-unrestricted. Unrelated triggers are retained. Top-level container lists are
-combined. Transformers still take priority over time modulators.
+See [Addon order in the guide](https://github.com/QTR-Modding/AlchemyOfTime/wiki#addon-order) for filename priority and repeated-trigger behavior.
