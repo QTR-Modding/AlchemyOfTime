@@ -51,7 +51,7 @@ Items go through different **stages** as time passes. For example, food might go
 Each stage changes what the item does or looks like and can have specific properties defined in YAML files under the `stages` section. Here's what you can set for each stage:
 
 - **no**: *(Required)* A unique number identifying the stage. It must start at `0` for the initial stage and increment by `1` for each subsequent stage.
-- **FormEditorID**: Optional. Stage `0` uses the original item. For later stages, specify the replacement item or omit this field to create a dynamic derivative of the original item.
+- **FormEditorID**: Stage `0` uses the original item and does not need this field. For later stages, only FOOD and MISC can omit it to create a dynamic derivative of the original item. INGR, MEDC, POSN, ARMO, WEAP, SCRL, BOOK, and SLGM require an explicit replacement form for every later stage.
 - **name**: The name of the stage (e.g., Fresh, Stale). This name will appear next to the original item name in parentheses if the stage is a dynamic form.
 - **duration**: *(Required)* The time in in-game hours the item remains in this stage; it must be positive. `.inf` means an infinite duration.
 - **value**: Overrides the item's value during this stage.
