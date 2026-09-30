@@ -26,7 +26,7 @@ formsLists:
         magnitude: 0
 ```
 
-This pauses raw beef's stage progression while Ice Wraith Teeth are nearby in the world or in the same inventory. It is useful with a spoilage preset; the supplied default itself has no timed evolution. A matching transformer takes priority over this modulator. Restart the game after editing presets.
+This pauses raw beef's stage progression while Ice Wraith Teeth are in the same inventory. With [world-item evolution enabled](#world-item-evolution), nearby Ice Wraith Teeth also pause beef lying in the world. It is useful with a spoilage preset; the supplied default itself has no timed evolution. A matching transformer takes priority over this modulator. Restart the game after editing presets.
 
 For cold areas or weather-based conditions, see [Location triggers](#location-triggers) and [Perk condition triggers](#perk-condition-triggers).
 
@@ -42,6 +42,22 @@ First, open the **INI file** and turn on the item type you want. Add this:
 Replace `item_type` with the type of items you want to use (like FOOD). To see the full list of item types, check the `moduleskeyvals` section in the [Settings.h file](https://github.com/QTR-Modding/AlchemyOfTime/blob/main/include/Settings.h).
 
 ---
+
+### World-item evolution
+
+For any rule to affect an item lying in the world, enable this in `SKSE/Plugins/AlchemyOfTime.ini`:
+
+```ini
+[Other Settings]
+WorldObjectsEvolve=true
+```
+
+This setting defaults to `false` in code. Inventory rules do not require it. For items already placed in the world or owned by someone else, also check these options in the same section:
+
+1. `PlacedObjectsEvolve=true` allows AoT to process placed world items, such as food on an inn's tables.
+2. `UnOwnedObjectsEvolve=true` allows world items that the player would be stealing if picked up. Despite the option's name, this is a theft-ownership check.
+
+Both additional options also default to `false` in code; check the INI installed by your mod manager. Enable only the categories you want to evolve. These settings apply to location and perk triggers as well as nearby-object triggers.
 
 ## Stages and Default Settings
 
