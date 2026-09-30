@@ -54,10 +54,10 @@ Each stage changes what the item does or looks like and can have specific proper
 - **FormEditorID**: Stage `0` uses the original item and does not need this field. For later stages, only FOOD and MISC can omit it to create a dynamic derivative of the original item. INGR, MEDC, POSN, ARMO, WEAP, SCRL, BOOK, and SLGM require an explicit replacement form for every later stage.
 - **name**: The name of the stage (e.g., Fresh, Stale). This name will appear next to the original item name in parentheses if the stage is a dynamic form.
 - **duration**: *(Required)* The time in in-game hours the item remains in this stage; it must be positive. `.inf` means an infinite duration.
-- **value**: Overrides the item's value during this stage.
-- **weight**: Overrides the item's weight during this stage.
+- **value**: Overrides the value of a dynamically generated stage form (FOOD or MISC). Ignored for stage `0` and stages with an explicit `FormEditorID`.
+- **weight**: Overrides the weight of a dynamically generated stage form (FOOD or MISC). Ignored for stage `0` and stages with an explicit `FormEditorID`.
 - **crafting\_allowed**: *(Boolean)* Whether the item can be used in crafting at this stage.
-- **mgeffect**: A list of magic effects that override the item's default effects during this stage. Each effect includes:
+- **mgeffect**: Overrides the effects of a dynamically generated FOOD stage only. Ignored for stage `0`, stages with an explicit `FormEditorID`, and other modules. Each effect includes:
   - **FormEditorID**: The form editor ID of the magic effect. Leaving this empty will result in an empty magic effect, useful if you want to remove the original magic effect on the item.
   - **magnitude**: The strength of the effect.
   - **duration**: Duration of the effect.
