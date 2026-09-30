@@ -152,6 +152,8 @@ timeModulators:
 
 ## Additional Features
 
+The `color`, `sound`, `art_object`, and `effect_shader` fields on stages, time modulators, and transformers apply only to items lying in the world, with [world-item evolution enabled](#world-item-evolution). Inventory items still receive the timing and transformation behavior, but these fields do not add visuals or play sounds in inventories.
+
 ### Containers
 
 1. **containers** at the rule level restricts evolution by the inventory owner's **base form**, not its placed reference ID. An omitted or empty list is unrestricted. For world items this rule-level filter compares the item's own base form.
