@@ -12,7 +12,7 @@ Supported item types are FOOD, INGR, MEDC, POSN, ARMO, WEAP, SCRL, BOOK, SLGM, M
 
 ## Getting Started
 
-This guide covers released AoT 1.3.5. A **trigger** is a form whose presence, location, or conditions activate a time modulator or transformer.
+This guide describes the configuration supported by the current source. Parameterized templates are pending release; the other features below are available in AoT 1.3.5. A **trigger** is a form whose presence, location, or conditions activate a time modulator or transformer.
 
 ### Smallest addon example
 
@@ -517,7 +517,29 @@ formsLists:
 
 Beef's stage progression pauses, while venison progresses at half speed. Explicit fields override inherited fields, including `0` and `null`. `<<: [*first, *second]` accepts several mappings, with the first taking precedence over later mappings. An explicit nested mapping replaces the inherited nested mapping; this is not a deep merge. A YAML sequence can be reused with an alias but cannot be merged with `<<` as though it were a mapping.
 
-Anchors stay within their YAML document. This works in default, custom, and addon presets. It does not provide functions or parameter substitution.
+Anchors stay within their YAML document. This works in default, custom, and addon presets.
+
+### Parameterized templates
+
+For repeated rules with different item pairs, define the rule once and call it for each pair. This example assumes your plugin defines the `MyCookingFires` trigger group:
+
+```yaml
+templates:
+  cookFood:
+    forms: $raw
+    transformers:
+      - FormEditorID: MyCookingFires
+        finalFormEditorID: $cooked
+        duration: 0.06
+
+formsLists:
+  - cookFood(0x65C99, 0x721E8)
+  - cookFood(FoodVenison, FoodVenisonCooked)
+```
+
+Arguments follow the first appearance of each distinct parameter: `$raw` first, then `$cooked`. Repeated occurrences reuse the same argument. Each call produces a separate rule. This also works in custom and default presets.
+
+A call can supply merge fields, for example `<<: cookFood(0x65C99, 0x721E8)`, with explicitly written fields overriding its result. For argument types, quoting, nested calls, and literal text, see [QTR's template guide](https://github.com/QTR-Modding/CLibUtilsQTR/wiki/Configuration-and-Strings#parameterized-yaml-templates).
 
 ## Where to Put Files
 
