@@ -537,9 +537,19 @@ formsLists:
   - cookFood(FoodVenison, FoodVenisonCooked)
 ```
 
-Arguments follow the first appearance of each distinct parameter: `$raw` first, then `$cooked`. Repeated occurrences reuse the same argument. Each call produces a separate rule. This also works in custom and default presets.
+`cookFood` is the template. `$raw` and `$cooked` are placeholders filled by the two values in each call, in that order. The first call produces:
 
-A call can supply merge fields, for example `<<: cookFood(0x65C99, 0x721E8)`, with explicitly written fields overriding its result. For argument types, quoting, nested calls, and literal text, see [QTR's template guide](https://github.com/QTR-Modding/CLibUtilsQTR/wiki/Configuration-and-Strings#parameterized-yaml-templates).
+```yaml
+- forms: 0x65C99
+  transformers:
+    - FormEditorID: MyCookingFires
+      finalFormEditorID: 0x721E8
+      duration: 0.06
+```
+
+Argument order follows each placeholder's first appearance, including nested fields. Reusing a placeholder reuses its argument; moving its first appearance changes the order.
+
+Templates work in default, custom, and addon presets. See [QTR's template guide](https://github.com/QTR-Modding/CLibUtilsQTR/wiki/Configuration-and-Strings#parameterized-yaml-templates) for field overrides, argument types, quoting, and nested calls.
 
 ## Where to Put Files
 
