@@ -424,7 +424,7 @@ namespace {
         }
 
         YAML::Node config = YAML::LoadFile(filename);
-        PresetHelpers::YAML_Helpers::ResolveMergeKeys(config);
+        PresetHelpers::YAML_Helpers::ResolveTemplates(config, filename);
 
         if (!config["ownerLists"]) {
             logger::warn("OwnerLists not found in {}", filename);
@@ -510,7 +510,7 @@ namespace {
         std::ifstream file(filename);
         if (!file.is_open()) throw YAML::BadFile(displayName);
         YAML::Node config = YAML::Load(file);
-        PresetHelpers::YAML_Helpers::ResolveMergeKeys(config);
+        PresetHelpers::YAML_Helpers::ResolveTemplates(config, displayName);
 
         if (!config["formsLists"] || config["formsLists"].IsNull()) {
             logger::warn("formsLists not found in {}", displayName);
@@ -897,7 +897,7 @@ DefaultSettings PresetParse::parseDefaults(const std::string& _type) {
 
     logger::info("Filename: {}", filename);
     const YAML::Node config = YAML::LoadFile(filename);
-    PresetHelpers::YAML_Helpers::ResolveMergeKeys(config);
+    PresetHelpers::YAML_Helpers::ResolveTemplates(config, filename);
     auto temp_settings = parseDefaults_(config);
     if (!temp_settings.CheckIntegrity()) {
         logger::warn("parseDefaults: Settings integrity check failed for {}", _type);
