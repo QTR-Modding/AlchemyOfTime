@@ -537,7 +537,9 @@ formsLists:
   - cookFood(FoodVenison, FoodVenisonCooked)
 ```
 
-`cookFood` is the template. `$raw` and `$cooked` are placeholders filled by the two values in each call, in that order. The first call produces:
+`cookFood` names the reusable rule, or **template**. `$raw` and `$cooked` are **parameters**: placeholders for the values supplied inside the parentheses. Those supplied values are called **arguments**.
+
+Argument order follows each parameter's first appearance, reading the template from top to bottom, including nested fields. Here, `$raw` appears first under `forms`, and `$cooked` appears next under `finalFormEditorID`. So `cookFood(0x65C99, 0x721E8)` replaces `$raw` with `0x65C99` and `$cooked` with `0x721E8`, producing:
 
 ```yaml
 - forms: 0x65C99
@@ -547,7 +549,9 @@ formsLists:
       duration: 0.06
 ```
 
-Argument order follows each placeholder's first appearance, including nested fields. Reusing a placeholder reuses its argument; moving its first appearance changes the order.
+To add another food pair, add another `cookFood(rawItem, cookedItem)` line under `formsLists`, replacing `rawItem` and `cookedItem` with that pair's FormIDs or EditorIDs. To change the cooking duration for every pair, change `duration: 0.06` in the template.
+
+If you use `$raw` again elsewhere in the template, it receives the same raw item without needing another argument. If you move `$cooked` before `$raw`, you must also put the cooked item first in every call.
 
 Templates work in default, custom, and addon presets. See [QTR's template guide](https://github.com/QTR-Modding/CLibUtilsQTR/wiki/Configuration-and-Strings#parameterized-yaml-templates) for field overrides, argument types, quoting, and nested calls.
 
