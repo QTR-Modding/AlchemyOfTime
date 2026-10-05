@@ -156,8 +156,37 @@ The `color`, `sound`, `art_object`, and `effect_shader` fields on stages, time m
 
 ### Containers
 
-1. **containers** at the rule level restricts evolution by the inventory owner's **base form**, not its placed reference ID. An omitted or empty list is unrestricted. For world items this rule-level filter compares the item's own base form.
-2. **containers** inside a transformer or time modulator restricts that trigger in inventories; it does not restrict the trigger for world items. For example, `containers: 0x7` matches the player's base form.
+Add `containers` beside `stages` to allow changes only in selected inventories. For example:
+
+```yaml
+containers: 0x7 # Player
+```
+
+With this setting, affected items can progress through their stages or transform only while carried by the player. Changes stop when the items are dropped, stored in a chest, or given to another character.
+
+Replace `0x7` with the identifier of another character or container, or supply a list to allow several inventories. An empty or omitted list imposes no restriction.
+
+**Choosing the identifiers**
+
+Use the character or container's **base form.** The reference ID of one chest placed in the game does not work here.
+
+**Items lying in the world**
+
+For items outside inventories, this filter checks the item's current base form. Include that form to allow the item to change. For example:
+
+```yaml
+containers: [0x7, FoodBeef]
+```
+
+This allows affected items to change in the player's inventory and allows raw beef to change while lying in the world. If a later stage replaces the item's base form, that replacement must also be in the list for changes to continue in the world.
+
+**Restricting one transformation or time modifier**
+
+You can also put `containers` inside an entry under `transformers` or `timeModulators`. There, it restricts only that entry's effect in inventories.
+
+For example, `containers: 0x7` inside a transformer allows that transformation in the player's inventory. Other inventories cannot activate it. Items lying in the world can still activate it; they ignore this filter inside transformations and time modifiers. The `containers` filter beside `stages` still applies, so it can block those world-item changes.
+
+💡 **Tip**
 
 To make a location/perk trigger apply only to world items, put its own location/perk ID in its `containers` field. That form cannot be an inventory owner's base form, so the inventory check never matches. See the freezing example below.
 
