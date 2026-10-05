@@ -184,7 +184,7 @@ This allows affected items to change in the player's inventory and allows raw be
 
 You can also put `containers` inside an entry under `transformers` or `timeModulators`. There, it restricts only that entry's effect in inventories.
 
-For example, `containers: 0x7` inside a transformer allows that transformation in the player's inventory. Other inventories cannot activate it. Items lying in the world can still activate it; they ignore this filter inside transformations and time modifiers. The filter beside `stages` still applies, so it can block those world-item changes.
+For example, `containers: 0x7` inside a transformer allows that transformation in the player's inventory. Other inventories cannot activate it. Items lying in the world can still activate it; they ignore this filter inside transformations and time modifiers. The `containers` filter beside `stages` still applies, so it can block those world-item changes.
 
 💡 **Tip**
 
