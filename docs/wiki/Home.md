@@ -186,6 +186,8 @@ You can also put `containers` inside an entry under `transformers` or `timeModul
 
 For example, `containers: 0x7` inside a transformer allows that transformation in the player's inventory. Other inventories cannot activate it. Items lying in the world can still activate it; they ignore this filter inside transformations and time modifiers. The filter beside `stages` still applies, so it can block those world-item changes.
 
+💡 **Tip**
+
 To make a location/perk trigger apply only to world items, put its own location/perk ID in its `containers` field. That form cannot be an inventory owner's base form, so the inventory check never matches. See the freezing example below.
 
 ### Time Modulators
