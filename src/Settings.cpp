@@ -115,15 +115,22 @@ DefaultSettings* Settings::GetCustomSetting(const RE::TESForm* form, std::string
     for (auto& [names, sttng] : itType->second) {
         if (!sttng.IsHealthy()) continue;
 
-        for (auto& name : names) {
+        for (const auto& name : names) {
+            {
+                std::shared_lock lock(PresetHelpers::formGroups_mutex_);
+                if (const auto group = PresetHelpers::formGroups.find(name); group != PresetHelpers::formGroups.end()) {
+                    if (group->second.contains(form_id)) return &sttng;
+                    continue;
+                }
+            }
             if (const FormID temp = FormReader::GetFormEditorIDFromString(name); temp > 0) {
                 if (const auto tempForm = FormReader::GetFormByID(temp, name);
                     tempForm && tempForm->GetFormID() == form_id) {
                     return &sttng;
                 }
             }
+            if (StringHelpers::includesWord(form->GetName(), {name})) return &sttng;
         }
-        if (StringHelpers::includesWord(form->GetName(), names)) return &sttng;
     }
 
     return nullptr;
@@ -286,30 +293,8 @@ DefaultSettings* Settings::GetCustomSetting(const RE::TESForm* form) {
         }
     }
 
-    DefaultSettings* result = nullptr;
-
     const auto qform_type = GetQFormType(form_id);
-    if (!qform_type.empty() && custom_settings.contains(qform_type)) {
-        for (auto& customSetting = custom_settings[qform_type]; auto& [names, sttng] : customSetting) {
-            if (!sttng.IsHealthy()) continue;
-
-            for (auto& name : names) {
-                if (const FormID temp_cstm_formid = FormReader::GetFormEditorIDFromString(name); temp_cstm_formid > 0) {
-                    if (const auto temp_cstm_form = FormReader::GetFormByID(temp_cstm_formid, name);
-                        temp_cstm_form && temp_cstm_form->GetFormID() == form_id) {
-                        result = &sttng;
-                        break;
-                    }
-                }
-            }
-            if (result) break;
-
-            if (StringHelpers::includesWord(form->GetName(), names)) {
-                result = &sttng;
-                break;
-            }
-        }
-    }
+    auto* result = qform_type.empty() ? nullptr : GetCustomSetting(form, qform_type);
 
     {
         std::unique_lock lk(g_settingsCacheMtx);

@@ -12,7 +12,7 @@ Supported item types are FOOD, INGR, MEDC, POSN, ARMO, WEAP, SCRL, BOOK, SLGM, M
 
 ## Getting Started
 
-This guide describes the configuration supported by the current source. Parameterized templates are pending release; the other features below are available in AoT 1.3.5. A **trigger** is a form whose presence, location, or conditions activate a time modulator or transformer.
+This guide describes the configuration supported by the current source. Parameterized templates and form groups in custom `owners` are pending release; the other features below are available in AoT 1.3.5. A **trigger** is a form whose presence, location, or conditions activate a time modulator or transformer.
 
 ### Smallest addon example
 
@@ -473,8 +473,25 @@ stages:
 #### Example: `0x1~quantAoTBBQ.esp`
 
 ### 6. Use Form Groups
-Use a [form group](https://github.com/QTR-Modding/CLibUtilsQTR/wiki/Form-Groups) to maintain a reusable list of forms for list-valued selectors, such as addon `forms`, trigger `FormEditorID`, and `containers`. A destination such as `finalFormEditorID` needs one actual form, not a group of possible destinations. See also [exclude lists](#exclude-lists) and [multiple owners](#3-multiple-owners).
-Put your form group `txt` files in `SKSE/Plugins/AlchemyOfTime/formGroups`.
+
+A [form group](https://github.com/QTR-Modding/CLibUtilsQTR/wiki/Form-Groups) is a named list of forms. Create `SKSE/Plugins/AlchemyOfTime/formGroups/MyFoodGroup.txt` with one form identifier per line:
+
+```text
+FoodBeef
+FoodVenison
+```
+
+In a custom rule, set its `owners` field to the filename without `.txt`:
+
+```yaml
+owners: MyFoodGroup
+```
+
+That rule's stages now apply to both items. Add or remove identifiers in the group file to change its members the next time AoT loads its settings. The rest of the custom rule, including `stages` and `finalFormEditorID`, stays as shown in the [custom example](#example-custom-file).
+
+You can mix groups with individual identifiers and name words, for example `owners: [MyFoodGroup, Soup]`. This selects the group's members and items whose names contain the word "Soup". Group names are case-sensitive. An exact match to a loaded group uses only its members, even when the group is empty; it does not also match item names.
+
+Groups also work in addon `forms`, trigger `FormEditorID`, and `containers`. A destination such as `finalFormEditorID` needs one actual form. See also [exclude lists](#exclude-lists) and [multiple owners](#3-multiple-owners).
 
 ### 7. Unique Overarching Node Names
 
