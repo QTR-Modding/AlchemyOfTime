@@ -285,6 +285,12 @@ bool Manager::IsRefQueued(const RefID refid) {
     return _ref_stops_.contains(refid) && !queue_delete_.contains(refid);
 }
 
+bool Manager::HasAppliedArtObject(const RefID refid, const FormID artid) {
+    QUE_SHARED_GUARD;
+    const auto it = _ref_stops_.find(refid);
+    return it != _ref_stops_.end() && it->second.applied_art_objects.contains(artid);
+}
+
 void Manager::MarkDirty_(RE::TESObjectREFR* r) {
     if (!r) return;
     if (std::shared_lock lk(dirty_mtx_);

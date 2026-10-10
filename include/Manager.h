@@ -240,6 +240,7 @@ public:
     void RequestRefUpdate(RE::TESObjectREFR* ref, bool skip_if_queued = false);
 
     [[nodiscard]] bool IsRefQueued(RefID refid);
+    [[nodiscard]] bool HasAppliedArtObject(RefID refid, FormID artid);
 
     void UpdateNow(RE::TESObjectREFR* a_ref);
 

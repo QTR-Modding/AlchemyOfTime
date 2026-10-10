@@ -1,5 +1,6 @@
 #include "Hooks.h"
 #include "CLibUtilsQTR/DrawDebug.hpp"
+#include "CLibUtilsQTR/Hooks.hpp"
 #include "Lorebox.h"
 #include "Manager.h"
 #include "Utils.h"
@@ -54,6 +55,7 @@ void Hooks::Install() {
     MenuHook<RE::InventoryMenu>::InstallHook(RE::InventoryMenu::VTABLE[0]);
 
     UpdateHook::Install();
+    ArtObjectHook::Install();
 
     MoveItemHooks<RE::PlayerCharacter>::install();
     MoveItemHooks<RE::TESObjectREFR>::install(false);
@@ -66,6 +68,30 @@ void Hooks::Install() {
 
     const REL::Relocation<std::uintptr_t> add_item_functor_hook{REL::VariantID(55946, 56490, 0x9DEDD0)};
     add_item_functor_ = trampoline.write_call<5>(add_item_functor_hook.address() + 0x15D, add_item_functor);
+}
+
+bool Hooks::ArtObjectHook::Attach(RE::ModelReferenceEffect* a_this) {
+    const bool attached = Attach_(a_this);
+    if (!attached || !a_this->artObject) return attached;
+
+    const auto ref = a_this->target.get();
+    if (!ref || !M->HasAppliedArtObject(ref->GetFormID(), a_this->artObject->GetFormID())) return attached;
+    const auto root = ref->Get3D();
+    const auto cell = ref->GetParentCell();
+    if (!root || !cell) return attached;
+
+    bool selective;
+    bool rigid;
+    root->SetSelectiveUpdateFlags(selective, true, rigid);
+    cell->AddAnimatedReference(a_this->target);
+    return attached;
+}
+
+void Hooks::ArtObjectHook::Install() {
+    const REL::Relocation<std::uintptr_t> attach{REL::VariantID(33870, 34666, 0x55EAB0)};
+    const auto original = clib_utilsQTR::write_prologue_hook(attach.address(), Attach);
+    if (!original) SKSE::stl::report_and_fail("Failed to install the art object attachment hook.");
+    Attach_ = original;
 }
 
 void Hooks::UpdateHook::Update(RE::Actor* a_this, float a_delta) {

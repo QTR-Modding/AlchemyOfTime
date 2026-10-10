@@ -32,6 +32,12 @@ namespace Hooks {
         static void Install();
     };
 
+    struct ArtObjectHook {
+        static bool Attach(RE::ModelReferenceEffect* a_this);
+        static inline REL::Relocation<decltype(Attach)> Attach_;
+        static void Install();
+    };
+
     template <typename RefType>
     class MoveItemHooks {
     public:
