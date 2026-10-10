@@ -1,5 +1,6 @@
 #include "Hooks.h"
 #include "CLibUtilsQTR/DrawDebug.hpp"
+#include "CLibUtilsQTR/Hooks.hpp"
 #include "Lorebox.h"
 #include "Manager.h"
 #include "Utils.h"
@@ -69,29 +70,28 @@ void Hooks::Install() {
     add_item_functor_ = trampoline.write_call<5>(add_item_functor_hook.address() + 0x15D, add_item_functor);
 }
 
-bool Hooks::ArtObjectHook::Update(RE::ModelReferenceEffect* a_this, float a_delta) {
-    const bool attached = a_this->flags.any(RE::ModelReferenceEffect::Flags::kAttached);
-    const bool active = Update_(a_this, a_delta);
-    if (!active || attached || !a_this->flags.any(RE::ModelReferenceEffect::Flags::kAttached) ||
-        !a_this->artObject) return active;
+bool Hooks::ArtObjectHook::Attach(RE::ModelReferenceEffect* a_this) {
+    const bool attached = Attach_(a_this);
+    if (!attached || !a_this->artObject) return attached;
 
     const auto ref = a_this->target.get();
-    if (!ref || !M->HasAppliedArtObject(ref->GetFormID(), a_this->artObject->GetFormID())) return active;
+    if (!ref || !M->HasAppliedArtObject(ref->GetFormID(), a_this->artObject->GetFormID())) return attached;
     const auto root = ref->Get3D();
     const auto cell = ref->GetParentCell();
-    if (!root || !cell) return active;
+    if (!root || !cell) return attached;
 
-    // Attachment is asynchronous; refresh the hierarchy only after the clone is attached.
     bool selective = false;
     bool rigid = false;
     root->SetSelectiveUpdateFlags(selective, false, rigid);
     cell->AddAnimatedReference(a_this->target);
-    return active;
+    return attached;
 }
 
 void Hooks::ArtObjectHook::Install() {
-    REL::Relocation<std::uintptr_t> vTable{RE::ModelReferenceEffect::VTABLE[0]};
-    Update_ = vTable.write_vfunc(0x28, Update);
+    const REL::Relocation<std::uintptr_t> attach{REL::VariantID(33870, 34666, 0x55EAB0)};
+    const auto original = clib_utilsQTR::write_prologue_hook(attach.address(), Attach);
+    if (!original) SKSE::stl::report_and_fail("Failed to install the art object attachment hook.");
+    Attach_ = original;
 }
 
 void Hooks::UpdateHook::Update(RE::Actor* a_this, float a_delta) {

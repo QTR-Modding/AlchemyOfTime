@@ -33,8 +33,8 @@ namespace Hooks {
     };
 
     struct ArtObjectHook {
-        static bool Update(RE::ModelReferenceEffect* a_this, float a_delta);
-        static inline REL::Relocation<decltype(Update)> Update_;
+        static bool Attach(RE::ModelReferenceEffect* a_this);
+        static inline REL::Relocation<decltype(Attach)> Attach_;
         static void Install();
     };
 
