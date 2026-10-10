@@ -80,8 +80,8 @@ bool Hooks::ArtObjectHook::Attach(RE::ModelReferenceEffect* a_this) {
     const auto cell = ref->GetParentCell();
     if (!root || !cell) return attached;
 
-    bool selective = false;
-    bool rigid = false;
+    bool selective;
+    bool rigid;
     root->SetSelectiveUpdateFlags(selective, true, rigid);
     cell->AddAnimatedReference(a_this->target);
     return attached;
