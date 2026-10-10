@@ -77,7 +77,7 @@ Each stage changes what the item does or looks like and can have specific proper
   - **FormEditorID**: The form editor ID of the magic effect. Leaving this empty will result in an empty magic effect, useful if you want to remove the original magic effect on the item.
   - **magnitude**: The strength of the effect.
   - **duration**: Duration of the effect.
-- **color**: A hexadecimal value (RGBA) defining the item's color at this stage.
+- **color**: The item's [tint color](#tint-colors) at this stage.
 - **sound**: The Sound Descriptor form to be attached to the item at this stage.
 - **art\_object**: The Art Object form to be attached to the item at this stage.
 - **effect\_shader**: The Effect Shader form to be attached to the item at this stage.
@@ -154,6 +154,20 @@ timeModulators:
 
 The `color`, `sound`, `art_object`, and `effect_shader` fields on stages, time modulators, and transformers apply only to items lying in the world, with [world-item evolution enabled](#world-item-evolution). Inventory items still receive the timing and transformation behavior, but these fields do not add visuals or play sounds in inventories.
 
+### Tint colors
+
+Add this field to a stage, time modulator, or transformer to give the world item a black tint:
+
+```yaml
+color: "#000000"
+```
+
+Use `"#RRGGBB"` for red, green, and blue, with two hexadecimal digits per channel (`00` to `FF`). For example, `"#FF0000"` is red. Add two more digits for tint alpha: `"#FF000080"` is red at roughly half strength. Alpha `00` makes the tint transparent; `FF` applies its full strength. Quote these values because an unquoted `#` starts a YAML comment.
+
+On a time modulator or transformer, omitting `color` or writing `color: null` keeps the stage's tint. Use `color: 0` to clear the tint while the trigger is active. `"#000000"` and `"#000000FF"` both mean black at full strength; `"#00000000"` clears the tint.
+
+Existing values without `#`, including values starting with `0x`, keep their previous meaning: zero clears the tint, values through `FFFFFF` use RGB, and larger values use RGBA. Leading zeros do not change that interpretation, so legacy `0x000000FF` means blue, while `"#000000FF"` means black at full strength.
+
 ### Containers
 
 Add `containers` beside `stages` to allow changes only in selected inventories. For example:
@@ -196,7 +210,7 @@ Time modulators change how quickly items progress through their stages and can e
 
 - **FormEditorID**: *(Required)* The trigger form: an object base form, location, or perk. This field also accepts a list or form group.
 - **magnitude**: *(Required)* A multiplier for stage progression: `1` is normal, `0.5` is half speed, `0` pauses, and negative values reverse progression. This does not set a transformer's duration.
-- **color**: RGBA color in hexadecimal format.
+- **color**: The [tint color](#tint-colors) while this trigger is active.
 - **sound**: The Sound Descriptor form to be attached to the stage item.
 - **art_object**: The Art Object form to be attached to the stage item.
 - **effect_shader**: The Effect Shader form to be attached to the stage item.
@@ -211,7 +225,7 @@ Transformers allow items to **bypass the stage cycle** and transform into anothe
 - **finalFormEditorID**: *(Required)* The ID of the new item after transformation.
 - **duration**: *(Required)* Positive duration in **in-game hours** for the transformation to occur.
 - **allowed_stages**: Specifies the stages where the transformation can happen. If omitted or empty, all stages are allowed; `[0]` selects only the initial stage.
-- **color**: RGBA color in hexadecimal format.
+- **color**: The [tint color](#tint-colors) while this trigger is active.
 - **sound**: The Sound Descriptor form to be attached during transformation.
 - **art_object**: The Art Object form attached to the transforming item.
 - **effect_shader**: The Effect Shader form attached to the transforming item.

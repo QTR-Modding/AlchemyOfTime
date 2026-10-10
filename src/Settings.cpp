@@ -563,7 +563,7 @@ namespace {
 
     auto parse_color = [](const YAML::Node& node, const char* key) -> std::optional<uint32_t> {
         if (node[key] && !node[key].IsNull())
-            return std::stoul(node[key].as<std::string>(), nullptr, 16);
+            return Utils::ParseTint(node[key].as<std::string>());
         return std::nullopt;
     };
 

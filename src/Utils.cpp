@@ -29,24 +29,30 @@ bool Utils::FileIsEmpty(const std::filesystem::path& filename) {
     return true; // Only whitespace characters or file is empty
 }
 
-void Utils::hexToRGBA(const uint32_t color_code, RE::NiColorA& nicolora) {
-    if (color_code > 0xFFFFFF) {
-        // 8-digit hex (RRGGBBAA)
-        nicolora.red = static_cast<float>(color_code >> 24 & 0xFF); // Bits 24-31
-        nicolora.green = static_cast<float>(color_code >> 16 & 0xFF); // Bits 16-23
-        nicolora.blue = static_cast<float>(color_code >> 8 & 0xFF); // Bits 8-15
-        const uint8_t alphaInt = color_code & 0xFF; // Bits 0-7
-        nicolora.alpha = static_cast<float>(alphaInt) / 255.0f;
-    } else {
-        // 6-digit hex (RRGGBB)
-        nicolora.red = static_cast<float>(color_code >> 16 & 0xFF); // Bits 16-23
-        nicolora.green = static_cast<float>(color_code >> 8 & 0xFF); // Bits 8-15
-        nicolora.blue = static_cast<float>(color_code & 0xFF); // Bits 0-7
-        nicolora.alpha = 1.0f; // Default to fully opaque
+uint32_t Utils::ParseTint(const std::string& value) {
+    constexpr auto hex_base = 16;
+    constexpr auto rgb_digits = 6;
+    constexpr auto rgba_digits = 8;
+    constexpr uint32_t max_rgb = 0xFFFFFF;
+    constexpr auto alpha_bits = std::numeric_limits<uint8_t>::digits;
+    constexpr auto max_alpha = std::numeric_limits<uint8_t>::max();
+    const bool explicit_color = value.starts_with('#');
+    if (explicit_color &&
+        ((value.size() != rgb_digits + 1 && value.size() != rgba_digits + 1) ||
+         !std::ranges::all_of(value.substr(1), [](const unsigned char c) { return std::isxdigit(c); }))) {
+        throw std::invalid_argument("Tint must be #RRGGBB or #RRGGBBAA.");
     }
-    nicolora.red /= 255.0f;
-    nicolora.green /= 255.0f;
-    nicolora.blue /= 255.0f;
+    const uint32_t color = std::stoul(explicit_color ? value.substr(1) : value, nullptr, hex_base);
+    const bool is_rgb = explicit_color ? value.size() == rgb_digits + 1 : color && color <= max_rgb;
+    return is_rgb ? (color << alpha_bits) | max_alpha : color;
+}
+
+void Utils::hexToRGBA(const uint32_t color_code, RE::NiColorA& nicolora) {
+    constexpr auto alpha_bits = std::numeric_limits<uint8_t>::digits;
+    constexpr auto max_alpha = std::numeric_limits<uint8_t>::max();
+    const RE::NiColor rgb(color_code >> alpha_bits);
+    nicolora = RE::NiColorA(rgb.red, rgb.green, rgb.blue,
+                          static_cast<float>(color_code & max_alpha) / max_alpha);
 }
 
 bool Utils::IsFoodItem(const RE::TESForm* form) {
