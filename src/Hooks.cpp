@@ -54,6 +54,7 @@ void Hooks::Install() {
     MenuHook<RE::InventoryMenu>::InstallHook(RE::InventoryMenu::VTABLE[0]);
 
     UpdateHook::Install();
+    ArtObjectHook::Install();
 
     MoveItemHooks<RE::PlayerCharacter>::install();
     MoveItemHooks<RE::TESObjectREFR>::install(false);
@@ -66,6 +67,31 @@ void Hooks::Install() {
 
     const REL::Relocation<std::uintptr_t> add_item_functor_hook{REL::VariantID(55946, 56490, 0x9DEDD0)};
     add_item_functor_ = trampoline.write_call<5>(add_item_functor_hook.address() + 0x15D, add_item_functor);
+}
+
+bool Hooks::ArtObjectHook::Update(RE::ModelReferenceEffect* a_this, float a_delta) {
+    const bool attached = a_this->flags.any(RE::ModelReferenceEffect::Flags::kAttached);
+    const bool active = Update_(a_this, a_delta);
+    if (!active || attached || !a_this->flags.any(RE::ModelReferenceEffect::Flags::kAttached) ||
+        !a_this->artObject) return active;
+
+    const auto ref = a_this->target.get();
+    if (!ref || !M->HasAppliedArtObject(ref->GetFormID(), a_this->artObject->GetFormID())) return active;
+    const auto root = ref->Get3D();
+    const auto cell = ref->GetParentCell();
+    if (!root || !cell) return active;
+
+    // Attachment is asynchronous; refresh the hierarchy only after the clone is attached.
+    bool selective = false;
+    bool rigid = false;
+    root->SetSelectiveUpdateFlags(selective, false, rigid);
+    cell->AddAnimatedReference(a_this->target);
+    return active;
+}
+
+void Hooks::ArtObjectHook::Install() {
+    REL::Relocation<std::uintptr_t> vTable{RE::ModelReferenceEffect::VTABLE[0]};
+    Update_ = vTable.write_vfunc(0x28, Update);
 }
 
 void Hooks::UpdateHook::Update(RE::Actor* a_this, float a_delta) {
