@@ -22,6 +22,8 @@ namespace Utils {
     std::vector<std::pair<int, bool>> encodeString(const std::string& inputString);
     std::string decodeString(const std::vector<std::pair<int, bool>>& encodedValues);
 
+    uint32_t ParseTint(const std::string& value);
+
     void hexToRGBA(uint32_t color_code, RE::NiColorA& nicolora);
 
     bool IsFoodItem(const RE::TESForm* form);

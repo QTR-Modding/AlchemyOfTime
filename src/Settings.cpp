@@ -562,24 +562,8 @@ namespace {
     }
 
     auto parse_color = [](const YAML::Node& node, const char* key) -> std::optional<uint32_t> {
-        if (node[key] && !node[key].IsNull()) {
-            constexpr auto hex_base = 16;
-            constexpr auto rgb_digits = 6;
-            constexpr auto rgba_digits = 8;
-            constexpr uint32_t max_rgb = 0xFFFFFF;
-            constexpr auto alpha_bits = std::numeric_limits<uint8_t>::digits;
-            constexpr auto max_alpha = std::numeric_limits<uint8_t>::max();
-            const auto value = node[key].as<std::string>();
-            const bool explicit_color = value.starts_with('#');
-            if (explicit_color &&
-                ((value.size() != rgb_digits + 1 && value.size() != rgba_digits + 1) ||
-                 !std::ranges::all_of(value.substr(1), [](const unsigned char c) { return std::isxdigit(c); }))) {
-                throw std::invalid_argument("Tint must be #RRGGBB or #RRGGBBAA.");
-            }
-            const uint32_t color = std::stoul(explicit_color ? value.substr(1) : value, nullptr, hex_base);
-            const bool is_rgb = explicit_color ? value.size() == rgb_digits + 1 : color && color <= max_rgb;
-            return is_rgb ? (color << alpha_bits) | max_alpha : color;
-        }
+        if (node[key] && !node[key].IsNull())
+            return Utils::ParseTint(node[key].as<std::string>());
         return std::nullopt;
     };
 
