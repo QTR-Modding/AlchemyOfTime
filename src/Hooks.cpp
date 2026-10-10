@@ -82,7 +82,7 @@ bool Hooks::ArtObjectHook::Attach(RE::ModelReferenceEffect* a_this) {
 
     bool selective = false;
     bool rigid = false;
-    root->SetSelectiveUpdateFlags(selective, false, rigid);
+    root->SetSelectiveUpdateFlags(selective, true, rigid);
     cell->AddAnimatedReference(a_this->target);
     return attached;
 }
