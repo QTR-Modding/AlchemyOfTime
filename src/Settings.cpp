@@ -481,7 +481,8 @@ namespace {
         }
     }
 
-    std::unordered_map<FormID, AddOnSettings> processAddOnFile(const std::filesystem::path& filename) {
+    std::unordered_map<FormID, AddOnSettings> processAddOnFile(const std::filesystem::path& filename,
+                                                            const std::string& qformtype) {
         const auto displayName = SKSE::stl::utf16_to_utf8(filename.native()).value_or("<invalid filename>");
         logger::info("Parsing file: {}", displayName);
 
@@ -506,23 +507,39 @@ namespace {
             return {};
         }
 
+        std::size_t entry_index = 0;
         for (const auto& Node_ : config["formsLists"]) {
+            ++entry_index;
             if (!Node_["forms"] || Node_["forms"].IsNull()) {
                 logger::warn("Forms not found in {}", displayName);
                 return {};
             }
             // we have list of owners at each node or a scalar owner
-            if (auto temp_settings = PresetParse::parseAddOns_(Node_); temp_settings.CheckIntegrity()) {
-                for (const auto owner : PresetHelpers::YAML_Helpers::CollectFrom<FormID, std::string>(Node_, "forms")) {
-                    if (const auto [it, inserted] = fileResult.try_emplace(owner, temp_settings); !inserted) {
-                        it->second.Merge(temp_settings);
-                    }
+            auto temp_settings = PresetParse::parseAddOns_(Node_);
+            if (!temp_settings.CheckIntegrity()) {
+                logger::error("Settings integrity check failed for formsLists entry {} in {}", entry_index, displayName);
+                continue;
+            }
+            if (temp_settings.containers.empty() && temp_settings.delayers.empty() && temp_settings.transformers.empty()) {
+                logger::error("Skipping formsLists entry {} in {}: no effective settings; no containers, time modulators, or transformers resolved.",
+                              entry_index, displayName);
+                continue;
+            }
+            bool has_compatible_forms = false;
+            for (const auto owner : PresetHelpers::YAML_Helpers::CollectFrom<FormID, std::string>(Node_, "forms")) {
+                if (!Settings::IsItem(owner, qformtype, false)) {
+                    logger::warn("Skipping form {:X} in formsLists entry {} of {}: it is not a {} item.",
+                                 owner, entry_index, displayName, qformtype);
+                    continue;
                 }
-            } else {
-                logger::error("Settings integrity check failed for forms starting with {}",
-                              Node_["forms"].IsScalar()
-                                  ? Node_["forms"].as<std::string>()
-                                  : Node_["forms"].begin()->as<std::string>());
+                has_compatible_forms = true;
+                if (const auto [it, inserted] = fileResult.try_emplace(owner, temp_settings); !inserted) {
+                    it->second.Merge(temp_settings);
+                }
+            }
+            if (!has_compatible_forms) {
+                logger::error("Skipping formsLists entry {} in {}: no {} items resolved from forms.",
+                              entry_index, displayName, qformtype);
             }
         }
 
@@ -549,8 +566,8 @@ namespace {
         ThreadPool pool(numThreads);
         for (const auto& filename : filenames) {
             futures.emplace_back(
-                pool.enqueue([filename]() {
-                    return processAddOnFile(filename);
+                pool.enqueue([filename, _type]() {
+                    return processAddOnFile(filename, _type);
                 })
                 );
         }
