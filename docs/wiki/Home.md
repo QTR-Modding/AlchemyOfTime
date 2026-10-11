@@ -231,6 +231,20 @@ Transformers allow items to **bypass the stage cycle** and transform into anothe
 - **effect_shader**: The Effect Shader form attached to the transforming item.
 - **containers**: Specifies the containers (form IDs, editor IDs, or local IDs) where the transformer is allowed to take effect. Can be a scalar or array type.
 
+### Keyword triggers
+
+```yaml
+formsLists:
+- forms: FoodBeef
+  timeModulators:
+  - FormEditorID: MyColdKeyword
+    magnitude: 0
+```
+
+`FoodBeef` selects the affected item, and `MyColdKeyword` is the EditorID of a Keyword (KYWD) record in your plugin. This addon pauses beef's stage progression while the beef itself or a nearby reference has that keyword on its base object. Replace the keyword with your own EditorID or FormID and change `magnitude` to the multiplier you need. The item needs stages from a default or custom rule.
+
+Keyword triggers apply only to world items and use the existing distance and proximity checks. Keyword changes are recognized on the next scan. Use the keyword in a transformer's `FormEditorID` to transform the item instead; individual keywords can also be mixed with other triggers, form groups, and Skyrim form lists.
+
 ### Art object triggers
 
 This addon pauses raw beef's stage progression while `MySmokeArt` is applied to the beef itself or a nearby reference:

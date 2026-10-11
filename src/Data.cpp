@@ -185,7 +185,7 @@ void Source::AddWorldTriggers(const tsl::ordered_map<FormID, T>& triggers,
         const auto perk = location ? nullptr : form->As<RE::BGSPerk>();
         // ReSharper disable once CppDependentTemplateWithoutTemplateKeyword
         const auto base = location || perk ? nullptr : form->As<RE::TESBoundObject>();
-        if (!location && !perk && !base &&
+        if (!location && !perk && !base && !form->As<RE::BGSKeyword>() &&
             !std::ranges::contains(CellScanner::applied_effect_trigger_types, form->GetFormType())) continue;
 
         for (const auto no : allowed_stages.at(trigger_id)) {

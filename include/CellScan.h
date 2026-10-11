@@ -35,6 +35,7 @@ private:
         std::shared_ptr<Cache> next;
         std::shared_ptr<std::unordered_set<FormID>> bases;
         std::unordered_set<RE::TESForm*> applied_effects;
+        std::unordered_set<FormID> keywords;
         std::shared_ptr<std::vector<RefInfo>> refInfos;
     };
 
@@ -55,8 +56,11 @@ private:
     static void CollectCellsToScan_(const std::vector<RefInfo>& refInfos,
                                     std::unordered_set<RE::TESObjectCELL*>& cellsToScan);
 
+    static void AddEntry_(FormID triggerID, const RE::TESObjectREFR* ref, Cache& outCache);
+
     static void ScanCells_(const std::unordered_set<RE::TESObjectCELL*>& cellsToScan,
-                           const std::unordered_set<FormID>& basesOfInterest, Cache& outCache);
+                           const std::unordered_set<FormID>& basesOfInterest,
+                           const std::unordered_set<FormID>& keywordsOfInterest, Cache& outCache);
 
     static void ScanAppliedEffects_(const std::unordered_set<RE::TESObjectCELL*>& cellsToScan,
                                     const std::unordered_set<RE::TESForm*>& forms, Cache& outCache);
