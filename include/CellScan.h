@@ -7,6 +7,8 @@
 class CellScanner final :
     public REX::Singleton<CellScanner> {
 public:
+    static constexpr std::array applied_effect_trigger_types{RE::FormType::ArtObject};
+
     struct Entry {
         RefID refid{0};
         RE::NiPoint3 pos{};
@@ -14,12 +16,12 @@ public:
 
     struct Cache {
         std::uint64_t generation{0};
-        std::unordered_map<FormID, std::vector<Entry>> byBase;
+        std::unordered_map<FormID, std::vector<Entry>> byTrigger;
     };
 
     using CachePtr = std::shared_ptr<const Cache>;
 
-    using Request = std::pair<RefInfo, std::vector<FormID>>;
+    using Request = std::pair<RefInfo, std::vector<RE::TESForm*>>;
 
     void RequestRefresh(const std::vector<Request>& requests);
 
@@ -32,6 +34,7 @@ private:
         // Built off-thread
         std::shared_ptr<Cache> next;
         std::shared_ptr<std::unordered_set<FormID>> bases;
+        std::unordered_set<RE::TESForm*> applied_effects;
         std::shared_ptr<std::vector<RefInfo>> refInfos;
     };
 
@@ -54,6 +57,9 @@ private:
 
     static void ScanCells_(const std::unordered_set<RE::TESObjectCELL*>& cellsToScan,
                            const std::unordered_set<FormID>& basesOfInterest, Cache& outCache);
+
+    static void ScanAppliedEffects_(const std::unordered_set<RE::TESObjectCELL*>& cellsToScan,
+                                    const std::unordered_set<RE::TESForm*>& forms, Cache& outCache);
 
     void Publish_(std::shared_ptr<Cache> next);
 

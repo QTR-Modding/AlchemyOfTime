@@ -390,6 +390,21 @@ void Utils::WorldObject::SwapObjects(RE::TESObjectREFR* a_from, RE::TESBoundObje
     });
 }
 
+std::vector<std::pair<RE::TESForm*, RE::ObjectRefHandle>> Utils::WorldObject::CollectAppliedEffectTargets(
+    const std::unordered_set<RE::TESForm*>& forms) {
+    std::vector<std::pair<RE::TESForm*, RE::ObjectRefHandle>> targets;
+    if (const auto processLists = RE::ProcessLists::GetSingleton()) {
+        processLists->ForEachMagicTempEffect([&](RE::BSTempEffect* tempEffect) {
+            const auto effect = tempEffect->As<RE::ModelReferenceEffect>();
+            if (effect && !effect->finished && forms.contains(effect->artObject)) {
+                targets.emplace_back(effect->artObject, effect->target);
+            }
+            return RE::BSContainer::ForEachResult::kContinue;
+        });
+    }
+    return targets;
+}
+
 bool Utils::WorldObject::IsPlacedObject(RE::TESObjectREFR* ref) {
     if (ref->extraList.HasType(RE::ExtraDataType::kStartingPosition)) {
         if (const auto starting_pos = ref->extraList.GetByType<RE::ExtraStartingPosition>(); starting_pos->location) {
