@@ -649,7 +649,7 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
             // containers
             auto containers = parse_formid_vec(modulator, "containers");
 
-            for (auto a_formid : parse_formid_vec(modulator, "FormEditorID")) {
+            for (auto a_formid : Utils::ExpandFormLists(parse_formid_vec(modulator, "FormEditorID"))) {
                 settings.delayer_allowed_stages[a_formid] = std::unordered_set(a_asv.begin(), a_asv.end());
                 settings.delayers[a_formid] = delayer_magnitude;
                 if (a_color) settings.delayer_colors[a_formid] = *a_color;
@@ -712,7 +712,7 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
             // containers
             auto containers = parse_formid_vec(transformer, "containers");
 
-            for (auto a_formid : parse_formid_vec(transformer, "FormEditorID")) {
+            for (auto a_formid : Utils::ExpandFormLists(parse_formid_vec(transformer, "FormEditorID"))) {
                 settings.transformers[a_formid] = {a_formid2, a_duration};
                 settings.transformer_allowed_stages[a_formid] = std::unordered_set(a_asv.begin(), a_asv.end());
                 if (a_color) settings.transformer_colors[a_formid] = *a_color;
