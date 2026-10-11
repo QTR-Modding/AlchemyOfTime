@@ -329,7 +329,7 @@ This example assumes your plugin defines a FormList (`FLST`) named `MyColdTrigge
 
 Replace `MyColdTriggers` with your list's identifier, or change its members in your plugin. You can also use a FormList in a transformer's `FormEditorID`; every member receives that transformer's settings, including its single `finalFormEditorID` result.
 
-AoT expands nested lists in member order when loading settings. Empty lists contribute no triggers, and repeated members keep their first priority position. The members are captured at settings load; later script changes to a FormList do not update these triggers until settings are loaded again. This support applies only to trigger `FormEditorID`, not `owners`, addon `forms`, `containers`, or transformation results.
+AoT expands nested lists in member order when plugin records load, before loading a save. Empty lists contribute no triggers, and repeated members keep their first priority position. A later definition of the same trigger replaces its complete settings. Papyrus changes, including additions restored from saves, are unsupported; edit the plugin's FormList record to change these triggers. This support applies only to trigger `FormEditorID`, not `owners`, addon `forms`, `containers`, or transformation results.
 
 ### Trigger priority
 

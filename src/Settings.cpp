@@ -653,10 +653,14 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
                 settings.delayer_allowed_stages[a_formid] = std::unordered_set(a_asv.begin(), a_asv.end());
                 settings.delayers[a_formid] = delayer_magnitude;
                 if (a_color) settings.delayer_colors[a_formid] = *a_color;
+                else settings.delayer_colors.erase(a_formid);
                 if (a_sound) settings.delayer_sounds[a_formid] = *a_sound;
+                else settings.delayer_sounds.erase(a_formid);
                 if (a_art_object) settings.delayer_artobjects[a_formid] = *a_art_object;
+                else settings.delayer_artobjects.erase(a_formid);
                 if (a_effect_shader) settings.delayer_effect_shaders[a_formid] = *a_effect_shader;
-                settings.delayer_containers[a_formid].insert(containers.begin(), containers.end());
+                else settings.delayer_effect_shaders.erase(a_formid);
+                settings.delayer_containers[a_formid] = std::unordered_set(containers.begin(), containers.end());
             }
         }
     }
@@ -716,10 +720,14 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
                 settings.transformers[a_formid] = {a_formid2, a_duration};
                 settings.transformer_allowed_stages[a_formid] = std::unordered_set(a_asv.begin(), a_asv.end());
                 if (a_color) settings.transformer_colors[a_formid] = *a_color;
+                else settings.transformer_colors.erase(a_formid);
                 if (a_sound) settings.transformer_sounds[a_formid] = *a_sound;
+                else settings.transformer_sounds.erase(a_formid);
                 if (a_art_object) settings.transformer_artobjects[a_formid] = *a_art_object;
+                else settings.transformer_artobjects.erase(a_formid);
                 if (a_effect_shader) settings.transformer_effect_shaders[a_formid] = *a_effect_shader;
-                settings.transformer_containers[a_formid].insert(containers.begin(), containers.end());
+                else settings.transformer_effect_shaders.erase(a_formid);
+                settings.transformer_containers[a_formid] = std::unordered_set(containers.begin(), containers.end());
             }
         }
     }
