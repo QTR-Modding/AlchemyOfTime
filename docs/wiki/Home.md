@@ -251,7 +251,7 @@ The same field accepts these types:
 2. **Effect Shader:** a reference has that shader applied and its effect has not finished.
 3. **Keyword:** a reference has that keyword.
 4. **Magic Effect:** a reference has that magic effect active, including non-actor references.
-5. **Faction:** an actor belongs to that faction.
+5. **Faction:** an actor belongs to that faction, or a non-actor reference has that faction explicitly assigned as its owner. Ownership inherited from a cell does not count.
 
 Replace `MySmokeArt` with the identifier you want to detect. These triggers also work in transformers: use the same `FormEditorID` and supply the transformation's `duration` and `finalFormEditorID`.
 

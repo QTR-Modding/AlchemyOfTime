@@ -20,7 +20,7 @@ bool CellScanner::MatchesTrigger(RE::TESObjectREFR* ref, RE::TESForm* trigger) {
             if (const auto actor = ref->As<RE::Actor>()) {
                 return actor->IsInFaction(trigger->As<RE::TESFaction>());
             }
-            return false;
+            return ref->GetFactionOwner() == trigger;
         default:
             return ref->GetObjectReference() == trigger;
     }
