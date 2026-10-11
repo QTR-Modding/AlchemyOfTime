@@ -12,8 +12,8 @@ bool CellScanner::MatchesTrigger(RE::TESObjectREFR* ref, RE::TESForm* trigger) {
         case RE::FormType::Keyword:
             return ref->HasKeyword(trigger->As<RE::BGSKeyword>());
         case RE::FormType::MagicEffect:
-            if (const auto actor = ref->As<RE::Actor>()) {
-                return actor->HasMagicEffect(trigger->As<RE::EffectSetting>());
+            if (const auto target = ref->GetMagicTarget()) {
+                return target->HasMagicEffect(trigger->As<RE::EffectSetting>());
             }
             return false;
         case RE::FormType::Faction:

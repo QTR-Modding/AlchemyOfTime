@@ -250,7 +250,7 @@ The same field accepts these types:
 1. **Art Object:** a reference has that art object attached and its effect has not finished.
 2. **Effect Shader:** a reference has that shader applied and its effect has not finished.
 3. **Keyword:** a reference has that keyword.
-4. **Magic Effect:** an actor has that magic effect active.
+4. **Magic Effect:** a reference has that magic effect active, including non-actor references.
 5. **Faction:** an actor belongs to that faction.
 
 Replace `MySmokeArt` with the identifier you want to detect. These triggers also work in transformers: use the same `FormEditorID` and supply the transformation's `duration` and `finalFormEditorID`.
