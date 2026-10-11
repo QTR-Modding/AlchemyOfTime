@@ -1328,7 +1328,7 @@ FormID Source::FindWorldTrigger(RE::TESObjectREFR* a_obj, const WorldTriggers& t
                 }
 
                 const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(e.refid);
-                if (!ref || !Utils::WorldObject::IsActive(*ref)) {
+                if (!ref || !Utils::WorldObject::IsActive(ref)) {
                     continue;
                 }
 
