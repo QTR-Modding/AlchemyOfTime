@@ -440,7 +440,8 @@ std::unordered_set<RE::EffectSetting*> Utils::WorldObject::CollectActiveMagicEff
     if (!target) return effects;
     if (const auto list = target->GetActiveEffectList()) {
         for (const auto effect : *list) {
-            if (!effect || effect->flags.any(RE::ActiveEffect::Flag::kInactive, RE::ActiveEffect::Flag::kDispelled)) continue;
+            if (!effect || effect->flags.any(RE::ActiveEffect::Flag::kInactive, RE::ActiveEffect::Flag::kDispelled) ||
+                effect->conditionStatus == RE::ActiveEffect::ConditionStatus::kFalse) continue;
             if (const auto base = effect->GetBaseObject()) effects.insert(base);
         }
     }
