@@ -1327,14 +1327,6 @@ FormID Source::FindWorldTrigger(RE::TESObjectREFR* a_obj, const WorldTriggers& t
                     continue;
                 }
 
-                if (appliedEffect) {
-                    const auto cell = a_obj->GetParentCell();
-                    const auto targetCell = ref->GetParentCell();
-                    if (!cell || !targetCell ||
-                        (cell != targetCell && (cell->IsInteriorCell() || targetCell->IsInteriorCell() ||
-                            !a_obj->GetWorldspace() || a_obj->GetWorldspace() != ref->GetWorldspace()))) continue;
-                }
-
                 if (SearchModulatorInCell_Sub(a_obj, ref)) {
                     return triggerID;
                 }
