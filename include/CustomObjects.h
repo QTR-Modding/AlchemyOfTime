@@ -239,7 +239,7 @@ private:
     bool init_failed = false;
 };
 
-using CustomSettings = std::map<std::vector<std::string>, DefaultSettings>;
+using CustomSettings = std::vector<std::pair<std::vector<std::string>, DefaultSettings>>;
 
 class SoundHelper : public REX::Singleton<SoundHelper> {
     std::unordered_map<RefID, RE::BSSoundHandle> handles;
