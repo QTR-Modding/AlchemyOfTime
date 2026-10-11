@@ -1189,10 +1189,9 @@ void Manager::UpdateQueuedInventory(const QueueInfo& queue_info) {
 void Manager::RestoreInventoryWatches() {
     const auto needs_watch = [](const Source::WorldTriggers& triggers) {
         return std::ranges::any_of(triggers.ordered, [](const auto& trigger) {
-            const auto form = std::get_if<RE::TESForm*>(&trigger);
+            if (const auto form = std::get_if<RE::TESForm*>(&trigger)) return (*form)->Is(RE::FormType::Faction);
             return std::holds_alternative<RE::BGSLocation*>(trigger) ||
-                   std::holds_alternative<RE::BGSPerk*>(trigger) ||
-                   (form && (*form)->Is(RE::FormType::Faction));
+                   std::holds_alternative<RE::BGSPerk*>(trigger);
         });
     };
     for (const auto& source : sources | std::views::values) {
