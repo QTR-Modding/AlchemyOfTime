@@ -25,9 +25,10 @@ public:
 
     [[nodiscard]] CachePtr GetCache() const;
 
-    static constexpr RE::FormType reference_trigger_types[]{
-        RE::FormType::ArtObject, RE::FormType::EffectShader, RE::FormType::Keyword,
-        RE::FormType::MagicEffect, RE::FormType::Faction};
+    static constexpr RE::FormType self_or_nearby_trigger_types[]{
+        RE::FormType::ArtObject, RE::FormType::EffectShader, RE::FormType::MagicEffect};
+    static constexpr RE::FormType nearby_only_trigger_types[]{
+        RE::FormType::Keyword, RE::FormType::Faction};
 
     static bool MatchesTrigger(RE::TESObjectREFR* ref, RE::TESForm* trigger);
 
