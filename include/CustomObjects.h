@@ -182,6 +182,7 @@ struct StageUpdate {
 
 struct AddOnSettings {
     std::unordered_set<FormID> containers;
+    bool containers_defined = false;
 
     tsl::ordered_map<FormID, float> delayers;
     std::unordered_map<FormID, uint32_t> delayer_colors;
@@ -233,7 +234,6 @@ struct DefaultSettings : AddOnSettings {
 
     void Add(AddOnSettings& addon);
     static void AddHelper(std::unordered_map<FormID, FormID>& dest, const std::unordered_map<FormID, FormID>& src);
-    static void AddHelper(std::unordered_set<FormID>& dest, const std::unordered_set<FormID>& src);
 
 private:
     bool init_failed = false;

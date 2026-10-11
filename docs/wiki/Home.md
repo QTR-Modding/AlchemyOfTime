@@ -416,7 +416,19 @@ Addons do not define stages. They extend the custom or default rule used by each
 
 Addon `.yml` files are combined in alphabetical filename order, ignoring letter case. Names differing only in case use their exact spelling as a tie-breaker. For example, `10_Cooking.yml` supplies triggers before `20_Freezing.yml` for the same food and trigger kind. This is AoT's filename order, not ESP load order.
 
-Repeated entries for the same food combine in entry order. Among addons, redefining the same trigger of the same kind replaces its complete settings without moving its priority. Omitted optional fields are cleared; empty allowed-stage and container lists mean unrestricted. Unrelated triggers remain, and rule-level container lists combine. Existing triggers in the underlying custom/default rule keep their positions; filename ordering describes the addons added to that rule.
+Repeated entries for the same food combine in entry order. Among addons, redefining the same trigger of the same kind replaces its complete settings without moving its priority. Omitted optional fields are cleared; empty allowed-stage and trigger-level container lists mean unrestricted. Unrelated triggers remain. Existing triggers in the underlying custom/default rule keep their positions; filename ordering describes the addons added to that rule.
+
+To restrict beef's existing stage progression and transformations to the player inventory, an addon can contain:
+
+```yaml
+formsLists:
+  - forms: FoodBeef
+    containers: [0x7]
+```
+
+Here `forms` selects beef and rule-level `containers` replaces its existing filter with the player's base form. This shared filter affects all its stages and transformations, including those supplied by other presets. Use a trigger's own `containers` when only that trigger should be restricted in inventories.
+
+Later addon entries or files replace this filter only when they supply rule-level `containers`. Omit the field to preserve the existing filter, supply another list to replace it, or write `containers: []` to remove the restriction. These overrides also apply to the filter from the selected default/custom rule. An entry that only clears the filter is valid.
 
 ### Example Addon File
 
