@@ -9,8 +9,8 @@ struct Source {
     using StageDict = std::map<StageNo, Stage>;
 
     struct WorldTriggers {
-        std::vector<std::variant<RE::BGSLocation*, RE::BGSPerk*, RE::TESBoundObject*>> ordered;
-        std::vector<RE::TESBoundObject*> scan_bases;
+        std::vector<std::variant<RE::BGSLocation*, RE::BGSPerk*, RE::TESForm*>> ordered;
+        std::vector<RE::TESForm*> scan_forms;
     };
 
     SourceData data;

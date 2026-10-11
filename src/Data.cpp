@@ -185,7 +185,9 @@ void Source::AddWorldTriggers(const tsl::ordered_map<FormID, T>& triggers,
         const auto perk = location ? nullptr : form->As<RE::BGSPerk>();
         // ReSharper disable once CppDependentTemplateWithoutTemplateKeyword
         const auto base = location || perk ? nullptr : form->As<RE::TESBoundObject>();
-        if (!location && !perk && !base) continue;
+        if (!location && !perk && !base &&
+            !form->Is(RE::FormType::EffectShader, RE::FormType::Keyword,
+                      RE::FormType::MagicEffect, RE::FormType::Faction)) continue;
 
         for (const auto no : allowed_stages.at(trigger_id)) {
             auto& prepared = world_triggers[no];
@@ -194,8 +196,8 @@ void Source::AddWorldTriggers(const tsl::ordered_map<FormID, T>& triggers,
             } else if (perk) {
                 prepared.ordered.emplace_back(perk);
             } else {
-                prepared.ordered.emplace_back(base);
-                prepared.scan_bases.push_back(base);
+                prepared.ordered.emplace_back(form);
+                prepared.scan_forms.push_back(form);
             }
         }
     }
@@ -206,7 +208,7 @@ void Source::RebuildWorldTriggers() {
     AddWorldTriggers(settings.transformers, settings.transformer_allowed_stages);
     AddWorldTriggers(settings.delayers, settings.delayer_allowed_stages);
     for (auto& prepared : world_triggers | std::views::values) {
-        auto& bases = prepared.scan_bases;
+        auto& bases = prepared.scan_forms;
         std::ranges::sort(bases);
         bases.erase(std::ranges::unique(bases).begin(), bases.end());
     }
@@ -1283,7 +1285,7 @@ namespace {
 FormID Source::FindWorldTrigger(RE::TESObjectREFR* a_obj, const WorldTriggers& triggers) {
     if (!a_obj || triggers.ordered.empty()) return 0;
 
-    const auto cache = triggers.scan_bases.empty() ? nullptr : CellScanner::GetSingleton()->GetCache();
+    const auto cache = triggers.scan_forms.empty() ? nullptr : CellScanner::GetSingleton()->GetCache();
     const auto originPos = Utils::WorldObject::GetPosition(a_obj);
 
     const float r = Settings::search_radius;
@@ -1301,9 +1303,9 @@ FormID Source::FindWorldTrigger(RE::TESObjectREFR* a_obj, const WorldTriggers& t
             }
         } else {
             if (!cache) continue;
-            const auto triggerID = std::get<RE::TESBoundObject*>(trigger)->GetFormID();
-            const auto it = cache->byBase.find(triggerID);
-            if (it == cache->byBase.end()) {
+            const auto triggerID = std::get<RE::TESForm*>(trigger)->GetFormID();
+            const auto it = cache->byTrigger.find(triggerID);
+            if (it == cache->byTrigger.end()) {
                 continue;
             }
 

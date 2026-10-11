@@ -1,7 +1,43 @@
 #include "CellScan.h"
 #include <unordered_set>
 #include "Utils.h"
+#include "CLibUtilsQTR/FormReader.hpp"
 
+
+namespace {
+    bool MatchesTrigger(RE::TESObjectREFR* ref, RE::TESForm* trigger) {
+        switch (trigger->GetFormType()) {
+            case RE::FormType::ArtObject:
+                return RefStop::HasArtObject(ref, trigger->As<RE::BGSArtObject>());
+            case RE::FormType::EffectShader: {
+                bool found = false;
+                if (const auto processLists = RE::ProcessLists::GetSingleton()) {
+                    const auto handle = ref->CreateRefHandle();
+                    processLists->ForEachShaderEffect([&](RE::ShaderReferenceEffect* effect) {
+                        found = !effect->finished && effect->target == handle &&
+                                effect->effectData == trigger->As<RE::TESEffectShader>();
+                        return found ? RE::BSContainer::ForEachResult::kStop : RE::BSContainer::ForEachResult::kContinue;
+                    });
+                }
+                return found;
+            }
+            case RE::FormType::Keyword:
+                return ref->HasKeyword(trigger->As<RE::BGSKeyword>());
+            case RE::FormType::MagicEffect:
+                if (const auto actor = ref->As<RE::Actor>()) {
+                    return actor->HasMagicEffect(trigger->As<RE::EffectSetting>());
+                }
+                return false;
+            case RE::FormType::Faction:
+                if (const auto actor = ref->As<RE::Actor>()) {
+                    return actor->IsInFaction(trigger->As<RE::TESFaction>());
+                }
+                return false;
+            default:
+                return ref->GetObjectReference() == trigger;
+        }
+    }
+}
 
 void CellScanner::RequestRefresh(const std::vector<Request>& requests) {
     const auto gen = requestedGeneration_.fetch_add(1, std::memory_order_acq_rel) + 1;
@@ -137,30 +173,28 @@ void CellScanner::CollectCellsToScan_(const std::vector<RefInfo>& refInfos,
 
 void CellScanner::ScanCells_(const std::unordered_set<RE::TESObjectCELL*>& cellsToScan,
                              const std::unordered_set<FormID>& basesOfInterest, Cache& outCache) {
+    std::vector<RE::TESForm*> triggers;
+    for (const auto id : basesOfInterest) {
+        if (const auto form = FormReader::GetFormByID(id)) triggers.push_back(form);
+    }
     for (const auto cell : cellsToScan) {
         if (!cell) {
             continue;
         }
 
-        auto callback = [&outCache, &basesOfInterest](const RE::TESObjectREFR* ref) -> RE::BSContainer::ForEachResult {
+        auto callback = [&outCache, &triggers](RE::TESObjectREFR* ref) -> RE::BSContainer::ForEachResult {
             if (!ref || ref->IsDisabled() || ref->IsDeleted() || ref->IsMarkedForDeletion()) {
                 return RE::BSContainer::ForEachResult::kContinue;
             }
 
-            const auto base = ref->GetObjectReference();
-            if (!base) {
-                return RE::BSContainer::ForEachResult::kContinue;
-            }
+            for (const auto trigger : triggers) {
+                if (!MatchesTrigger(ref, trigger)) continue;
 
-            const auto baseID = base->GetFormID();
-            if (!basesOfInterest.contains(baseID)) {
-                return RE::BSContainer::ForEachResult::kContinue;
+                Entry e;
+                e.refid = ref->GetFormID();
+                e.pos = Utils::WorldObject::GetPosition(ref);
+                outCache.byTrigger[trigger->GetFormID()].push_back(e);
             }
-
-            Entry e;
-            e.refid = ref->GetFormID();
-            e.pos = Utils::WorldObject::GetPosition(ref);
-            outCache.byBase[baseID].push_back(e);
 
             return RE::BSContainer::ForEachResult::kContinue;
         };

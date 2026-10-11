@@ -14,7 +14,7 @@ public:
 
     struct Cache {
         std::uint64_t generation{0};
-        std::unordered_map<FormID, std::vector<Entry>> byBase;
+        std::unordered_map<FormID, std::vector<Entry>> byTrigger;
     };
 
     using CachePtr = std::shared_ptr<const Cache>;

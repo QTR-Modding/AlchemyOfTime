@@ -12,7 +12,7 @@ Supported item types are FOOD, INGR, MEDC, POSN, ARMO, WEAP, SCRL, BOOK, SLGM, M
 
 ## Getting Started
 
-This guide describes the configuration supported by the current source. Parameterized templates and form groups in custom `owners` are pending release; the other features below are available in AoT 1.3.5. A **trigger** is a form whose presence, location, or conditions activate a time modulator or transformer.
+This guide describes the configuration supported by the current source. Parameterized templates, form groups in custom `owners`, and the nearby-reference triggers below are pending release; the other features below are available in AoT 1.3.5. A **trigger** is a form whose presence, location, or conditions activate a time modulator or transformer.
 
 ### Smallest addon example
 
@@ -206,9 +206,9 @@ To make a location/perk trigger apply only to world items, put its own location/
 
 ### Time Modulators
 
-Time modulators change how quickly items progress through their stages and can even reverse time progression. Their trigger can be a nearby object, an item in the same inventory, a location, or a perk condition list. They include the following properties:
+Time modulators change how quickly items progress through their stages and can even reverse time progression. Their trigger can be a nearby object, an item in the same inventory, a location, a perk condition list, or a [matching nearby reference](#triggers-on-nearby-references). They include the following properties:
 
-- **FormEditorID**: *(Required)* The trigger form: an object base form, location, or perk. This field also accepts a list or form group.
+- **FormEditorID**: *(Required)* The trigger form: an object base form, location, perk, art object, effect shader, keyword, magic effect, or faction. This field also accepts a list or form group.
 - **magnitude**: *(Required)* A multiplier for stage progression: `1` is normal, `0.5` is half speed, `0` pauses, and negative values reverse progression. This does not set a transformer's duration.
 - **color**: The [tint color](#tint-colors) while this trigger is active.
 - **sound**: The Sound Descriptor form to be attached to the stage item.
@@ -219,7 +219,7 @@ Time modulators change how quickly items progress through their stages and can e
 
 ### Transformers
 
-Transformers allow items to **bypass the stage cycle** and transform into another form after a specified duration. They use the same object, location, and perk triggers as time modulators. Transformers include:
+Transformers allow items to **bypass the stage cycle** and transform into another form after a specified duration. They use the same triggers as time modulators. Transformers include:
 
 - **FormEditorID**: *(Required)* The **trigger** ID, not the item being transformed. The affected item is selected by the rule's `owners` or `forms`. This field also accepts a list or form group.
 - **finalFormEditorID**: *(Required)* The ID of the new item after transformation.
@@ -230,6 +230,30 @@ Transformers allow items to **bypass the stage cycle** and transform into anothe
 - **art_object**: The Art Object form attached to the transforming item.
 - **effect_shader**: The Effect Shader form attached to the transforming item.
 - **containers**: Specifies the containers (form IDs, editor IDs, or local IDs) where the transformer is allowed to take effect. Can be a scalar or array type.
+
+### Triggers on nearby references
+
+If your plugin defines an Art Object with EditorID `MySmokeArt`, this addon pauses raw beef's stage progression while that art object is attached to a nearby reference:
+
+```yaml
+formsLists:
+  - forms: FoodBeef
+    timeModulators:
+      - FormEditorID: MySmokeArt
+        magnitude: 0
+```
+
+A reference is an individual object or actor in the game world. Put the Art Object's EditorID or FormID in `FormEditorID`; AoT checks which references have it attached, then applies the usual proximity check. The evolving item itself can match. These checks require world-item evolution and do not check effects or properties on inventory owners.
+
+The same field accepts these types:
+
+1. **Art Object:** a reference has that art object attached and its effect has not finished.
+2. **Effect Shader:** a reference has that shader applied and its effect has not finished.
+3. **Keyword:** a reference has that keyword.
+4. **Magic Effect:** an actor has that magic effect active.
+5. **Faction:** an actor belongs to that faction.
+
+Replace `MySmokeArt` with the identifier you want to detect. These triggers also work in transformers: use the same `FormEditorID` and supply the transformation's `duration` and `finalFormEditorID`.
 
 ### Location triggers
 
@@ -552,7 +576,7 @@ Despite the field name `FormEditorID`, AoT accepts these identifiers:
 3. A prefixed hexadecimal FormID, such as `0x65C99` or `0xF`. `0X` also works. Short unprefixed strings are not shorthand numeric IDs.
 4. A plugin-local ID followed by `~PluginName.esp`, such as `0x65C99~Skyrim.esm`. This avoids hard-coding the plugin's load-order index. Use the local record ID, not a full runtime ID with its load-order prefix.
 
-Quotes are optional for these YAML values; `0xF` and `"0xF"` both work. Use identifiers for the required record type: a transformer destination is an item, while its trigger can be an object, location, or perk. See [Form Groups](#6-use-form-groups) for fields that accept reusable lists.
+Quotes are optional for these YAML values; `0xF` and `"0xF"` both work. Use identifiers for the required record type: a transformer destination is an item, while its trigger uses one of the types described under [Additional Features](#additional-features). See [Form Groups](#6-use-form-groups) for fields that accept reusable lists.
 
 ## Shared YAML fields
 
