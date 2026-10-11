@@ -116,6 +116,8 @@ namespace Utils {
 
         void SwapObjects(RE::TESObjectREFR* a_from, RE::TESBoundObject* a_to, bool apply_havok = true);
 
+        bool HasEffectShader(RE::TESObjectREFR* ref, const RE::TESEffectShader* shader);
+
         bool IsPlacedObject(RE::TESObjectREFR* ref);
 
         RE::bhkRigidBody* GetRigidBody(const RE::TESObjectREFR* refr);

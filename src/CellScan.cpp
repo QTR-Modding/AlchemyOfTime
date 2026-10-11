@@ -8,18 +8,8 @@ bool CellScanner::MatchesTrigger(RE::TESObjectREFR* ref, RE::TESForm* trigger) {
     switch (trigger->GetFormType()) {
         case RE::FormType::ArtObject:
             return RefStop::HasArtObject(ref, trigger->As<RE::BGSArtObject>());
-        case RE::FormType::EffectShader: {
-            bool found = false;
-            if (const auto processLists = RE::ProcessLists::GetSingleton()) {
-                const auto handle = ref->CreateRefHandle();
-                processLists->ForEachShaderEffect([&](RE::ShaderReferenceEffect* effect) {
-                    found = !effect->finished && effect->target == handle &&
-                            effect->effectData == trigger->As<RE::TESEffectShader>();
-                    return found ? RE::BSContainer::ForEachResult::kStop : RE::BSContainer::ForEachResult::kContinue;
-                });
-            }
-            return found;
-        }
+        case RE::FormType::EffectShader:
+            return Utils::WorldObject::HasEffectShader(ref, trigger->As<RE::TESEffectShader>());
         case RE::FormType::Keyword:
             return ref->HasKeyword(trigger->As<RE::BGSKeyword>());
         case RE::FormType::MagicEffect:

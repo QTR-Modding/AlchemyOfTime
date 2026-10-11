@@ -390,6 +390,18 @@ void Utils::WorldObject::SwapObjects(RE::TESObjectREFR* a_from, RE::TESBoundObje
     });
 }
 
+bool Utils::WorldObject::HasEffectShader(RE::TESObjectREFR* ref, const RE::TESEffectShader* shader) {
+    bool found = false;
+    if (const auto processLists = RE::ProcessLists::GetSingleton()) {
+        const auto handle = ref->CreateRefHandle();
+        processLists->ForEachShaderEffect([&](RE::ShaderReferenceEffect* effect) {
+            found = !effect->finished && effect->target == handle && effect->effectData == shader;
+            return found ? RE::BSContainer::ForEachResult::kStop : RE::BSContainer::ForEachResult::kContinue;
+        });
+    }
+    return found;
+}
+
 bool Utils::WorldObject::IsPlacedObject(RE::TESObjectREFR* ref) {
     if (ref->extraList.HasType(RE::ExtraDataType::kStartingPosition)) {
         if (const auto starting_pos = ref->extraList.GetByType<RE::ExtraStartingPosition>(); starting_pos->location) {
