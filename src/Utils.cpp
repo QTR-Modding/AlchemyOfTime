@@ -398,6 +398,9 @@ std::vector<std::pair<RE::TESForm*, RE::ObjectRefHandle>> Utils::WorldObject::Co
             const auto effect = tempEffect->As<RE::ModelReferenceEffect>();
             if (effect && !effect->finished && forms.contains(effect->artObject)) {
                 targets.emplace_back(effect->artObject, effect->target);
+            } else if (const auto shader = tempEffect->As<RE::ShaderReferenceEffect>();
+                       shader && !shader->finished && forms.contains(shader->effectData)) {
+                targets.emplace_back(shader->effectData, shader->target);
             }
             return RE::BSContainer::ForEachResult::kContinue;
         });
