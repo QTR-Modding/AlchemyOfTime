@@ -241,9 +241,9 @@ formsLists:
     magnitude: 0
 ```
 
-`FoodBeef` selects the affected item, and `MyColdKeyword` is the EditorID of a Keyword (KYWD) record in your plugin. This addon pauses beef's stage progression while the beef itself or a nearby reference has that keyword on its base object. Replace the keyword with your own EditorID or FormID and change `magnitude` to the multiplier you need. The item needs stages from a default or custom rule.
+`FoodBeef` selects the affected item, and `MyColdKeyword` is the EditorID of a Keyword (KYWD) record in your plugin. In an inventory, this addon pauses beef's stage progression while any item in that inventory, including the beef itself, has that keyword on its base object. For beef lying in the world, the keyword can be on the beef's own base object or a nearby reference's base object. Replace the keyword with your own EditorID or FormID and change `magnitude` to the multiplier you need. The item needs stages from a default or custom rule.
 
-Keyword triggers apply only to world items and use the existing distance and proximity checks. Keyword changes are recognized on the next scan. Use the keyword in a transformer's `FormEditorID` to transform the item instead; individual keywords can also be mixed with other triggers, form groups, and Skyrim form lists.
+Inventory Keyword triggers use the current inventory contents when AoT updates that inventory; the inventory owner's keywords do not count. World-item Keyword triggers use the existing distance and proximity checks, and keyword changes are recognized on the next scan. Use the keyword in a transformer's `FormEditorID` to transform the item instead; individual keywords can also be mixed with other triggers, form groups, and Skyrim form lists.
 
 ### Art object triggers
 

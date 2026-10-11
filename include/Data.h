@@ -62,7 +62,7 @@ struct Source {
 
     // applies time modulation to all instances in the inventory
     [[nodiscard]] bool InitInsertInstanceInventory(StageNo n, Count c, const RefInfo& a_info, UpdateTime t_0,
-                                                   const InvMap& inv);
+                                                   const Utils::Inventory::Snapshot& inv);
 
     [[nodiscard]] bool MoveInstance(RefID from_ref, RefID to_ref, const StageInstance* st_inst);
     [[nodiscard]] bool MoveInstanceAt(RefID from_ref, RefID to_ref, size_t index);
@@ -74,7 +74,7 @@ struct Source {
     void UpdateTimeModulationInWorld(RE::TESObjectREFR* wo, StageInstance& wo_inst, float _time) const;
 
     // always update before doing this
-    void UpdateTimeModulationInInventory(QueueInfo& queue_info, UpdateTime time, const InvMap& inv);
+    void UpdateTimeModulationInInventory(QueueInfo& queue_info, UpdateTime time, const Utils::Inventory::Snapshot& inv);
 
 
     float GetNextUpdateTime(const StageInstance* st_inst);
@@ -175,7 +175,7 @@ private:
 
     [[nodiscard]] Stage GetTransformedStage(FormID key_formid) const;
 
-    void SetDelayOfInstance(StageInstance& instance, UpdateTime time, QueueInfo& queue_info, const InvMap& a_inv) const;
+    void SetDelayOfInstance(StageInstance& instance, UpdateTime time, QueueInfo& queue_info, const Utils::Inventory::Snapshot& a_inv) const;
     void SetDelayOfInstance(StageInstance& instance, float a_time, FormID a_modulator) const;
 
     [[nodiscard]] bool CheckIntegrity();

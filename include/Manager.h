@@ -46,7 +46,7 @@ class Manager final : public Ticker, public SaveLoadData {
 
     static void ApplyAlchemyNullSkip_(UpdateCtx& ctx);
 
-    void ApplyTransferToSource_(Source& src, UpdateCtx& ctx, const InvMap& to_inv);
+    void ApplyTransferToSource_(Source& src, UpdateCtx& ctx, const Utils::Inventory::Snapshot& to_inv);
 
     void SplitWorldObjectStackIfNeeded_(Source& src, const UpdateCtx& ctx);
 
@@ -156,10 +156,10 @@ class Manager final : public Ticker, public SaveLoadData {
     std::set<float> GetUpdateTimes(const RE::TESObjectREFR* inventory_owner);
 
     // [expects: sourceMutex_] (unique)
-    bool UpdateInventory(QueueInfo& queue_info, UpdateTime t, const InvMap& inv);
+    bool UpdateInventory(QueueInfo& queue_info, UpdateTime t, const Utils::Inventory::Snapshot& inv);
 
     // [expects: sourceMutex_] (unique)
-    void UpdateInventory(const RefInfo& a_info, InvMap& inv);
+    void UpdateInventory(const RefInfo& a_info, Utils::Inventory::Snapshot& inv);
 
     void UpdateQueuedRef(const QueueInfo& queue_info, float curr_time);
     void UpdateQueuedWO(const RefInfo& ref_info, float curr_time);
@@ -170,7 +170,7 @@ class Manager final : public Ticker, public SaveLoadData {
     // [expects: sourceMutex_] (unique)
     void UpdateWO(RE::TESObjectREFR* ref);
     // [expects: sourceMutex_] (unique)
-    void SyncWithInventory(const RefInfo& a_info, InvMap& inv);
+    void SyncWithInventory(const RefInfo& a_info, Utils::Inventory::Snapshot& inventory);
 
 
     // [expects: sourceMutex_] (unique)
@@ -223,7 +223,7 @@ public:
 
     // Registers instances; may mutate sources. [expects: sourceMutex_] (unique)
     void Register(FormID some_formid, Count count, const RefInfo& ref_info,
-                  UpdateTime register_time, const InvMap& a_inv);
+                  UpdateTime register_time, const Utils::Inventory::Snapshot& a_inv);
     // Registers instances; may mutate sources. [expects: sourceMutex_] (unique)
     void Register(FormID some_formid, Count count, RefID location_refid, Duration register_time);
 
