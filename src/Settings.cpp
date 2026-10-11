@@ -4,6 +4,7 @@
 #include "CLibUtilsQTR/PresetHelpers/PresetHelpersTXT.hpp"
 #include "CLibUtilsQTR/PresetHelpers/PresetHelpersYAML.hpp"
 #include "CLibUtilsQTR/StringHelpers.hpp"
+#include <CLibUtil/hash.hpp>
 #include "Lorebox.h"
 #include "rapidjson/stringbuffer.h"
 #include <rapidjson/istreamwrapper.h>
@@ -464,6 +465,16 @@ namespace {
         for (auto& fut : futures) {
             combinedSettings.append_range(fut.get() | std::views::as_rvalue);
         }
+
+        const auto hashOwners = [](const std::vector<std::string>& owners) {
+            return clib_util::hash::fnv1a_64(owners | std::views::transform(std::hash<std::string>{}));
+        };
+        std::unordered_set<std::vector<std::string>, decltype(hashOwners)> seenOwners;
+        seenOwners.reserve(combinedSettings.size());
+        const auto first = std::remove_if(combinedSettings.rbegin(), combinedSettings.rend(), [&](const auto& rule) {
+            return !seenOwners.insert(rule.first).second;
+        }).base();
+        combinedSettings.erase(combinedSettings.begin(), first);
 
         // Return the fully merged settings after all threads are done
         return combinedSettings;
