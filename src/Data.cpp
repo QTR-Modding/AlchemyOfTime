@@ -49,10 +49,8 @@ namespace {
                     const auto [it, inserted] = watch.perks.try_emplace(perk);
                     if (inserted) it->second = perk->perkConditions.IsTrue(owner, owner);
                     if (it->second) return trigger_fid;
-                } else {
+                } else if (const auto faction = trigger->As<RE::TESFaction>()) {
                     queue_info.update_flags.set(QueueInfo::UpdateFlag::kFaction);
-                    // ReSharper disable once CppDependentTemplateWithoutTemplateKeyword
-                    const auto faction = trigger->As<RE::TESFaction>();
                     const auto [it, inserted] = watch.factions.try_emplace(faction);
                     if (inserted) it->second = Utils::WorldObject::MatchesFaction(owner, faction);
                     if (it->second) return trigger_fid;

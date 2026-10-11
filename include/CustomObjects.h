@@ -344,7 +344,7 @@ struct QueueInfo {
         kWorldObject = 1u << 0,
         kLocation = 1u << 1,
         kPerk = 1u << 2,
-        kFaction = 1u << 3
+        kFaction = 1u << 4
     };
     RefInfo ref_info;
     REX::EnumSet<UpdateFlag> update_flags;
