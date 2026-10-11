@@ -113,6 +113,10 @@ namespace Utils {
     };
 
     namespace WorldObject {
+        inline bool IsActive(const RE::TESObjectREFR* ref) {
+            return !ref->IsDisabled() && !ref->IsDeleted() && !ref->IsMarkedForDeletion();
+        }
+
         RE::TESObjectREFR* DropObjectIntoTheWorld(RE::TESBoundObject* obj, Count count, bool player_owned = true);
 
         void SwapObjects(RE::TESObjectREFR* a_from, RE::TESBoundObject* a_to, bool apply_havok = true);
