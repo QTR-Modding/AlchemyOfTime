@@ -315,6 +315,22 @@ For a world item, AoT passes the item's reference as both the condition subject 
 
 Use `containers: MyColdConditions` inside the trigger if those conditions should only affect world items. Inventory conditions are reevaluated during updates; do not expect a paused menu to advance a timed transformation.
 
+### FormList triggers
+
+```yaml
+formsLists:
+  - forms: FoodBeef
+    timeModulators:
+      - FormEditorID: MyColdTriggers
+        magnitude: 0
+```
+
+This example assumes your plugin defines a FormList (`FLST`) named `MyColdTriggers` containing `IceWraithTeeth` and `FrostSalts`. A FormList is a plugin record that holds other forms. Either ingredient in the same inventory pauses the beef's stage progression; for beef lying in the world, either ingredient nearby activates the same modulator.
+
+Replace `MyColdTriggers` with your list's identifier, or change its members in your plugin. You can also use a FormList in a transformer's `FormEditorID`; every member receives that transformer's settings, including its single `finalFormEditorID` result.
+
+AoT expands nested lists in member order when plugin records load, before loading a save. Empty lists contribute no triggers, and repeated members keep their first priority position. A later definition of the same trigger replaces its complete settings. Papyrus changes, including additions restored from saves, are unsupported; edit the plugin's FormList record to change these triggers. This support applies only to trigger `FormEditorID`, not `owners`, addon `forms`, `containers`, or transformation results.
+
 ### Trigger priority
 
 AoT uses the first qualifying transformer; if none qualifies, it uses the first qualifying time modulator. It does not multiply all matching modulators together. Order triggers of the same kind from highest to lowest priority. For example, put a nearby-fire transformer before a location-based freezing transformer so the fire wins when both match.
