@@ -1237,6 +1237,12 @@ namespace {
 
     bool SearchModulatorInCell_Sub(const RE::TESObjectREFR* a_origin, const RE::TESObjectREFR* ref,
                                    const float proximity = Settings::proximity_range) {
+        const auto cell = a_origin->GetParentCell();
+        const auto targetCell = ref->GetParentCell();
+        if (!cell || !targetCell ||
+            (cell != targetCell && (cell->IsInteriorCell() || targetCell->IsInteriorCell() ||
+                !a_origin->GetWorldspace() || a_origin->GetWorldspace() != ref->GetWorldspace()))) return false;
+
         DirectX::BoundingOrientedBox obb1{};
         DirectX::BoundingOrientedBox obb2{};
 
