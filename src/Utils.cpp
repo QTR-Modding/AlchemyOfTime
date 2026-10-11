@@ -416,6 +416,11 @@ void Utils::WorldObject::SwapObjects(RE::TESObjectREFR* a_from, RE::TESBoundObje
     });
 }
 
+bool Utils::WorldObject::MatchesFaction(RE::TESObjectREFR* ref, RE::TESFaction* faction) {
+    if (const auto actor = ref->As<RE::Actor>()) return actor->IsInFaction(faction);
+    return ref->GetFactionOwner() == faction;
+}
+
 std::vector<std::pair<RE::TESForm*, RE::ObjectRefHandle>> Utils::WorldObject::CollectAppliedEffectTargets(
     const std::unordered_set<RE::TESForm*>& forms) {
     std::vector<std::pair<RE::TESForm*, RE::ObjectRefHandle>> targets;

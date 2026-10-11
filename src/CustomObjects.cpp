@@ -359,6 +359,9 @@ bool InventoryWatch::HasChanged(RE::TESObjectREFR* owner) {
     for (const auto& [perk, matched] : perks) {
         if (perk->perkConditions.IsTrue(owner, owner) != matched) return true;
     }
+    for (const auto& [faction, matched] : factions) {
+        if (Utils::WorldObject::MatchesFaction(owner, faction) != matched) return true;
+    }
     return false;
 }
 

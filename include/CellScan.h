@@ -36,6 +36,7 @@ private:
         std::shared_ptr<std::unordered_set<FormID>> bases;
         std::unordered_set<RE::TESForm*> applied_effects;
         std::unordered_set<FormID> keywords;
+        std::unordered_set<RE::TESFaction*> factions;
         std::shared_ptr<std::vector<RefInfo>> refInfos;
     };
 
@@ -60,7 +61,8 @@ private:
 
     static void ScanCells_(const std::unordered_set<RE::TESObjectCELL*>& cellsToScan,
                            const std::unordered_set<FormID>& basesOfInterest,
-                           const std::unordered_set<FormID>& keywordsOfInterest, Cache& outCache);
+                           const std::unordered_set<FormID>& keywordsOfInterest,
+                           const std::unordered_set<RE::TESFaction*>& factionsOfInterest, Cache& outCache);
 
     static void ScanAppliedEffects_(const std::unordered_set<RE::TESObjectCELL*>& cellsToScan,
                                     const std::unordered_set<RE::TESForm*>& forms, Cache& outCache);

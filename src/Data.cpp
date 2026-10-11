@@ -24,7 +24,7 @@ namespace {
             const auto trigger = RE::TESForm::LookupByID(trigger_fid);
             if (!trigger) continue;
 
-            if (trigger->Is(RE::FormType::Location, RE::FormType::Perk)) {
+            if (trigger->Is(RE::FormType::Location, RE::FormType::Perk, RE::FormType::Faction)) {
                 if (phase == UpdatePhase::kCatchUp) {
                     if (trigger_fid == instance.GetDelayerFormID()) return trigger_fid;
                     continue;
@@ -48,6 +48,13 @@ namespace {
                     queue_info.update_flags.set(QueueInfo::UpdateFlag::kPerk);
                     const auto [it, inserted] = watch.perks.try_emplace(perk);
                     if (inserted) it->second = perk->perkConditions.IsTrue(owner, owner);
+                    if (it->second) return trigger_fid;
+                } else {
+                    queue_info.update_flags.set(QueueInfo::UpdateFlag::kFaction);
+                    // ReSharper disable once CppDependentTemplateWithoutTemplateKeyword
+                    const auto faction = trigger->As<RE::TESFaction>();
+                    const auto [it, inserted] = watch.factions.try_emplace(faction);
+                    if (inserted) it->second = Utils::WorldObject::MatchesFaction(owner, faction);
                     if (it->second) return trigger_fid;
                 }
                 // ReSharper disable once CppDependentTemplateWithoutTemplateKeyword
@@ -188,7 +195,7 @@ void Source::AddWorldTriggers(const tsl::ordered_map<FormID, T>& triggers,
         const auto perk = location ? nullptr : form->As<RE::BGSPerk>();
         // ReSharper disable once CppDependentTemplateWithoutTemplateKeyword
         const auto base = location || perk ? nullptr : form->As<RE::TESBoundObject>();
-        if (!location && !perk && !base && !form->As<RE::BGSKeyword>() &&
+        if (!location && !perk && !base && !form->As<RE::BGSKeyword>() && !form->As<RE::TESFaction>() &&
             !std::ranges::contains(CellScanner::applied_effect_trigger_types, form->GetFormType())) continue;
 
         for (const auto no : allowed_stages.at(trigger_id)) {
