@@ -1754,7 +1754,7 @@ void Manager::SendData() {
     SRC_SHARED_GUARD;
     for (const auto& src : sources | std::views::values) {
         const auto& source = *src;
-        if (source.GetStageDuration(0) >= 10000.f) {
+        if (source.GetStageDuration(0) >= Settings::critical_stage_dur) {
             if (source.settings.transformers.empty() && source.settings.delayers.empty()) {
                 continue;
             }
