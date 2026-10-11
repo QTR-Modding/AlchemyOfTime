@@ -1311,8 +1311,7 @@ FormID Source::FindWorldTrigger(RE::TESObjectREFR* a_obj, const WorldTriggers& t
             }
 
             for (const auto& e : it->second) {
-                if (appliedEffect && e.refid == a_obj->GetFormID() &&
-                    !a_obj->IsDisabled() && !a_obj->IsDeleted() && !a_obj->IsMarkedForDeletion()) return triggerID;
+                if (appliedEffect && e.refid == a_obj->GetFormID()) return triggerID;
                 const float dx = e.pos.x - originPos.x;
                 const float dy = e.pos.y - originPos.y;
                 const float dz = e.pos.z - originPos.z;
