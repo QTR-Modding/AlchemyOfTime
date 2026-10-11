@@ -7,7 +7,7 @@
 class CellScanner final :
     public REX::Singleton<CellScanner> {
 public:
-    static constexpr std::array applied_effect_trigger_types{RE::FormType::ArtObject, RE::FormType::EffectShader};
+    static constexpr std::array applied_effect_trigger_types{RE::FormType::ArtObject, RE::FormType::EffectShader, RE::FormType::MagicEffect};
 
     struct Entry {
         RefID refid{0};
@@ -34,7 +34,8 @@ private:
         // Built off-thread
         std::shared_ptr<Cache> next;
         std::shared_ptr<std::unordered_set<FormID>> bases;
-        std::unordered_set<RE::TESForm*> applied_effects;
+        std::unordered_set<RE::TESForm*> visual_effects;
+        std::unordered_set<RE::EffectSetting*> magic_effects;
         std::unordered_set<FormID> keywords;
         std::shared_ptr<std::vector<RefInfo>> refInfos;
     };
@@ -60,7 +61,8 @@ private:
 
     static void ScanCells_(const std::unordered_set<RE::TESObjectCELL*>& cellsToScan,
                            const std::unordered_set<FormID>& basesOfInterest,
-                           const std::unordered_set<FormID>& keywordsOfInterest, Cache& outCache);
+                           const std::unordered_set<FormID>& keywordsOfInterest,
+                           const std::unordered_set<RE::EffectSetting*>& magicEffectsOfInterest, Cache& outCache);
 
     static void ScanAppliedEffects_(const std::unordered_set<RE::TESObjectCELL*>& cellsToScan,
                                     const std::unordered_set<RE::TESForm*>& forms, Cache& outCache);
