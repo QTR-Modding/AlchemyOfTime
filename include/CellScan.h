@@ -19,11 +19,15 @@ public:
 
     using CachePtr = std::shared_ptr<const Cache>;
 
-    using Request = std::pair<RefInfo, std::vector<FormID>>;
+    using Request = std::pair<RefInfo, std::vector<RE::TESForm*>>;
 
     void RequestRefresh(const std::vector<Request>& requests);
 
     [[nodiscard]] CachePtr GetCache() const;
+
+    static constexpr RE::FormType reference_trigger_types[]{
+        RE::FormType::ArtObject, RE::FormType::EffectShader, RE::FormType::Keyword,
+        RE::FormType::MagicEffect, RE::FormType::Faction};
 
     static bool MatchesTrigger(RE::TESObjectREFR* ref, RE::TESForm* trigger);
 
@@ -33,7 +37,7 @@ private:
 
         // Built off-thread
         std::shared_ptr<Cache> next;
-        std::shared_ptr<std::unordered_set<FormID>> bases;
+        std::shared_ptr<std::unordered_set<RE::TESForm*>> triggers;
         std::shared_ptr<std::vector<RefInfo>> refInfos;
     };
 
@@ -55,7 +59,7 @@ private:
                                     std::unordered_set<RE::TESObjectCELL*>& cellsToScan);
 
     static void ScanCells_(const std::unordered_set<RE::TESObjectCELL*>& cellsToScan,
-                           const std::unordered_set<FormID>& basesOfInterest, Cache& outCache);
+                           const std::unordered_set<RE::TESForm*>& triggers, Cache& outCache);
 
     void Publish_(std::shared_ptr<Cache> next);
 

@@ -1,7 +1,6 @@
 #include "CellScan.h"
 #include <unordered_set>
 #include "Utils.h"
-#include "CLibUtilsQTR/FormReader.hpp"
 
 
 bool CellScanner::MatchesTrigger(RE::TESObjectREFR* ref, RE::TESForm* trigger) {
@@ -34,7 +33,7 @@ void CellScanner::RequestRefresh(const std::vector<Request>& requests) {
         return;
     }
 
-    if (work->bases->empty() || work->refInfos->empty()) {
+    if (work->triggers->empty() || work->refInfos->empty()) {
         Publish_(std::move(work->next));
         return;
     }
@@ -64,18 +63,18 @@ CellScanner::WorkItemPtr CellScanner::BuildWorkItem_(const std::uint64_t gen,
     work->next = std::make_shared<Cache>();
     work->next->generation = gen;
 
-    work->bases = std::make_shared<std::unordered_set<FormID>>();
+    work->triggers = std::make_shared<std::unordered_set<RE::TESForm*>>();
     work->refInfos = std::make_shared<std::vector<RefInfo>>();
 
     work->refInfos->reserve(requests.size());
 
-    // CPU-only: union bases + extract refInfos
-    for (auto& [ref_info, bases] : requests) {
+    // CPU-only: union triggers + extract refInfos
+    for (auto& [ref_info, triggers] : requests) {
         work->refInfos->push_back(ref_info);
 
-        for (auto base : bases) {
-            if (base != 0) {
-                work->bases->insert(base);
+        for (auto trigger : triggers) {
+            if (trigger) {
+                work->triggers->insert(trigger);
             }
         }
     }
@@ -159,11 +158,7 @@ void CellScanner::CollectCellsToScan_(const std::vector<RefInfo>& refInfos,
 }
 
 void CellScanner::ScanCells_(const std::unordered_set<RE::TESObjectCELL*>& cellsToScan,
-                             const std::unordered_set<FormID>& basesOfInterest, Cache& outCache) {
-    std::vector<RE::TESForm*> triggers;
-    for (const auto id : basesOfInterest) {
-        if (const auto form = FormReader::GetFormByID(id)) triggers.push_back(form);
-    }
+                             const std::unordered_set<RE::TESForm*>& triggers, Cache& outCache) {
     for (const auto cell : cellsToScan) {
         if (!cell) {
             continue;
@@ -198,7 +193,7 @@ void CellScanner::RunScanTaskOnGameThread_(const WorkItemPtr& work) {
     std::unordered_set<RE::TESObjectCELL*> cellsToScan;
     CollectCellsToScan_(*work->refInfos, cellsToScan);
 
-    ScanCells_(cellsToScan, *work->bases, *work->next);
+    ScanCells_(cellsToScan, *work->triggers, *work->next);
 
     if (IsStale_(work->gen)) {
         return;

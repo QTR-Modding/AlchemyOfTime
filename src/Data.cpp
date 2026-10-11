@@ -186,8 +186,7 @@ void Source::AddWorldTriggers(const tsl::ordered_map<FormID, T>& triggers,
         // ReSharper disable once CppDependentTemplateWithoutTemplateKeyword
         const auto base = location || perk ? nullptr : form->As<RE::TESBoundObject>();
         if (!location && !perk && !base &&
-            !form->Is(RE::FormType::EffectShader, RE::FormType::Keyword,
-                      RE::FormType::MagicEffect, RE::FormType::Faction)) continue;
+            !std::ranges::contains(CellScanner::reference_trigger_types, form->GetFormType())) continue;
 
         for (const auto no : allowed_stages.at(trigger_id)) {
             auto& prepared = world_triggers[no];
@@ -1304,8 +1303,7 @@ FormID Source::FindWorldTrigger(RE::TESObjectREFR* a_obj, const WorldTriggers& t
         } else {
             const auto form = std::get<RE::TESForm*>(trigger);
             const auto triggerID = form->GetFormID();
-            if (form->Is(RE::FormType::ArtObject, RE::FormType::EffectShader, RE::FormType::Keyword,
-                         RE::FormType::MagicEffect, RE::FormType::Faction) &&
+            if (std::ranges::contains(CellScanner::reference_trigger_types, form->GetFormType()) &&
                 CellScanner::MatchesTrigger(a_obj, form)) return triggerID;
             if (!cache) continue;
             const auto it = cache->byTrigger.find(triggerID);
