@@ -299,6 +299,20 @@ Effect shader triggers apply to items lying in the world. A shader applied to th
 
 Use the shader's ID in a transformer's `FormEditorID` to transform the affected item instead. The `effect_shader` field applies a shader while a stage or trigger is active; `FormEditorID` detects one that is already applied.
 
+### Magic effect triggers
+
+```yaml
+formsLists:
+- forms: FoodBeef
+  timeModulators:
+  - FormEditorID: MyFrostEffect
+    magnitude: 0
+```
+
+`FoodBeef` selects the affected item, and `MyFrostEffect` is the EditorID of a Magic Effect (MGEF) record in your plugin. In an inventory, this addon pauses beef's stage progression while its owner has that effect active. For beef lying in the world, the effect can be on the beef itself or a nearby reference. A spell or another source must apply the effect first. Replace `MyFrostEffect` with your effect's EditorID or FormID and change `magnitude` to the multiplier you need. The beef needs stages from a default or custom rule.
+
+World-item targets can be actors or other references with active magic effects; nearby targets use the existing distance and proximity checks. World changes are recognized on the next scan, and owner effects use the existing inventory-condition checks. Inactive or dispelled effects do not match. Use the MGEF in a transformer's `FormEditorID` to transform the item instead. Individual effects can be mixed with other triggers, form groups, and Skyrim form lists.
+
 ### Location triggers
 
 A location is a Skyrim **LCTN record**, not a cell, region, weather record, or a place name typed as text. Use its EditorID or FormID in the trigger's `FormEditorID` field.

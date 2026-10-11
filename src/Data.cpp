@@ -24,7 +24,7 @@ namespace {
             const auto trigger = RE::TESForm::LookupByID(trigger_fid);
             if (!trigger) continue;
 
-            if (trigger->Is(RE::FormType::Location, RE::FormType::Perk, RE::FormType::Faction)) {
+            if (trigger->Is(RE::FormType::Location, RE::FormType::Perk, RE::FormType::MagicEffect, RE::FormType::Faction)) {
                 if (phase == UpdatePhase::kCatchUp) {
                     if (trigger_fid == instance.GetDelayerFormID()) return trigger_fid;
                     continue;
@@ -48,6 +48,11 @@ namespace {
                     queue_info.update_flags.set(QueueInfo::UpdateFlag::kPerk);
                     const auto [it, inserted] = watch.perks.try_emplace(perk);
                     if (inserted) it->second = perk->perkConditions.IsTrue(owner, owner);
+                    if (it->second) return trigger_fid;
+                } else if (const auto magicEffect = trigger->As<RE::EffectSetting>()) {
+                    queue_info.update_flags.set(QueueInfo::UpdateFlag::kMagicEffect);
+                    const auto [it, inserted] = watch.magic_effects.try_emplace(magicEffect);
+                    if (inserted) it->second = inventory.HasMagicEffect(owner, magicEffect);
                     if (it->second) return trigger_fid;
                 } else if (const auto faction = trigger->As<RE::TESFaction>()) {
                     queue_info.update_flags.set(QueueInfo::UpdateFlag::kFaction);

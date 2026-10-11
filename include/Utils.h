@@ -128,6 +128,8 @@ namespace Utils {
         std::vector<std::pair<RE::TESForm*, RE::ObjectRefHandle>> CollectAppliedEffectTargets(
             const std::unordered_set<RE::TESForm*>& forms);
 
+        std::unordered_set<RE::EffectSetting*> CollectActiveMagicEffects(RE::TESObjectREFR* ref);
+
         bool IsPlacedObject(RE::TESObjectREFR* ref);
 
         RE::bhkRigidBody* GetRigidBody(const RE::TESObjectREFR* refr);
@@ -139,8 +141,10 @@ namespace Utils {
         struct Snapshot {
             InvMap items;
             mutable std::optional<std::unordered_set<RE::BGSKeyword*>> keywords;
+            mutable std::optional<std::unordered_set<RE::EffectSetting*>> magic_effects;
 
             bool HasKeyword(RE::BGSKeyword* keyword) const;
+            bool HasMagicEffect(RE::TESObjectREFR* owner, RE::EffectSetting* effect) const;
         };
 
         bool IsQuestItem(FormID formid, const InvMap& a_inv);

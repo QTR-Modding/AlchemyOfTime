@@ -439,6 +439,20 @@ std::vector<std::pair<RE::TESForm*, RE::ObjectRefHandle>> Utils::WorldObject::Co
     return targets;
 }
 
+std::unordered_set<RE::EffectSetting*> Utils::WorldObject::CollectActiveMagicEffects(RE::TESObjectREFR* ref) {
+    std::unordered_set<RE::EffectSetting*> effects;
+    const auto target = ref->GetMagicTarget();
+    if (!target) return effects;
+    if (const auto list = target->GetActiveEffectList()) {
+        for (const auto effect : *list) {
+            if (!effect || effect->flags.any(RE::ActiveEffect::Flag::kInactive, RE::ActiveEffect::Flag::kDispelled) ||
+                effect->conditionStatus == RE::ActiveEffect::ConditionStatus::kFalse) continue;
+            if (const auto base = effect->GetBaseObject()) effects.insert(base);
+        }
+    }
+    return effects;
+}
+
 bool Utils::WorldObject::IsPlacedObject(RE::TESObjectREFR* ref) {
     if (ref->extraList.HasType(RE::ExtraDataType::kStartingPosition)) {
         if (const auto starting_pos = ref->extraList.GetByType<RE::ExtraStartingPosition>(); starting_pos->location) {
@@ -503,6 +517,11 @@ bool Utils::Inventory::Snapshot::HasKeyword(RE::BGSKeyword* keyword) const {
         }
     }
     return keywords->contains(keyword);
+}
+
+bool Utils::Inventory::Snapshot::HasMagicEffect(RE::TESObjectREFR* owner, RE::EffectSetting* effect) const {
+    if (!magic_effects) magic_effects = WorldObject::CollectActiveMagicEffects(owner);
+    return magic_effects->contains(effect);
 }
 
 bool Utils::Inventory::IsQuestItem(const FormID formid, const InvMap& a_inv) {
