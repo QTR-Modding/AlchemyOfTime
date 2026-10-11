@@ -134,6 +134,13 @@ namespace Utils {
     };
 
     namespace Inventory {
+        struct Snapshot {
+            InvMap items;
+            mutable std::optional<std::unordered_set<RE::BGSKeyword*>> keywords;
+
+            bool HasKeyword(RE::BGSKeyword* keyword) const;
+        };
+
         bool IsQuestItem(FormID formid, const InvMap& a_inv);
     };
 

@@ -485,6 +485,21 @@ void Utils::Math::rotateZ(RE::NiPoint3& v, const float angle) {
     v.y = y;
 }
 
+bool Utils::Inventory::Snapshot::HasKeyword(RE::BGSKeyword* keyword) const {
+    if (!keywords) {
+        keywords.emplace();
+        for (const auto& [item, entry] : items) {
+            if (entry.first <= 0) continue;
+            if (const auto form = item->As<RE::BGSKeywordForm>()) {
+                for (const auto value : form->GetKeywords()) {
+                    if (value) keywords->insert(value);
+                }
+            }
+        }
+    }
+    return keywords->contains(keyword);
+}
+
 bool Utils::Inventory::IsQuestItem(const FormID formid, const InvMap& a_inv) {
     if (const auto item = FormReader::GetFormByID<RE::TESBoundObject>(formid)) {
         if (const auto it = a_inv.find(item); it != a_inv.end()) {

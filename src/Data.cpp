@@ -10,8 +10,9 @@ namespace {
     FormID GetTriggerInInventory(const tsl::ordered_map<FormID, T>& triggers,
                                  const std::unordered_map<FormID, std::unordered_set<StageNo>>& allowed_stages,
                                  const std::unordered_map<FormID, std::unordered_set<FormID>>& containers,
-                                 const InvMap& inv, QueueInfo& queue_info, const StageInstance& instance,
+                                 const Utils::Inventory::Snapshot& inventory, QueueInfo& queue_info, const StageInstance& instance,
                                  const UpdatePhase phase) {
+        const auto& inv = inventory.items;
         if (inv.empty()) return 0;
 
         for (const auto trigger_fid : triggers | std::views::keys) {
@@ -50,6 +51,8 @@ namespace {
                     if (it->second) return trigger_fid;
                 }
                 // ReSharper disable once CppDependentTemplateWithoutTemplateKeyword
+            } else if (const auto keyword = trigger->As<RE::BGSKeyword>()) {
+                if (inventory.HasKeyword(keyword)) return trigger_fid;
             } else if (const auto obj = trigger->As<RE::TESBoundObject>()) {
                 if (const auto it = inv.find(obj); it != inv.end() && it->second.first > 0) {
                     return trigger_fid;
@@ -395,7 +398,7 @@ StageInstance* Source::InitInsertInstanceWO(StageNo n, const Count c, const RefI
 }
 
 bool Source::InitInsertInstanceInventory(const StageNo n, const Count c, const RefInfo& a_info,
-                                         const UpdateTime t_0, const InvMap& inv) {
+                                         const UpdateTime t_0, const Utils::Inventory::Snapshot& inv) {
     // isme takilma
     if (!InitInsertInstanceWO(n, c, a_info.ref_id, t_0.hours)) {
         logger::error("InitInsertInstance failed.");
@@ -620,7 +623,7 @@ float Source::GetNextUpdateTime(const StageInstance* st_inst) {
     return st_inst->GetHittingTime(schranke);
 }
 
-void Source::UpdateTimeModulationInInventory(QueueInfo& queue_info, const UpdateTime time, const InvMap& inv) {
+void Source::UpdateTimeModulationInInventory(QueueInfo& queue_info, const UpdateTime time, const Utils::Inventory::Snapshot& inv) {
     const auto it = data.find(queue_info.ref_info.ref_id);
     if (it == data.end()) return;
 
@@ -968,7 +971,7 @@ Stage Source::GetTransformedStage(const FormID key_formid) const {
 }
 
 void Source::SetDelayOfInstance(StageInstance& instance, const UpdateTime time, QueueInfo& queue_info,
-                                const InvMap& a_inv) const {
+                                const Utils::Inventory::Snapshot& a_inv) const {
     if (instance.count <= 0 || instance.xtra.is_decayed) return;
 
     if (ShouldFreezeEvolution(queue_info.ref_info.base_id)) {

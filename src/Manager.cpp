@@ -261,7 +261,7 @@ void Manager::UpdateImpl(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const R
     {
         SRC_UNIQUE_GUARD;
         if (src = UpdateGetSource(ctx.what->GetFormID(), loc); src) {
-            ApplyTransferToSource_(*src, ctx, ctx.to && ctx.to->HasContainer() ? ctx.to->GetInventory() : InvMap{});
+            ApplyTransferToSource_(*src, ctx, {ctx.to && ctx.to->HasContainer() ? ctx.to->GetInventory() : InvMap{}});
             SplitWorldObjectStackIfNeeded_(*src, ctx);
         }
     }
@@ -384,7 +384,7 @@ void Manager::ApplyAlchemyNullSkip_(UpdateCtx& ctx) {
     }
 }
 
-void Manager::ApplyTransferToSource_(Source& src, UpdateCtx& ctx, const InvMap& to_inv) {
+void Manager::ApplyTransferToSource_(Source& src, UpdateCtx& ctx, const Utils::Inventory::Snapshot& to_inv) {
     if (src.data.contains(ctx.from_refid)) {
         ctx.count = src.MoveInstances(ctx.from_refid, ctx.to_refid, ctx.what_formid, ctx.count, true);
     }
@@ -916,7 +916,7 @@ std::set<float> Manager::GetUpdateTimes(const RE::TESObjectREFR* inventory_owner
     return queued_updates;
 }
 
-bool Manager::UpdateInventory(QueueInfo& queue_info, const UpdateTime t, const InvMap& inv) {
+bool Manager::UpdateInventory(QueueInfo& queue_info, const UpdateTime t, const Utils::Inventory::Snapshot& inv) {
     const auto& a_info = queue_info.ref_info;
     bool update_took_place = false;
     const auto refid = a_info.ref_id;
@@ -1008,7 +1008,7 @@ bool Manager::UpdateInventory(QueueInfo& queue_info, const UpdateTime t, const I
     return update_took_place;
 }
 
-void Manager::UpdateInventory(const RefInfo& a_info, InvMap& inv) {
+void Manager::UpdateInventory(const RefInfo& a_info, Utils::Inventory::Snapshot& inv) {
     SyncWithInventory(a_info, inv);
 
     const auto curr = RE::Calendar::GetSingleton()->GetHoursPassed();
@@ -1031,7 +1031,8 @@ void Manager::UpdateInventory(const RefInfo& a_info, InvMap& inv) {
     }
 }
 
-void Manager::SyncWithInventory(const RefInfo& a_info, InvMap& inv) {
+void Manager::SyncWithInventory(const RefInfo& a_info, Utils::Inventory::Snapshot& inventory) {
+    auto& inv = inventory.items;
     const RefID loc = a_info.ref_id;
     const bool needHandling = locs_to_be_handled.contains(loc);
     const auto owner = needHandling ? a_info.GetRef() : nullptr;
@@ -1089,13 +1090,13 @@ void Manager::SyncWithInventory(const RefInfo& a_info, InvMap& inv) {
 
         auto rt = reg_total.find(fid);
         if (rt == reg_total.end()) {
-            if (invCount > 0) Register(fid, invCount, a_info, {.hours = now, .phase = UpdatePhase::kCurrent}, inv);
+            if (invCount > 0) Register(fid, invCount, a_info, {.hours = now, .phase = UpdatePhase::kCurrent}, inventory);
             continue;
         }
 
         const Count regCount = rt->second;
         if (regCount < invCount) {
-            Register(fid, invCount - regCount, a_info, {.hours = now, .phase = UpdatePhase::kCurrent}, inv);
+            Register(fid, invCount - regCount, a_info, {.hours = now, .phase = UpdatePhase::kCurrent}, inventory);
         } else if (regCount > invCount) {
             const Count diff = regCount - invCount;
             if (needHandling && reg_has_fake[fid]) {
@@ -1150,7 +1151,7 @@ void Manager::SyncWithInventory(const RefInfo& a_info, InvMap& inv) {
             if (count > 0) owner->AddObjectToContainer(bound, nullptr, count, nullptr);
             else if (count < 0) owner->RemoveItem(bound, -count, RE::ITEM_REMOVE_REASON::kRemove, nullptr, nullptr);
         }
-        inv = owner->GetInventory();
+        inventory = {owner->GetInventory()};
         locs_to_be_handled.erase(loc);
     }
 }
@@ -1370,7 +1371,7 @@ void Manager::UpdateRef(RE::TESObjectREFR* loc) {
     if (loc->HasContainer()) {
         const auto base = loc->GetBaseObject();
         const RefInfo info(loc->GetFormID(), base ? base->GetFormID() : 0);
-        auto inv = loc->GetInventory();
+        Utils::Inventory::Snapshot inv{loc->GetInventory()};
         UpdateInventory(info, inv);
     } else {
         UpdateWO(loc);
@@ -1480,7 +1481,7 @@ void Manager::Register(const FormID some_formid, const Count count, const RefID 
 }
 
 void Manager::Register(const FormID some_formid, const Count count, const RefInfo& ref_info,
-                       const UpdateTime register_time, const InvMap& a_inv) {
+                       const UpdateTime register_time, const Utils::Inventory::Snapshot& a_inv) {
     if (do_not_register.contains(some_formid)) {
         return;
     }
@@ -1496,7 +1497,7 @@ void Manager::Register(const FormID some_formid, const Count count, const RefInf
     if (!location_refid) {
         return;
     }
-    if (Utils::Inventory::IsQuestItem(some_formid, a_inv)) {
+    if (Utils::Inventory::IsQuestItem(some_formid, a_inv.items)) {
         return;
     }
     if (!Settings::IsItem(some_formid, "", true)) {
@@ -1793,7 +1794,7 @@ void Manager::HandleLoc(RE::TESObjectREFR* loc_ref) {
         return;
     }
 
-    auto loc_inventory_temp = loc_ref->GetInventory();
+    Utils::Inventory::Snapshot loc_inventory_temp{loc_ref->GetInventory()};
 
     const auto loc_base = loc_ref->GetObjectReference()->GetFormID();
     SyncWithInventory(RefInfo(loc_refid, loc_base), loc_inventory_temp);
