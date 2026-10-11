@@ -1301,13 +1301,17 @@ FormID Source::FindWorldTrigger(RE::TESObjectREFR* a_obj, const WorldTriggers& t
             }
         } else {
             if (!cache) continue;
-            const auto triggerID = std::get<RE::TESBoundObject*>(trigger)->GetFormID();
+            const auto base = std::get<RE::TESBoundObject*>(trigger);
+            const auto art = base->As<RE::BGSArtObject>();
+            const auto triggerID = base->GetFormID();
             const auto it = cache->byBase.find(triggerID);
             if (it == cache->byBase.end()) {
                 continue;
             }
 
             for (const auto& e : it->second) {
+                if (art && e.refid == a_obj->GetFormID() &&
+                    !a_obj->IsDisabled() && !a_obj->IsDeleted() && !a_obj->IsMarkedForDeletion()) return triggerID;
                 const float dx = e.pos.x - originPos.x;
                 const float dy = e.pos.y - originPos.y;
                 const float dz = e.pos.z - originPos.z;
@@ -1320,6 +1324,14 @@ FormID Source::FindWorldTrigger(RE::TESObjectREFR* a_obj, const WorldTriggers& t
                 const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(e.refid);
                 if (!ref || ref->IsDisabled() || ref->IsDeleted() || ref->IsMarkedForDeletion()) {
                     continue;
+                }
+
+                if (art) {
+                    const auto cell = a_obj->GetParentCell();
+                    const auto targetCell = ref->GetParentCell();
+                    if (!cell || !targetCell ||
+                        (cell != targetCell && (cell->IsInteriorCell() || targetCell->IsInteriorCell() ||
+                            !a_obj->GetWorldspace() || a_obj->GetWorldspace() != ref->GetWorldspace()))) continue;
                 }
 
                 if (SearchModulatorInCell_Sub(a_obj, ref)) {

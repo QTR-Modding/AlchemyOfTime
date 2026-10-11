@@ -19,7 +19,7 @@ public:
 
     using CachePtr = std::shared_ptr<const Cache>;
 
-    using Request = std::pair<RefInfo, std::vector<FormID>>;
+    using Request = std::pair<RefInfo, std::vector<RE::TESBoundObject*>>;
 
     void RequestRefresh(const std::vector<Request>& requests);
 
@@ -32,6 +32,7 @@ private:
         // Built off-thread
         std::shared_ptr<Cache> next;
         std::shared_ptr<std::unordered_set<FormID>> bases;
+        std::unordered_set<RE::BGSArtObject*> art_objects;
         std::shared_ptr<std::vector<RefInfo>> refInfos;
     };
 
@@ -54,6 +55,9 @@ private:
 
     static void ScanCells_(const std::unordered_set<RE::TESObjectCELL*>& cellsToScan,
                            const std::unordered_set<FormID>& basesOfInterest, Cache& outCache);
+
+    static void ScanArtObjects_(const std::unordered_set<RE::TESObjectCELL*>& cellsToScan,
+                                const std::unordered_set<RE::BGSArtObject*>& artObjects, Cache& outCache);
 
     void Publish_(std::shared_ptr<Cache> next);
 

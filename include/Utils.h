@@ -1,4 +1,5 @@
 #pragma once
+#include <unordered_set>
 
 namespace Utils {
     const auto mod_name = std::string(SKSE::PluginDeclaration::GetSingleton()->GetName());
@@ -115,6 +116,9 @@ namespace Utils {
         RE::TESObjectREFR* DropObjectIntoTheWorld(RE::TESBoundObject* obj, Count count, bool player_owned = true);
 
         void SwapObjects(RE::TESObjectREFR* a_from, RE::TESBoundObject* a_to, bool apply_havok = true);
+
+        std::vector<std::pair<RE::BGSArtObject*, RE::ObjectRefHandle>> CollectArtObjectTargets(
+            const std::unordered_set<RE::BGSArtObject*>& artObjects);
 
         bool IsPlacedObject(RE::TESObjectREFR* ref);
 

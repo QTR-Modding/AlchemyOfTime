@@ -206,9 +206,9 @@ To make a location/perk trigger apply only to world items, put its own location/
 
 ### Time Modulators
 
-Time modulators change how quickly items progress through their stages and can even reverse time progression. Their trigger can be a nearby object, an item in the same inventory, a location, or a perk condition list. They include the following properties:
+Time modulators change how quickly items progress through their stages and can even reverse time progression. Their trigger can be a nearby object, an item in the same inventory, a location, a perk condition list, or an [applied art object](#art-object-triggers). They include the following properties:
 
-- **FormEditorID**: *(Required)* The trigger form: an object base form, location, or perk. This field also accepts a list or form group.
+- **FormEditorID**: *(Required)* The trigger form: an object base form, location, perk, or art object. This field also accepts a list or form group.
 - **magnitude**: *(Required)* A multiplier for stage progression: `1` is normal, `0.5` is half speed, `0` pauses, and negative values reverse progression. This does not set a transformer's duration.
 - **color**: The [tint color](#tint-colors) while this trigger is active.
 - **sound**: The Sound Descriptor form to be attached to the stage item.
@@ -219,7 +219,7 @@ Time modulators change how quickly items progress through their stages and can e
 
 ### Transformers
 
-Transformers allow items to **bypass the stage cycle** and transform into another form after a specified duration. They use the same object, location, and perk triggers as time modulators. Transformers include:
+Transformers allow items to **bypass the stage cycle** and transform into another form after a specified duration. They use the same object, location, perk, and art object triggers as time modulators. Transformers include:
 
 - **FormEditorID**: *(Required)* The **trigger** ID, not the item being transformed. The affected item is selected by the rule's `owners` or `forms`. This field also accepts a list or form group.
 - **finalFormEditorID**: *(Required)* The ID of the new item after transformation.
@@ -230,6 +230,24 @@ Transformers allow items to **bypass the stage cycle** and transform into anothe
 - **art_object**: The Art Object form attached to the transforming item.
 - **effect_shader**: The Effect Shader form attached to the transforming item.
 - **containers**: Specifies the containers (form IDs, editor IDs, or local IDs) where the transformer is allowed to take effect. Can be a scalar or array type.
+
+### Art object triggers
+
+This addon pauses raw beef's stage progression while `MySmokeArt` is applied to the beef itself or a nearby reference:
+
+```yaml
+formsLists:
+  - forms: FoodBeef
+    timeModulators:
+      - FormEditorID: MySmokeArt
+        magnitude: 0
+```
+
+`MySmokeArt` is the EditorID of an Art Object (ARTO) record in your plugin. Another effect or script must apply it to a reference; this example detects that applied art object. Replace `MySmokeArt` with your art object's EditorID or FormID, and change `magnitude` to the stage-progression multiplier you need.
+
+Art object triggers apply to items lying in the world. An art object applied to the affected item itself also activates the trigger; an art object on another reference uses the existing nearby-object distance and proximity checks. AoT discovers attachments and removals at its scan refresh, so a change between scans is recognized on the next refresh. They do not activate inventory items.
+
+Use the art object's ID in a transformer's `FormEditorID` to transform the affected item instead. The `art_object` field applies an art object while a stage or trigger is active; `FormEditorID` detects one that is already applied.
 
 ### Location triggers
 

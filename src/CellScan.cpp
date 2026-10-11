@@ -11,7 +11,7 @@ void CellScanner::RequestRefresh(const std::vector<Request>& requests) {
         return;
     }
 
-    if (work->bases->empty() || work->refInfos->empty()) {
+    if ((work->bases->empty() && work->art_objects.empty()) || work->refInfos->empty()) {
         Publish_(std::move(work->next));
         return;
     }
@@ -51,8 +51,11 @@ CellScanner::WorkItemPtr CellScanner::BuildWorkItem_(const std::uint64_t gen,
         work->refInfos->push_back(ref_info);
 
         for (auto base : bases) {
-            if (base != 0) {
-                work->bases->insert(base);
+            if (!base) continue;
+            if (const auto art = base->As<RE::BGSArtObject>()) {
+                work->art_objects.insert(art);
+            } else if (const auto baseID = base->GetFormID(); baseID != 0) {
+                work->bases->insert(baseID);
             }
         }
     }
@@ -169,6 +172,20 @@ void CellScanner::ScanCells_(const std::unordered_set<RE::TESObjectCELL*>& cells
     }
 }
 
+void CellScanner::ScanArtObjects_(const std::unordered_set<RE::TESObjectCELL*>& cellsToScan,
+                                  const std::unordered_set<RE::BGSArtObject*>& artObjects, Cache& outCache) {
+    for (const auto& [art, handle] : Utils::WorldObject::CollectArtObjectTargets(artObjects)) {
+        const auto ref = handle.get();
+        if (!ref || ref->IsDisabled() || ref->IsDeleted() || ref->IsMarkedForDeletion() ||
+            !cellsToScan.contains(ref->GetParentCell())) continue;
+
+        Entry e;
+        e.refid = ref->GetFormID();
+        e.pos = Utils::WorldObject::GetPosition(ref.get());
+        outCache.byBase[art->GetFormID()].push_back(e);
+    }
+}
+
 void CellScanner::RunScanTaskOnGameThread_(const WorkItemPtr& work) {
     if (!work || IsStale_(work->gen)) {
         return;
@@ -177,7 +194,12 @@ void CellScanner::RunScanTaskOnGameThread_(const WorkItemPtr& work) {
     std::unordered_set<RE::TESObjectCELL*> cellsToScan;
     CollectCellsToScan_(*work->refInfos, cellsToScan);
 
-    ScanCells_(cellsToScan, *work->bases, *work->next);
+    if (!work->bases->empty()) {
+        ScanCells_(cellsToScan, *work->bases, *work->next);
+    }
+    if (!work->art_objects.empty()) {
+        ScanArtObjects_(cellsToScan, work->art_objects, *work->next);
+    }
 
     if (IsStale_(work->gen)) {
         return;

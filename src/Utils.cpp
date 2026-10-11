@@ -390,6 +390,20 @@ void Utils::WorldObject::SwapObjects(RE::TESObjectREFR* a_from, RE::TESBoundObje
     });
 }
 
+std::vector<std::pair<RE::BGSArtObject*, RE::ObjectRefHandle>> Utils::WorldObject::CollectArtObjectTargets(
+    const std::unordered_set<RE::BGSArtObject*>& artObjects) {
+    std::vector<std::pair<RE::BGSArtObject*, RE::ObjectRefHandle>> targets;
+    if (const auto processLists = RE::ProcessLists::GetSingleton()) {
+        processLists->ForEachModelEffect([&](const RE::ModelReferenceEffect* effect) {
+            if (!effect->finished && artObjects.contains(effect->artObject)) {
+                targets.emplace_back(effect->artObject, effect->target);
+            }
+            return RE::BSContainer::ForEachResult::kContinue;
+        });
+    }
+    return targets;
+}
+
 bool Utils::WorldObject::IsPlacedObject(RE::TESObjectREFR* ref) {
     if (ref->extraList.HasType(RE::ExtraDataType::kStartingPosition)) {
         if (const auto starting_pos = ref->extraList.GetByType<RE::ExtraStartingPosition>(); starting_pos->location) {
