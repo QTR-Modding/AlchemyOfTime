@@ -366,7 +366,7 @@ Custom settings go into files in this folder:
 SKSE\Plugins\AlchemyOfTime\<ITEMTYPE>\custom\
 ```
 
-You can add as many files as you want.
+You can add as many files as you want. Files are read in alphabetical filename order, ignoring letter case; names differing only in case use their exact spelling as a tie-breaker. If several custom rules select the same item, the last matching rule wins completely, including its stages, final item, and triggers. Later entries within one file take precedence too. Other items keep their own matching rules.
 
 Each `ownerLists` entry is a complete stage rule and needs `stages` and `finalFormEditorID`. Use an addon instead if you only want to add triggers.
 

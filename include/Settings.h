@@ -162,7 +162,6 @@ namespace Settings {
 };
 
 namespace PresetParse {
-    inline std::mutex g_settingsMutex;
 
     std::vector<std::string> LoadExcludeList(const std::string& postfix);
     AddOnSettings parseAddOns_(const YAML::Node& config);

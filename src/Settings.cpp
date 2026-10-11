@@ -4,6 +4,7 @@
 #include "CLibUtilsQTR/PresetHelpers/PresetHelpersTXT.hpp"
 #include "CLibUtilsQTR/PresetHelpers/PresetHelpersYAML.hpp"
 #include "CLibUtilsQTR/StringHelpers.hpp"
+#include <CLibUtil/hash.hpp>
 #include "Lorebox.h"
 #include "rapidjson/stringbuffer.h"
 #include <rapidjson/istreamwrapper.h>
@@ -112,7 +113,7 @@ DefaultSettings* Settings::GetCustomSetting(const RE::TESForm* form, std::string
 
     const FormID form_id = form->GetFormID();
 
-    for (auto& [names, sttng] : itType->second) {
+    for (auto& [names, sttng] : std::views::reverse(itType->second)) {
         if (!sttng.IsHealthy()) continue;
 
         for (const auto& name : names) {
@@ -393,19 +394,18 @@ std::vector<std::string> PresetParse::LoadExcludeList(const std::string& postfix
 namespace {
     constexpr int warnings_limit = 5;
 
-    void mergeCustomSettings(CustomSettings& dest, const CustomSettings& src) {
-        for (const auto& [owners, settings] : src) {
-            dest[owners] = settings;
-        }
+    bool PresetFilenameLess(const std::filesystem::path& lhs, const std::filesystem::path& rhs) {
+        const auto order = CompareStringOrdinal(lhs.c_str(), -1, rhs.c_str(), -1, TRUE);
+        return order == CSTR_EQUAL ? lhs.native() < rhs.native() : order == CSTR_LESS_THAN;
     }
 
-    void processCustomFile(const std::string& filename, CustomSettings& combinedSettings) {
+    CustomSettings processCustomFile(const std::string& filename) {
         logger::info("Parsing file: {}", filename);
         // Create a temporary result for this file
         CustomSettings fileResult;
         if (Utils::FileIsEmpty(filename)) {
             logger::info("File is empty: {}", filename);
-            return;
+            return {};
         }
 
         YAML::Node config = YAML::LoadFile(filename);
@@ -413,26 +413,23 @@ namespace {
 
         if (!config["ownerLists"]) {
             logger::warn("OwnerLists not found in {}", filename);
-            return;
+            return {};
         }
 
         for (const auto& Node_ : config["ownerLists"]) {
             if (!Node_["owners"]) {
                 logger::warn("Owners not found in {}", filename);
-                return;
+                return {};
             }
             // we have list of owners at each node or a scalar owner
             if (auto temp_settings = PresetParse::parseDefaults_(Node_); temp_settings.CheckIntegrity()) {
                 std::vector<std::string> owners = PresetHelpers::YAML_Helpers::CollectFrom<
                     std::string>(Node_, "owners");
-                fileResult[owners] = temp_settings;
+                fileResult.emplace_back(std::move(owners), std::move(temp_settings));
             }
         }
 
-        if (!fileResult.empty()) {
-            std::lock_guard lock(PresetParse::g_settingsMutex);
-            mergeCustomSettings(combinedSettings, fileResult);
-        }
+        return fileResult;
     }
 
     CustomSettings parseCustomsParallel(const std::string& _type) {
@@ -441,33 +438,43 @@ namespace {
         std::filesystem::create_directories(folder_path);
 
         // Gather all .yml filenames in the directory
-        std::vector<std::string> filenames;
+        std::vector<std::filesystem::path> filenames;
         for (const auto& entry : std::filesystem::directory_iterator(folder_path)) {
             if (entry.is_regular_file() && entry.path().extension() == ".yml") {
-                filenames.push_back(entry.path().string());
+                filenames.push_back(entry.path());
             }
         }
 
+        std::ranges::sort(filenames, PresetFilenameLess);
         // Reserve space for futures
-        std::vector<std::future<void>> futures;
+        std::vector<std::future<CustomSettings>> futures;
         futures.reserve(filenames.size());
 
         // Create a thread pool with available hardware threads
         ThreadPool pool(numThreads);
 
-        // Enqueue a task for each file. Each task will parse and merge its file.
+        // Parse files in parallel, then combine them in filename order.
         for (const auto& filename : filenames) {
             futures.emplace_back(
-                pool.enqueue([filename, &combinedSettings]() {
-                    processCustomFile(filename, combinedSettings);
+                pool.enqueue([filename]() {
+                    return processCustomFile(filename.string());
                 })
                 );
         }
 
-        // Wait for all tasks to complete
         for (auto& fut : futures) {
-            fut.get();
+            combinedSettings.append_range(fut.get() | std::views::as_rvalue);
         }
+
+        const auto hashOwners = [](const std::vector<std::string>& owners) {
+            return clib_util::hash::fnv1a_64(owners | std::views::transform(std::hash<std::string>{}));
+        };
+        std::unordered_set<std::vector<std::string>, decltype(hashOwners)> seenOwners;
+        seenOwners.reserve(combinedSettings.size());
+        const auto first = std::remove_if(combinedSettings.rbegin(), combinedSettings.rend(), [&](const auto& rule) {
+            return !seenOwners.insert(rule.first).second;
+        }).base();
+        combinedSettings.erase(combinedSettings.begin(), first);
 
         // Return the fully merged settings after all threads are done
         return combinedSettings;
@@ -557,10 +564,7 @@ namespace {
                 filenames.push_back(entry.path());
             }
         }
-        std::ranges::sort(filenames, [](const std::filesystem::path& lhs, const std::filesystem::path& rhs) {
-            const auto order = CompareStringOrdinal(lhs.c_str(), -1, rhs.c_str(), -1, TRUE);
-            return order == CSTR_EQUAL ? lhs.native() < rhs.native() : order == CSTR_LESS_THAN;
-        });
+        std::ranges::sort(filenames, PresetFilenameLess);
         std::vector<std::future<std::unordered_map<FormID, AddOnSettings>>> futures;
         futures.reserve(filenames.size());
         ThreadPool pool(numThreads);
