@@ -4,6 +4,21 @@
 #include "CLibUtilsQTR/DrawDebug.hpp"
 #include "MCP.h"
 
+namespace {
+    void AppendExpandedForm(RE::TESForm* form, std::vector<FormID>& expanded,
+                            std::unordered_set<RE::BGSListForm*>& visited) {
+        if (const auto list = form->As<RE::BGSListForm>()) {
+            if (!visited.insert(list).second) return;
+            list->ForEachForm([&](RE::TESForm* member) {
+                AppendExpandedForm(member, expanded, visited);
+                return RE::BSContainer::ForEachResult::kContinue;
+            });
+        } else {
+            expanded.push_back(form->GetFormID());
+        }
+    }
+}
+
 std::string Utils::DecodeTypeCode(const std::uint32_t typeCode) {
     char buf[4];
     buf[3] = static_cast<char>(typeCode);
@@ -27,6 +42,16 @@ bool Utils::FileIsEmpty(const std::filesystem::path& filename) {
     }
 
     return true; // Only whitespace characters or file is empty
+}
+
+std::vector<FormID> Utils::ExpandFormLists(const std::vector<FormID>& forms) {
+    std::vector<FormID> expanded;
+    std::unordered_set<RE::BGSListForm*> visited;
+    for (const auto id : forms) {
+        if (const auto form = FormReader::GetFormByID(id)) AppendExpandedForm(form, expanded, visited);
+        else expanded.push_back(id);
+    }
+    return expanded;
 }
 
 uint32_t Utils::ParseTint(const std::string& value) {
