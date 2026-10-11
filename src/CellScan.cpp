@@ -146,7 +146,7 @@ void CellScanner::ScanCells_(const std::unordered_set<RE::TESObjectCELL*>& cells
         }
 
         auto callback = [&outCache, &basesOfInterest](const RE::TESObjectREFR* ref) -> RE::BSContainer::ForEachResult {
-            if (!ref || ref->IsDisabled() || ref->IsDeleted() || ref->IsMarkedForDeletion()) {
+            if (!ref || !Utils::WorldObject::IsActive(*ref)) {
                 return RE::BSContainer::ForEachResult::kContinue;
             }
 
@@ -176,7 +176,7 @@ void CellScanner::ScanAppliedEffects_(const std::unordered_set<RE::TESObjectCELL
                                       const std::unordered_set<RE::TESForm*>& forms, Cache& outCache) {
     for (const auto& [form, handle] : Utils::WorldObject::CollectAppliedEffectTargets(forms)) {
         const auto ref = handle.get();
-        if (!ref || ref->IsDisabled() || ref->IsDeleted() || ref->IsMarkedForDeletion() ||
+        if (!ref || !Utils::WorldObject::IsActive(*ref) ||
             !cellsToScan.contains(ref->GetParentCell())) continue;
 
         Entry e;
