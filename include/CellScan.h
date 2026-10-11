@@ -7,7 +7,7 @@
 class CellScanner final :
     public REX::Singleton<CellScanner> {
 public:
-    static constexpr std::array applied_effect_trigger_types{RE::FormType::ArtObject};
+    static constexpr std::array applied_effect_trigger_types{RE::FormType::ArtObject, RE::FormType::EffectShader};
 
     struct Entry {
         RefID refid{0};
