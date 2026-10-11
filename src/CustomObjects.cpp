@@ -248,7 +248,7 @@ bool DefaultSettings::IsEmpty() {
 // check it
 void DefaultSettings::Add(AddOnSettings& addon) {
     // containers
-    AddHelper(containers, addon.containers);
+    if (addon.containers_defined) containers = addon.containers;
 
     // delayers
     for (const auto& [a_formID, _delay] : addon.delayers) {
@@ -329,16 +329,6 @@ void DefaultSettings::AddHelper(std::unordered_map<FormID, FormID>& dest,
     }
 }
 
-void DefaultSettings::AddHelper(std::unordered_set<FormID>& dest, const std::unordered_set<FormID>& src) {
-    for (const auto& _formID : src) {
-        if (!_formID) {
-            logger::critical("AddOn has null formid.");
-            continue;
-        }
-        dest.insert(_formID);
-    }
-}
-
 RefStopFeature::operator bool() const { return id > 0 && enabled; }
 
 RefStopFeature::RefStopFeature() {
@@ -385,7 +375,10 @@ bool RefStop::IsDue(const float curr_time) const { return stop_time <= curr_time
 
 // check it
 void AddOnSettings::Merge(const AddOnSettings& addon) {
-    containers.insert(addon.containers.begin(), addon.containers.end());
+    if (addon.containers_defined) {
+        containers = addon.containers;
+        containers_defined = true;
+    }
     for (const auto& [id, value] : addon.delayers) delayers[id] = value;
     for (const auto& [id, value] : addon.transformers) transformers[id] = value;
 

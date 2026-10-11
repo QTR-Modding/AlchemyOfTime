@@ -527,7 +527,7 @@ namespace {
                 logger::error("Settings integrity check failed for formsLists entry {} in {}", entry_index, displayName);
                 continue;
             }
-            if (temp_settings.containers.empty() && temp_settings.delayers.empty() && temp_settings.transformers.empty()) {
+            if (!temp_settings.containers_defined && temp_settings.delayers.empty() && temp_settings.transformers.empty()) {
                 logger::error("Skipping formsLists entry {} in {}: no effective settings; no containers, time modulators, or transformers resolved.",
                               entry_index, displayName);
                 continue;
@@ -620,6 +620,7 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
 
     // containers
     if (config["containers"] && !config["containers"].IsNull()) {
+        settings.containers_defined = true;
         auto containers = parse_formid_vec(config, "containers");
         settings.containers.insert(containers.begin(), containers.end());
     }
