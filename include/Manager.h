@@ -183,7 +183,7 @@ class Manager final : public Ticker, public SaveLoadData {
     // [expects: sourceMutex_] (unique)
     bool DeRegisterRef(RefID refid);
 
-    using ScanRequest = std::pair<RefInfo, std::vector<RE::TESBoundObject*>>;
+    using ScanRequest = std::pair<RefInfo, std::vector<RE::TESForm*>>;
 
     [[nodiscard]] std::vector<ScanRequest> BuildCellScanRequests_(
         const std::vector<QueueInfo>& refStopsCopy);

@@ -11,7 +11,7 @@ void CellScanner::RequestRefresh(const std::vector<Request>& requests) {
         return;
     }
 
-    if ((work->bases->empty() && work->art_objects.empty()) || work->refInfos->empty()) {
+    if ((work->bases->empty() && work->applied_effects.empty()) || work->refInfos->empty()) {
         Publish_(std::move(work->next));
         return;
     }
@@ -46,15 +46,15 @@ CellScanner::WorkItemPtr CellScanner::BuildWorkItem_(const std::uint64_t gen,
 
     work->refInfos->reserve(requests.size());
 
-    // CPU-only: union bases + extract refInfos
-    for (auto& [ref_info, bases] : requests) {
+    // CPU-only: union trigger forms + extract refInfos
+    for (auto& [ref_info, forms] : requests) {
         work->refInfos->push_back(ref_info);
 
-        for (auto base : bases) {
-            if (!base) continue;
-            if (const auto art = base->As<RE::BGSArtObject>()) {
-                work->art_objects.insert(art);
-            } else if (const auto baseID = base->GetFormID(); baseID != 0) {
+        for (auto form : forms) {
+            if (!form) continue;
+            if (std::ranges::contains(applied_effect_trigger_types, form->GetFormType())) {
+                work->applied_effects.insert(form);
+            } else if (const auto baseID = form->GetFormID(); baseID != 0) {
                 work->bases->insert(baseID);
             }
         }
@@ -163,7 +163,7 @@ void CellScanner::ScanCells_(const std::unordered_set<RE::TESObjectCELL*>& cells
             Entry e;
             e.refid = ref->GetFormID();
             e.pos = Utils::WorldObject::GetPosition(ref);
-            outCache.byBase[baseID].push_back(e);
+            outCache.byTrigger[baseID].push_back(e);
 
             return RE::BSContainer::ForEachResult::kContinue;
         };
@@ -172,9 +172,9 @@ void CellScanner::ScanCells_(const std::unordered_set<RE::TESObjectCELL*>& cells
     }
 }
 
-void CellScanner::ScanArtObjects_(const std::unordered_set<RE::TESObjectCELL*>& cellsToScan,
-                                  const std::unordered_set<RE::BGSArtObject*>& artObjects, Cache& outCache) {
-    for (const auto& [art, handle] : Utils::WorldObject::CollectArtObjectTargets(artObjects)) {
+void CellScanner::ScanAppliedEffects_(const std::unordered_set<RE::TESObjectCELL*>& cellsToScan,
+                                      const std::unordered_set<RE::TESForm*>& forms, Cache& outCache) {
+    for (const auto& [form, handle] : Utils::WorldObject::CollectAppliedEffectTargets(forms)) {
         const auto ref = handle.get();
         if (!ref || ref->IsDisabled() || ref->IsDeleted() || ref->IsMarkedForDeletion() ||
             !cellsToScan.contains(ref->GetParentCell())) continue;
@@ -182,7 +182,7 @@ void CellScanner::ScanArtObjects_(const std::unordered_set<RE::TESObjectCELL*>& 
         Entry e;
         e.refid = ref->GetFormID();
         e.pos = Utils::WorldObject::GetPosition(ref.get());
-        outCache.byBase[art->GetFormID()].push_back(e);
+        outCache.byTrigger[form->GetFormID()].push_back(e);
     }
 }
 
@@ -197,8 +197,8 @@ void CellScanner::RunScanTaskOnGameThread_(const WorkItemPtr& work) {
     if (!work->bases->empty()) {
         ScanCells_(cellsToScan, *work->bases, *work->next);
     }
-    if (!work->art_objects.empty()) {
-        ScanArtObjects_(cellsToScan, work->art_objects, *work->next);
+    if (!work->applied_effects.empty()) {
+        ScanAppliedEffects_(cellsToScan, work->applied_effects, *work->next);
     }
 
     if (IsStale_(work->gen)) {

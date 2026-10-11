@@ -130,9 +130,9 @@ std::vector<Manager::ScanRequest> Manager::BuildCellScanRequests_(
         }
 
         const auto triggers_it = src->world_triggers.find(inst.no);
-        if (triggers_it == src->world_triggers.end() || triggers_it->second.scan_bases.empty()) continue;
+        if (triggers_it == src->world_triggers.end() || triggers_it->second.scan_forms.empty()) continue;
 
-        out.emplace_back(queue_info.ref_info, triggers_it->second.scan_bases);
+        out.emplace_back(queue_info.ref_info, triggers_it->second.scan_forms);
     }
 
     return out;

@@ -117,8 +117,8 @@ namespace Utils {
 
         void SwapObjects(RE::TESObjectREFR* a_from, RE::TESBoundObject* a_to, bool apply_havok = true);
 
-        std::vector<std::pair<RE::BGSArtObject*, RE::ObjectRefHandle>> CollectArtObjectTargets(
-            const std::unordered_set<RE::BGSArtObject*>& artObjects);
+        std::vector<std::pair<RE::TESForm*, RE::ObjectRefHandle>> CollectAppliedEffectTargets(
+            const std::unordered_set<RE::TESForm*>& forms);
 
         bool IsPlacedObject(RE::TESObjectREFR* ref);
 
