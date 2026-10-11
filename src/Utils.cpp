@@ -46,6 +46,7 @@ bool Utils::FileIsEmpty(const std::filesystem::path& filename) {
 
 std::vector<FormID> Utils::ExpandFormLists(const std::vector<FormID>& forms) {
     std::vector<FormID> expanded;
+    expanded.reserve(forms.size());
     std::unordered_set<RE::BGSListForm*> visited;
     for (const auto id : forms) {
         if (const auto form = FormReader::GetFormByID(id)) AppendExpandedForm(form, expanded, visited);
