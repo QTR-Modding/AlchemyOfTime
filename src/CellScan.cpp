@@ -11,7 +11,7 @@ void CellScanner::RequestRefresh(const std::vector<Request>& requests) {
         return;
     }
 
-    if ((work->bases->empty() && work->applied_effects.empty()) || work->refInfos->empty()) {
+    if ((work->bases->empty() && work->keywords.empty() && work->applied_effects.empty()) || work->refInfos->empty()) {
         Publish_(std::move(work->next));
         return;
     }
@@ -54,6 +54,8 @@ CellScanner::WorkItemPtr CellScanner::BuildWorkItem_(const std::uint64_t gen,
             if (!form) continue;
             if (std::ranges::contains(applied_effect_trigger_types, form->GetFormType())) {
                 work->applied_effects.insert(form);
+            } else if (const auto keyword = form->As<RE::BGSKeyword>()) {
+                work->keywords.insert(keyword->GetFormID());
             } else if (const auto baseID = form->GetFormID(); baseID != 0) {
                 work->bases->insert(baseID);
             }
@@ -139,13 +141,14 @@ void CellScanner::CollectCellsToScan_(const std::vector<RefInfo>& refInfos,
 }
 
 void CellScanner::ScanCells_(const std::unordered_set<RE::TESObjectCELL*>& cellsToScan,
-                             const std::unordered_set<FormID>& basesOfInterest, Cache& outCache) {
+                             const std::unordered_set<FormID>& basesOfInterest,
+                             const std::unordered_set<FormID>& keywordsOfInterest, Cache& outCache) {
     for (const auto cell : cellsToScan) {
         if (!cell) {
             continue;
         }
 
-        auto callback = [&outCache, &basesOfInterest](const RE::TESObjectREFR* ref) -> RE::BSContainer::ForEachResult {
+        auto callback = [&outCache, &basesOfInterest, &keywordsOfInterest](const RE::TESObjectREFR* ref) -> RE::BSContainer::ForEachResult {
             if (!ref || !Utils::WorldObject::IsActive(ref)) {
                 return RE::BSContainer::ForEachResult::kContinue;
             }
@@ -156,14 +159,24 @@ void CellScanner::ScanCells_(const std::unordered_set<RE::TESObjectCELL*>& cells
             }
 
             const auto baseID = base->GetFormID();
-            if (!basesOfInterest.contains(baseID)) {
-                return RE::BSContainer::ForEachResult::kContinue;
+            if (basesOfInterest.contains(baseID)) {
+                Entry e;
+                e.refid = ref->GetFormID();
+                e.pos = Utils::WorldObject::GetPosition(ref);
+                outCache.byTrigger[baseID].push_back(e);
             }
 
-            Entry e;
-            e.refid = ref->GetFormID();
-            e.pos = Utils::WorldObject::GetPosition(ref);
-            outCache.byTrigger[baseID].push_back(e);
+            if (!keywordsOfInterest.empty()) {
+                if (const auto keywords = base->As<RE::BGSKeywordForm>()) {
+                    for (const auto keyword : keywords->GetKeywords()) {
+                        if (!keyword || !keywordsOfInterest.contains(keyword->GetFormID())) continue;
+                        Entry e;
+                        e.refid = ref->GetFormID();
+                        e.pos = Utils::WorldObject::GetPosition(ref);
+                        outCache.byTrigger[keyword->GetFormID()].push_back(e);
+                    }
+                }
+            }
 
             return RE::BSContainer::ForEachResult::kContinue;
         };
@@ -194,8 +207,8 @@ void CellScanner::RunScanTaskOnGameThread_(const WorkItemPtr& work) {
     std::unordered_set<RE::TESObjectCELL*> cellsToScan;
     CollectCellsToScan_(*work->refInfos, cellsToScan);
 
-    if (!work->bases->empty()) {
-        ScanCells_(cellsToScan, *work->bases, *work->next);
+    if (!work->bases->empty() || !work->keywords.empty()) {
+        ScanCells_(cellsToScan, *work->bases, work->keywords, *work->next);
     }
     if (!work->applied_effects.empty()) {
         ScanAppliedEffects_(cellsToScan, work->applied_effects, *work->next);
