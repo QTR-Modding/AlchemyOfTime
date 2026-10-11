@@ -1303,7 +1303,7 @@ FormID Source::FindWorldTrigger(RE::TESObjectREFR* a_obj, const WorldTriggers& t
         } else {
             const auto form = std::get<RE::TESForm*>(trigger);
             const auto triggerID = form->GetFormID();
-            if (std::ranges::contains(CellScanner::reference_trigger_types, form->GetFormType()) &&
+            if (form->Is(RE::FormType::ArtObject, RE::FormType::EffectShader, RE::FormType::MagicEffect) &&
                 CellScanner::MatchesTrigger(a_obj, form)) return triggerID;
             if (!cache) continue;
             const auto it = cache->byTrigger.find(triggerID);
@@ -1312,6 +1312,7 @@ FormID Source::FindWorldTrigger(RE::TESObjectREFR* a_obj, const WorldTriggers& t
             }
 
             for (const auto& e : it->second) {
+                if (e.refid == a_obj->GetFormID() && form->Is(RE::FormType::Keyword, RE::FormType::Faction)) continue;
                 const float dx = e.pos.x - originPos.x;
                 const float dy = e.pos.y - originPos.y;
                 const float dz = e.pos.z - originPos.z;
