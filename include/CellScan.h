@@ -25,6 +25,8 @@ public:
 
     [[nodiscard]] CachePtr GetCache() const;
 
+    static bool MatchesTrigger(RE::TESObjectREFR* ref, RE::TESForm* trigger);
+
 private:
     struct WorkItem {
         std::uint64_t gen{0};

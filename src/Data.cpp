@@ -1302,8 +1302,12 @@ FormID Source::FindWorldTrigger(RE::TESObjectREFR* a_obj, const WorldTriggers& t
                 return (*perk)->GetFormID();
             }
         } else {
+            const auto form = std::get<RE::TESForm*>(trigger);
+            const auto triggerID = form->GetFormID();
+            if (form->Is(RE::FormType::ArtObject, RE::FormType::EffectShader, RE::FormType::Keyword,
+                         RE::FormType::MagicEffect, RE::FormType::Faction) &&
+                CellScanner::MatchesTrigger(a_obj, form)) return triggerID;
             if (!cache) continue;
-            const auto triggerID = std::get<RE::TESForm*>(trigger)->GetFormID();
             const auto it = cache->byTrigger.find(triggerID);
             if (it == cache->byTrigger.end()) {
                 continue;

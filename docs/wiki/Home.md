@@ -243,7 +243,7 @@ formsLists:
         magnitude: 0
 ```
 
-A reference is an individual object or actor in the game world. Put the Art Object's EditorID or FormID in `FormEditorID`; AoT checks which references have it attached, then applies the usual proximity check. The evolving item itself can match. These checks require world-item evolution and do not check effects or properties on inventory owners.
+A reference is an individual object or actor in the game world. Put the Art Object's EditorID or FormID in `FormEditorID`; AoT checks which references have it attached, then applies the usual proximity check. AoT checks the evolving item itself first; a matching effect or property on it counts as close without a distance check. These checks require world-item evolution and do not check effects or properties on inventory owners.
 
 The same field accepts these types:
 

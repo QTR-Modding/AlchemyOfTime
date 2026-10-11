@@ -4,41 +4,38 @@
 #include "CLibUtilsQTR/FormReader.hpp"
 
 
-namespace {
-    bool MatchesTrigger(RE::TESObjectREFR* ref, RE::TESForm* trigger) {
-        switch (trigger->GetFormType()) {
-            case RE::FormType::ArtObject:
-                return RefStop::HasArtObject(ref, trigger->As<RE::BGSArtObject>());
-            case RE::FormType::EffectShader: {
-                bool found = false;
-                if (const auto processLists = RE::ProcessLists::GetSingleton()) {
-                    const auto handle = ref->CreateRefHandle();
-                    processLists->ForEachShaderEffect([&](RE::ShaderReferenceEffect* effect) {
-                        found = !effect->finished && effect->target == handle &&
-                                effect->effectData == trigger->As<RE::TESEffectShader>();
-                        return found ? RE::BSContainer::ForEachResult::kStop : RE::BSContainer::ForEachResult::kContinue;
-                    });
-                }
-                return found;
+bool CellScanner::MatchesTrigger(RE::TESObjectREFR* ref, RE::TESForm* trigger) {
+    switch (trigger->GetFormType()) {
+        case RE::FormType::ArtObject:
+            return RefStop::HasArtObject(ref, trigger->As<RE::BGSArtObject>());
+        case RE::FormType::EffectShader: {
+            bool found = false;
+            if (const auto processLists = RE::ProcessLists::GetSingleton()) {
+                const auto handle = ref->CreateRefHandle();
+                processLists->ForEachShaderEffect([&](RE::ShaderReferenceEffect* effect) {
+                    found = !effect->finished && effect->target == handle &&
+                            effect->effectData == trigger->As<RE::TESEffectShader>();
+                    return found ? RE::BSContainer::ForEachResult::kStop : RE::BSContainer::ForEachResult::kContinue;
+                });
             }
-            case RE::FormType::Keyword:
-                return ref->HasKeyword(trigger->As<RE::BGSKeyword>());
-            case RE::FormType::MagicEffect:
-                if (const auto actor = ref->As<RE::Actor>()) {
-                    return actor->HasMagicEffect(trigger->As<RE::EffectSetting>());
-                }
-                return false;
-            case RE::FormType::Faction:
-                if (const auto actor = ref->As<RE::Actor>()) {
-                    return actor->IsInFaction(trigger->As<RE::TESFaction>());
-                }
-                return false;
-            default:
-                return ref->GetObjectReference() == trigger;
+            return found;
         }
+        case RE::FormType::Keyword:
+            return ref->HasKeyword(trigger->As<RE::BGSKeyword>());
+        case RE::FormType::MagicEffect:
+            if (const auto actor = ref->As<RE::Actor>()) {
+                return actor->HasMagicEffect(trigger->As<RE::EffectSetting>());
+            }
+            return false;
+        case RE::FormType::Faction:
+            if (const auto actor = ref->As<RE::Actor>()) {
+                return actor->IsInFaction(trigger->As<RE::TESFaction>());
+            }
+            return false;
+        default:
+            return ref->GetObjectReference() == trigger;
     }
 }
-
 void CellScanner::RequestRefresh(const std::vector<Request>& requests) {
     const auto gen = requestedGeneration_.fetch_add(1, std::memory_order_acq_rel) + 1;
 
