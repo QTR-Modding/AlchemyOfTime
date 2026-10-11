@@ -11,7 +11,7 @@ void CellScanner::RequestRefresh(const std::vector<Request>& requests) {
         return;
     }
 
-    if ((work->bases->empty() && work->keywords.empty() && work->applied_effects.empty() && work->magic_effects.empty()) || work->refInfos->empty()) {
+    if ((work->bases->empty() && work->keywords.empty() && work->visual_effects.empty() && work->magic_effects.empty()) || work->refInfos->empty()) {
         Publish_(std::move(work->next));
         return;
     }
@@ -55,7 +55,7 @@ CellScanner::WorkItemPtr CellScanner::BuildWorkItem_(const std::uint64_t gen,
             if (const auto effect = form->As<RE::EffectSetting>()) {
                 work->magic_effects.insert(effect);
             } else if (std::ranges::contains(applied_effect_trigger_types, form->GetFormType())) {
-                work->applied_effects.insert(form);
+                work->visual_effects.insert(form);
             } else if (const auto keyword = form->As<RE::BGSKeyword>()) {
                 work->keywords.insert(keyword->GetFormID());
             } else if (const auto baseID = form->GetFormID(); baseID != 0) {
@@ -217,8 +217,8 @@ void CellScanner::RunScanTaskOnGameThread_(const WorkItemPtr& work) {
     if (!work->bases->empty() || !work->keywords.empty() || !work->magic_effects.empty()) {
         ScanCells_(cellsToScan, *work->bases, work->keywords, work->magic_effects, *work->next);
     }
-    if (!work->applied_effects.empty()) {
-        ScanAppliedEffects_(cellsToScan, work->applied_effects, *work->next);
+    if (!work->visual_effects.empty()) {
+        ScanAppliedEffects_(cellsToScan, work->visual_effects, *work->next);
     }
 
     if (IsStale_(work->gen)) {
