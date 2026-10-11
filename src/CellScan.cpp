@@ -140,6 +140,13 @@ void CellScanner::CollectCellsToScan_(const std::vector<RefInfo>& refInfos,
     }
 }
 
+void CellScanner::AddEntry_(const FormID triggerID, const RE::TESObjectREFR* ref, Cache& outCache) {
+    Entry e;
+    e.refid = ref->GetFormID();
+    e.pos = Utils::WorldObject::GetPosition(ref);
+    outCache.byTrigger[triggerID].push_back(e);
+}
+
 void CellScanner::ScanCells_(const std::unordered_set<RE::TESObjectCELL*>& cellsToScan,
                              const std::unordered_set<FormID>& basesOfInterest,
                              const std::unordered_set<FormID>& keywordsOfInterest, Cache& outCache) {
@@ -160,20 +167,14 @@ void CellScanner::ScanCells_(const std::unordered_set<RE::TESObjectCELL*>& cells
 
             const auto baseID = base->GetFormID();
             if (basesOfInterest.contains(baseID)) {
-                Entry e;
-                e.refid = ref->GetFormID();
-                e.pos = Utils::WorldObject::GetPosition(ref);
-                outCache.byTrigger[baseID].push_back(e);
+                AddEntry_(baseID, ref, outCache);
             }
 
             if (!keywordsOfInterest.empty()) {
                 if (const auto keywords = base->As<RE::BGSKeywordForm>()) {
                     for (const auto keyword : keywords->GetKeywords()) {
                         if (!keyword || !keywordsOfInterest.contains(keyword->GetFormID())) continue;
-                        Entry e;
-                        e.refid = ref->GetFormID();
-                        e.pos = Utils::WorldObject::GetPosition(ref);
-                        outCache.byTrigger[keyword->GetFormID()].push_back(e);
+                        AddEntry_(keyword->GetFormID(), ref, outCache);
                     }
                 }
             }
@@ -192,10 +193,7 @@ void CellScanner::ScanAppliedEffects_(const std::unordered_set<RE::TESObjectCELL
         if (!ref || !Utils::WorldObject::IsActive(ref.get()) ||
             !cellsToScan.contains(ref->GetParentCell())) continue;
 
-        Entry e;
-        e.refid = ref->GetFormID();
-        e.pos = Utils::WorldObject::GetPosition(ref.get());
-        outCache.byTrigger[form->GetFormID()].push_back(e);
+        AddEntry_(form->GetFormID(), ref.get(), outCache);
     }
 }
 

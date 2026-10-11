@@ -56,6 +56,8 @@ private:
     static void CollectCellsToScan_(const std::vector<RefInfo>& refInfos,
                                     std::unordered_set<RE::TESObjectCELL*>& cellsToScan);
 
+    static void AddEntry_(FormID triggerID, const RE::TESObjectREFR* ref, Cache& outCache);
+
     static void ScanCells_(const std::unordered_set<RE::TESObjectCELL*>& cellsToScan,
                            const std::unordered_set<FormID>& basesOfInterest,
                            const std::unordered_set<FormID>& keywordsOfInterest, Cache& outCache);
