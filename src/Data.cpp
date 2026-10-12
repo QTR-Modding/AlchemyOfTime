@@ -24,7 +24,7 @@ namespace {
             const auto trigger = RE::TESForm::LookupByID(trigger_fid);
             if (!trigger) continue;
 
-            if (trigger->Is(RE::FormType::Location, RE::FormType::Perk, RE::FormType::MagicEffect, RE::FormType::Faction) ||
+            if (trigger->Is(RE::FormType::Location, RE::FormType::Perk, RE::FormType::Faction) ||
                 std::ranges::contains(CellScanner::applied_effect_trigger_types, trigger->GetFormType())) {
                 if (phase == UpdatePhase::kCatchUp) {
                     if (trigger_fid == instance.GetDelayerFormID()) return trigger_fid;

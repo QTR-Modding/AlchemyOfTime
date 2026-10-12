@@ -1191,7 +1191,7 @@ void Manager::UpdateQueuedInventory(const QueueInfo& queue_info) {
 void Manager::RestoreInventoryWatches() {
     const auto needs_watch = [](const Source::WorldTriggers& triggers) {
         return std::ranges::any_of(triggers.ordered, [](const auto& trigger) {
-            if (const auto form = std::get_if<RE::TESForm*>(&trigger)) return (*form)->Is(RE::FormType::MagicEffect, RE::FormType::Faction) ||
+            if (const auto form = std::get_if<RE::TESForm*>(&trigger)) return (*form)->Is(RE::FormType::Faction) ||
                 std::ranges::contains(CellScanner::applied_effect_trigger_types, (*form)->GetFormType());
             return std::holds_alternative<RE::BGSLocation*>(trigger) ||
                    std::holds_alternative<RE::BGSPerk*>(trigger);

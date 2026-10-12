@@ -11,9 +11,9 @@ void CellScanner::RequestRefresh(const std::vector<Request>& requests, const boo
         return;
     }
 
-    work->scan_visual_effects = collect_visual_effects || !work->visual_effects.empty();
-    if (!work->scan_visual_effects &&
-        ((work->bases->empty() && work->keywords.empty() && work->visual_effects.empty() && work->magic_effects.empty() && work->factions.empty()) || work->refInfos->empty())) {
+    work->scan_visual_effects = collect_visual_effects || !work->world_visual_effects.empty();
+    if (!work->scan_visual_effects && work->bases->empty() && work->keywords.empty() &&
+        work->magic_effects.empty() && work->factions.empty()) {
         Publish_(std::move(work->next));
         return;
     }
@@ -57,7 +57,7 @@ CellScanner::WorkItemPtr CellScanner::BuildWorkItem_(const std::uint64_t gen,
             if (const auto effect = form->As<RE::EffectSetting>()) {
                 work->magic_effects.insert(effect);
             } else if (std::ranges::contains(applied_effect_trigger_types, form->GetFormType())) {
-                work->visual_effects.insert(form);
+                work->world_visual_effects.insert(form);
             } else if (const auto keyword = form->As<RE::BGSKeyword>()) {
                 work->keywords.insert(keyword->GetFormID());
             } else if (const auto faction = form->As<RE::TESFaction>()) {
@@ -212,16 +212,20 @@ void CellScanner::ScanCells_(const std::unordered_set<RE::TESObjectCELL*>& cells
 
 void CellScanner::ScanAppliedEffects_(const std::unordered_set<RE::TESObjectCELL*>& cellsToScan,
                                       const std::unordered_set<RE::TESForm*>& forms, Cache& outCache) {
-    for (const auto& [form, handle] : Utils::WorldObject::CollectAppliedEffectTargets()) {
-        if (!handle) continue;
-        outCache.visual_effects[handle].insert(form);
-        if (!forms.contains(form)) continue;
+    outCache.visual_effects = Utils::WorldObject::CollectAppliedEffectTargets();
+    if (forms.empty()) return;
 
-        const auto ref = handle.get();
-        if (!ref || !Utils::WorldObject::IsActive(ref.get()) ||
-            !cellsToScan.contains(ref->GetParentCell())) continue;
-
-        AddEntry_(form->GetFormID(), ref.get(), outCache);
+    for (const auto& [handle, effects] : outCache.visual_effects) {
+        RE::NiPointer<RE::TESObjectREFR> ref;
+        for (const auto form : effects) {
+            if (!forms.contains(form)) continue;
+            if (!ref) {
+                ref = handle.get();
+                if (!ref || !Utils::WorldObject::IsActive(ref.get()) ||
+                    !cellsToScan.contains(ref->GetParentCell())) break;
+            }
+            AddEntry_(form->GetFormID(), ref.get(), outCache);
+        }
     }
 }
 
@@ -237,7 +241,7 @@ void CellScanner::RunScanTaskOnGameThread_(const WorkItemPtr& work) {
         ScanCells_(cellsToScan, *work->bases, work->keywords, work->magic_effects, work->factions, *work->next);
     }
     if (work->scan_visual_effects) {
-        ScanAppliedEffects_(cellsToScan, work->visual_effects, *work->next);
+        ScanAppliedEffects_(cellsToScan, work->world_visual_effects, *work->next);
     }
 
     if (IsStale_(work->gen)) {

@@ -422,7 +422,7 @@ bool Utils::WorldObject::MatchesFaction(RE::TESObjectREFR* ref, RE::TESFaction* 
     return ref->GetFactionOwner() == faction;
 }
 
-std::vector<std::pair<RE::TESForm*, RE::ObjectRefHandle>> Utils::WorldObject::CollectAppliedEffectTargets() {
+std::unordered_map<RE::ObjectRefHandle, std::unordered_set<RE::TESForm*>, RE::BSCRC32<RE::ObjectRefHandle>> Utils::WorldObject::CollectAppliedEffectTargets() {
     std::vector<std::pair<RE::TESForm*, RE::ObjectRefHandle>> targets;
     if (const auto processLists = RE::ProcessLists::GetSingleton()) {
         processLists->ForEachMagicTempEffect([&](RE::BSTempEffect* tempEffect) {
@@ -436,7 +436,11 @@ std::vector<std::pair<RE::TESForm*, RE::ObjectRefHandle>> Utils::WorldObject::Co
             return RE::BSContainer::ForEachResult::kContinue;
         });
     }
-    return targets;
+    std::unordered_map<RE::ObjectRefHandle, std::unordered_set<RE::TESForm*>, RE::BSCRC32<RE::ObjectRefHandle>> effects;
+    for (const auto& [form, handle] : targets) {
+        if (handle) effects[handle].insert(form);
+    }
+    return effects;
 }
 
 std::unordered_set<RE::TESForm*> Utils::WorldObject::CollectCachedVisualEffects(RE::TESObjectREFR* ref) {

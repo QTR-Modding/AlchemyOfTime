@@ -35,7 +35,7 @@ private:
         // Built off-thread
         std::shared_ptr<Cache> next;
         std::shared_ptr<std::unordered_set<FormID>> bases;
-        std::unordered_set<RE::TESForm*> visual_effects;
+        std::unordered_set<RE::TESForm*> world_visual_effects;
         bool scan_visual_effects{false};
         std::unordered_set<RE::EffectSetting*> magic_effects;
         std::unordered_set<FormID> keywords;

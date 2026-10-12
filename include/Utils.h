@@ -125,7 +125,7 @@ namespace Utils {
 
         void SwapObjects(RE::TESObjectREFR* a_from, RE::TESBoundObject* a_to, bool apply_havok = true);
 
-        std::vector<std::pair<RE::TESForm*, RE::ObjectRefHandle>> CollectAppliedEffectTargets();
+        std::unordered_map<RE::ObjectRefHandle, std::unordered_set<RE::TESForm*>, RE::BSCRC32<RE::ObjectRefHandle>> CollectAppliedEffectTargets();
 
         std::unordered_set<RE::TESForm*> CollectCachedVisualEffects(RE::TESObjectREFR* ref);
 
