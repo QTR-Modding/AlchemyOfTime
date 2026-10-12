@@ -5,8 +5,7 @@
 
 
 constexpr auto poll_formtypes =
-    std::array{RE::FormType::Location, RE::FormType::Perk, RE::FormType::MagicEffect,
-                                RE::FormType::Faction,  RE::FormType::Keyword};
+    std::array{RE::FormType::Location, RE::FormType::Perk, RE::FormType::MagicEffect, RE::FormType::Faction};
 
 
 template <class T>
