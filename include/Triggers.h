@@ -46,25 +46,9 @@ FormID GetTriggerInInventory(std::ranges::input_range auto&& trigger_ids,
             }
 
             auto& watch = *queue_info.inventory_watch;
-            // ReSharper disable once CppDependentTemplateWithoutTemplateKeyword
-            if (const auto location = trigger->As<RE::BGSLocation>()) {
-                watch.locations.insert(location);
-                if (Utils::IsInLocation(location, watch.last_location)) return a_trigger_id;
-                // ReSharper disable once CppDependentTemplateWithoutTemplateKeyword
-            } else if (const auto perk = trigger->As<RE::BGSPerk>()) {
-                const auto [it, inserted] = watch.perks.try_emplace(perk);
-                if (inserted) it->second = perk->perkConditions.IsTrue(owner, owner);
-                if (it->second) return a_trigger_id;
-            } else if (const auto magicEffect = trigger->As<RE::EffectSetting>()) {
-                const auto [it, inserted] = watch.magic_effects.try_emplace(magicEffect);
-                if (inserted) it->second = inventory.HasMagicEffect(owner, magicEffect);
-                if (it->second) return a_trigger_id;
-            } else if (const auto faction = trigger->As<RE::TESFaction>()) {
-                const auto [it, inserted] = watch.factions.try_emplace(faction);
-                if (inserted) it->second = Utils::WorldObject::MatchesFaction(owner, faction);
-                if (it->second) return a_trigger_id;
+            if (watch.Eval(trigger, owner, inventory)) {
+                return a_trigger_id;
             }
-            // ReSharper disable once CppDependentTemplateWithoutTemplateKeyword
         } else if (const auto keyword = trigger->As<RE::BGSKeyword>()) {
             if (inventory.HasKeyword(keyword)) return a_trigger_id;
         } else if (const auto obj = trigger->As<RE::TESBoundObject>()) {

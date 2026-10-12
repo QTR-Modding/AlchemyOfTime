@@ -1,16 +1,31 @@
 #pragma once
 #include <unordered_set>
 #include "CustomObjects.h"
+#include "Utils.h"
+
+template <typename T>
+struct InventoryWatchList {
+    std::unordered_map<T*, bool> list;
+
+    template <typename Evaluate>
+    bool Eval(T* a_trigger, Evaluate&& evaluate) {
+        const auto [it, inserted] = list.try_emplace(a_trigger);
+        if (inserted) it->second = evaluate();
+        return it->second;
+    }
+};
 
 // it contains the results from the last check/loop so it can compare it in the next update when the new info comes
 struct InventoryWatch {  // inventory owner watch
     RE::BGSLocation* last_location = nullptr;
     std::unordered_set<RE::BGSLocation*> locations;
-    std::unordered_map<RE::BGSPerk*, bool> perks;
-    std::unordered_map<RE::EffectSetting*, bool> magic_effects;
-    std::unordered_map<RE::TESFaction*, bool> factions;
+    InventoryWatchList<RE::BGSPerk> perks;
+    InventoryWatchList<RE::EffectSetting> magic_effects;
+    InventoryWatchList<RE::TESFaction> factions;
 
     [[nodiscard]] bool HasChanged(RE::TESObjectREFR* owner);
+    bool Eval(RE::TESForm* trigger, RE::TESObjectREFR* owner,
+              const Utils::Inventory::Snapshot& inventory);
 };
 
 
