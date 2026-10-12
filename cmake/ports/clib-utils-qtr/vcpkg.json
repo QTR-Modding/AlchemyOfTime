@@ -1,6 +1,6 @@
 {
   "name": "clib-utils-qtr",
-  "version-string": "2.6.0",
+  "version-string": "2.7.1",
   "homepage": "https://github.com/QTR-Modding/CLibUtilsQTR",
   "license": "MIT",
   "default-features": [
@@ -17,7 +17,7 @@
       ]
     },
     "json": {
-      "description": "Game-independent JSON preset fields and getters.",
+      "description": "Game-independent JSON preset fields, getters, and translations.",
       "dependencies": [
         "rapidjson"
       ]

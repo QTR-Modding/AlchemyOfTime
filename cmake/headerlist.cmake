@@ -14,4 +14,9 @@ set(headers ${headers}
 	include/Lorebox.h
 	include/CellScan.h
 	include/Queue.h
+	include/InventoryWatch.h
+	include/Triggers.h
+	include/WorldUpdates.h
+	include/Stages.h
+	include/Presets.h
 )
