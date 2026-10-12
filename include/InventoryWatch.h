@@ -30,6 +30,8 @@ struct InventoryWatch {  // inventory owner watch
     InventoryWatchList<RE::BGSPerk> perks;
     InventoryWatchList<RE::EffectSetting> magic_effects;
     InventoryWatchList<RE::TESFaction> factions;
+    InventoryWatchList<RE::BGSArtObject> art_objects;
+    InventoryWatchList<RE::TESEffectShader> effect_shaders;
 
     [[nodiscard]] bool HasChanged(RE::TESObjectREFR* owner);
     bool Eval(RE::TESForm* trigger, RE::TESObjectREFR* owner,

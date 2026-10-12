@@ -5,7 +5,8 @@
 
 
 constexpr auto poll_formtypes =
-    std::array{RE::FormType::Location, RE::FormType::Perk, RE::FormType::MagicEffect, RE::FormType::Faction};
+    std::array{RE::FormType::Location, RE::FormType::Perk, RE::FormType::MagicEffect, RE::FormType::Faction,
+               RE::FormType::ArtObject, RE::FormType::EffectShader};
 
 
 FormID GetTriggerInInventory(std::ranges::input_range auto&& trigger_ids,

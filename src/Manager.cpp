@@ -3,6 +3,7 @@
 #include "CellScan.h"
 #include "Hooks.h"
 #include "Queue.h"
+#include "Triggers.h"
 #include "CLibUtilsQTR/DebugLocks.hpp"
 
 
@@ -1184,9 +1185,9 @@ void Manager::UpdateQueuedInventory(const QueueInfo& queue_info) {
 void Manager::RestoreInventoryWatches() {
     const auto needs_watch = [](const Source::WorldTriggers& triggers) {
         return std::ranges::any_of(triggers.ordered, [](const auto& trigger) {
-            if (const auto form = std::get_if<RE::TESForm*>(&trigger)) return (*form)->Is(RE::FormType::MagicEffect, RE::FormType::Faction);
-            return std::holds_alternative<RE::BGSLocation*>(trigger) ||
-                   std::holds_alternative<RE::BGSPerk*>(trigger);
+            return std::visit([](const auto* form) {
+                return std::ranges::contains(poll_formtypes, form->GetFormType());
+            }, trigger);
         });
     };
     for (const auto& source : sources | std::views::values) {

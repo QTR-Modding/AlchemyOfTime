@@ -421,6 +421,11 @@ bool Utils::WorldObject::MatchesFaction(RE::TESObjectREFR* ref, const RE::TESFac
     return ref->GetFactionOwner() == faction;
 }
 
+bool Utils::WorldObject::HasTempEffect(RE::TESObjectREFR*, RE::TESForm*) {
+    // Placeholder: temp-effect detection will be implemented separately.
+    return false;
+}
+
 std::vector<std::pair<RE::TESForm*, RE::ObjectRefHandle>> Utils::WorldObject::CollectAppliedEffectTargets(
     const std::unordered_set<RE::TESForm*>& forms) {
     std::vector<std::pair<RE::TESForm*, RE::ObjectRefHandle>> targets;

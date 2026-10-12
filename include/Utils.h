@@ -121,6 +121,8 @@ namespace Utils {
 
         bool MatchesFaction(RE::TESObjectREFR* ref, const RE::TESFaction* faction);
 
+        bool HasTempEffect(RE::TESObjectREFR* ref, RE::TESForm* effect);
+
         RE::TESObjectREFR* DropObjectIntoTheWorld(RE::TESBoundObject* obj, Count count, bool player_owned = true);
 
         void SwapObjects(RE::TESObjectREFR* a_from, RE::TESBoundObject* a_to, bool apply_havok = true);
