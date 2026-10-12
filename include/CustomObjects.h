@@ -388,11 +388,8 @@ struct RefStop : QueueInfo {
     [[nodiscard]] RE::BSSoundHandle& GetSoundHandle() const;
 
     void RemoveTint();
-    void RemoveArtObject();
-    void RemoveShader();
+    void RemoveVisualEffects(bool art_objects = true, bool effect_shaders = true);
     void RemoveSound();
-
-    static bool HasArtObject(RE::TESObjectREFR* a_ref, const RE::BGSArtObject* a_art);
 
     void Update(const RefStop& other);
 

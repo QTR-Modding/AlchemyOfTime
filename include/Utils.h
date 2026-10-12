@@ -129,6 +129,9 @@ namespace Utils {
 
         std::unordered_set<RE::TESForm*> CollectCachedVisualEffects(RE::TESObjectREFR* ref);
 
+        void ScheduleVisualEffectRemoval(RE::TESObjectREFR* ref, const std::unordered_set<FormID>* art_objects,
+                                         const std::unordered_set<FormID>* effect_shaders, float delay);
+
         std::unordered_set<RE::EffectSetting*> CollectActiveMagicEffects(RE::TESObjectREFR* ref);
 
         bool IsPlacedObject(RE::TESObjectREFR* ref);

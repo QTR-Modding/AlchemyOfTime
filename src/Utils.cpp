@@ -449,6 +449,28 @@ std::unordered_set<RE::TESForm*> Utils::WorldObject::CollectCachedVisualEffects(
     return {};
 }
 
+void Utils::WorldObject::ScheduleVisualEffectRemoval(RE::TESObjectREFR* ref,
+                                                    const std::unordered_set<FormID>* art_objects,
+                                                    const std::unordered_set<FormID>* effect_shaders, const float delay) {
+    if (const auto processLists = RE::ProcessLists::GetSingleton()) {
+        const auto handle = ref->CreateRefHandle();
+        processLists->ForEachMagicTempEffect([&](RE::BSTempEffect* tempEffect) {
+            const auto effect = tempEffect->As<RE::ReferenceEffect>();
+            if (!effect || effect->target != handle || !(effect->lifetime < 0.f)) {
+                return RE::BSContainer::ForEachResult::kContinue;
+            }
+            if (const auto model = effect->As<RE::ModelReferenceEffect>();
+                art_objects && model && model->artObject && art_objects->contains(model->artObject->GetFormID())) {
+                effect->lifetime = effect->age + delay;
+            } else if (const auto shader = effect->As<RE::ShaderReferenceEffect>();
+                       effect_shaders && shader && shader->effectData && effect_shaders->contains(shader->effectData->GetFormID())) {
+                effect->lifetime = effect->age + delay;
+            }
+            return RE::BSContainer::ForEachResult::kContinue;
+        });
+    }
+}
+
 std::unordered_set<RE::EffectSetting*> Utils::WorldObject::CollectActiveMagicEffects(RE::TESObjectREFR* ref) {
     std::unordered_set<RE::EffectSetting*> effects;
     const auto target = ref->GetMagicTarget();
