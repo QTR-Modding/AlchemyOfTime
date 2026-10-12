@@ -368,6 +368,12 @@ bool InventoryWatch::HasChanged(RE::TESObjectREFR* owner) {
     for (const auto& [faction, matched] : factions) {
         if (Utils::WorldObject::MatchesFaction(owner, faction) != matched) return true;
     }
+    if (!visual_effects.empty()) {
+        const auto active = Utils::WorldObject::CollectCachedVisualEffects(owner);
+        for (const auto& [effect, matched] : visual_effects) {
+            if (active.contains(effect) != matched) return true;
+        }
+    }
     return false;
 }
 

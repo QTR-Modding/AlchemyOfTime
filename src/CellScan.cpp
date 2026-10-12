@@ -3,7 +3,7 @@
 #include "Utils.h"
 
 
-void CellScanner::RequestRefresh(const std::vector<Request>& requests) {
+void CellScanner::RequestRefresh(const std::vector<Request>& requests, const bool collect_visual_effects) {
     const auto gen = requestedGeneration_.fetch_add(1, std::memory_order_acq_rel) + 1;
 
     auto work = BuildWorkItem_(gen, requests);
@@ -11,7 +11,9 @@ void CellScanner::RequestRefresh(const std::vector<Request>& requests) {
         return;
     }
 
-    if ((work->bases->empty() && work->keywords.empty() && work->visual_effects.empty() && work->magic_effects.empty() && work->factions.empty()) || work->refInfos->empty()) {
+    work->scan_visual_effects = collect_visual_effects || !work->visual_effects.empty();
+    if (!work->scan_visual_effects &&
+        ((work->bases->empty() && work->keywords.empty() && work->visual_effects.empty() && work->magic_effects.empty() && work->factions.empty()) || work->refInfos->empty())) {
         Publish_(std::move(work->next));
         return;
     }
@@ -210,7 +212,11 @@ void CellScanner::ScanCells_(const std::unordered_set<RE::TESObjectCELL*>& cells
 
 void CellScanner::ScanAppliedEffects_(const std::unordered_set<RE::TESObjectCELL*>& cellsToScan,
                                       const std::unordered_set<RE::TESForm*>& forms, Cache& outCache) {
-    for (const auto& [form, handle] : Utils::WorldObject::CollectAppliedEffectTargets(forms)) {
+    for (const auto& [form, handle] : Utils::WorldObject::CollectAppliedEffectTargets()) {
+        if (!handle) continue;
+        outCache.visual_effects[handle].insert(form);
+        if (!forms.contains(form)) continue;
+
         const auto ref = handle.get();
         if (!ref || !Utils::WorldObject::IsActive(ref.get()) ||
             !cellsToScan.contains(ref->GetParentCell())) continue;
@@ -230,7 +236,7 @@ void CellScanner::RunScanTaskOnGameThread_(const WorkItemPtr& work) {
     if (!work->bases->empty() || !work->keywords.empty() || !work->magic_effects.empty() || !work->factions.empty()) {
         ScanCells_(cellsToScan, *work->bases, work->keywords, work->magic_effects, work->factions, *work->next);
     }
-    if (!work->visual_effects.empty()) {
+    if (work->scan_visual_effects) {
         ScanAppliedEffects_(cellsToScan, work->visual_effects, *work->next);
     }
 

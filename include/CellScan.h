@@ -17,13 +17,14 @@ public:
     struct Cache {
         std::uint64_t generation{0};
         std::unordered_map<FormID, std::vector<Entry>> byTrigger;
+        std::unordered_map<RE::ObjectRefHandle, std::unordered_set<RE::TESForm*>, RE::BSCRC32<RE::ObjectRefHandle>> visual_effects;
     };
 
     using CachePtr = std::shared_ptr<const Cache>;
 
     using Request = std::pair<RefInfo, std::vector<RE::TESForm*>>;
 
-    void RequestRefresh(const std::vector<Request>& requests);
+    void RequestRefresh(const std::vector<Request>& requests, bool collect_visual_effects = false);
 
     [[nodiscard]] CachePtr GetCache() const;
 
@@ -35,6 +36,7 @@ private:
         std::shared_ptr<Cache> next;
         std::shared_ptr<std::unordered_set<FormID>> bases;
         std::unordered_set<RE::TESForm*> visual_effects;
+        bool scan_visual_effects{false};
         std::unordered_set<RE::EffectSetting*> magic_effects;
         std::unordered_set<FormID> keywords;
         std::unordered_set<RE::TESFaction*> factions;

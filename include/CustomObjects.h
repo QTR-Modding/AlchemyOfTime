@@ -336,6 +336,7 @@ struct InventoryWatch { // inventory owner watch
     std::unordered_map<RE::BGSPerk*, bool> perks;
     std::unordered_map<RE::EffectSetting*, bool> magic_effects;
     std::unordered_map<RE::TESFaction*, bool> factions;
+    std::unordered_map<RE::TESForm*, bool> visual_effects;
 
     [[nodiscard]] bool HasChanged(RE::TESObjectREFR* owner);
 };
@@ -346,7 +347,8 @@ struct QueueInfo {
         kLocation = 1u << 1,
         kPerk = 1u << 2,
         kMagicEffect = 1u << 3,
-        kFaction = 1u << 4
+        kFaction = 1u << 4,
+        kVisualEffect = 1u << 5
     };
     RefInfo ref_info;
     REX::EnumSet<UpdateFlag> update_flags;

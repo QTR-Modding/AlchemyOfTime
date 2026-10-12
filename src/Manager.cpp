@@ -506,7 +506,9 @@ void Manager::UpdateLoop() {
     auto ref_stops_copy = GetRefStops();
 
     const auto scanReq = BuildCellScanRequests_(ref_stops_copy);
-    CellScanner::GetSingleton()->RequestRefresh(scanReq);
+    CellScanner::GetSingleton()->RequestRefresh(scanReq, std::ranges::any_of(ref_stops_copy, [](const auto& queue_info) {
+        return queue_info.update_flags.any(QueueInfo::UpdateFlag::kVisualEffect);
+    }));
 
     float curr_time = -1.0f;
     if (const auto cal = RE::Calendar::GetSingleton()) {
@@ -1161,7 +1163,7 @@ void Manager::UpdateQueuedRef(const QueueInfo& queue_info, const float curr_time
     if (queue_info.update_flags.any(QueueInfo::UpdateFlag::kWorldObject)) {
         UpdateQueuedWO(queue_info.ref_info, curr_time);
     }
-    if (queue_info.update_flags.any(QueueInfo::UpdateFlag::kLocation, QueueInfo::UpdateFlag::kPerk, QueueInfo::UpdateFlag::kMagicEffect, QueueInfo::UpdateFlag::kFaction)) {
+    if (queue_info.update_flags.any(QueueInfo::UpdateFlag::kLocation, QueueInfo::UpdateFlag::kPerk, QueueInfo::UpdateFlag::kMagicEffect, QueueInfo::UpdateFlag::kFaction, QueueInfo::UpdateFlag::kVisualEffect)) {
         UpdateQueuedInventory(queue_info);
     }
 }
@@ -1189,7 +1191,8 @@ void Manager::UpdateQueuedInventory(const QueueInfo& queue_info) {
 void Manager::RestoreInventoryWatches() {
     const auto needs_watch = [](const Source::WorldTriggers& triggers) {
         return std::ranges::any_of(triggers.ordered, [](const auto& trigger) {
-            if (const auto form = std::get_if<RE::TESForm*>(&trigger)) return (*form)->Is(RE::FormType::MagicEffect, RE::FormType::Faction);
+            if (const auto form = std::get_if<RE::TESForm*>(&trigger)) return (*form)->Is(RE::FormType::MagicEffect, RE::FormType::Faction) ||
+                std::ranges::contains(CellScanner::applied_effect_trigger_types, (*form)->GetFormType());
             return std::holds_alternative<RE::BGSLocation*>(trigger) ||
                    std::holds_alternative<RE::BGSPerk*>(trigger);
         });

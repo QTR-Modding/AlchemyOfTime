@@ -125,8 +125,9 @@ namespace Utils {
 
         void SwapObjects(RE::TESObjectREFR* a_from, RE::TESBoundObject* a_to, bool apply_havok = true);
 
-        std::vector<std::pair<RE::TESForm*, RE::ObjectRefHandle>> CollectAppliedEffectTargets(
-            const std::unordered_set<RE::TESForm*>& forms);
+        std::vector<std::pair<RE::TESForm*, RE::ObjectRefHandle>> CollectAppliedEffectTargets();
+
+        std::unordered_set<RE::TESForm*> CollectCachedVisualEffects(RE::TESObjectREFR* ref);
 
         std::unordered_set<RE::EffectSetting*> CollectActiveMagicEffects(RE::TESObjectREFR* ref);
 
@@ -142,9 +143,11 @@ namespace Utils {
             InvMap items;
             mutable std::optional<std::unordered_set<RE::BGSKeyword*>> keywords;
             mutable std::optional<std::unordered_set<RE::EffectSetting*>> magic_effects;
+            mutable std::optional<std::unordered_set<RE::TESForm*>> visual_effects;
 
             bool HasKeyword(RE::BGSKeyword* keyword) const;
             bool HasMagicEffect(RE::TESObjectREFR* owner, RE::EffectSetting* effect) const;
+            bool HasVisualEffect(RE::TESObjectREFR* owner, RE::TESForm* effect) const;
         };
 
         bool IsQuestItem(FormID formid, const InvMap& a_inv);
