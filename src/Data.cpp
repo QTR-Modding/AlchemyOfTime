@@ -925,11 +925,11 @@ void Source::SetDelayOfInstance(StageInstance& instance, const UpdateTime time, 
     }
 
     if (const auto transformer_best =
-        GetTriggerInInventory(settings.transformers, settings.transformer_allowed_stages,
+            GetTriggerInInventory(settings.transformers | std::views::keys, settings.transformer_allowed_stages,
                               settings.transformer_containers, a_inv, queue_info, instance, time.phase)) {
         SetDelayOfInstance(instance, time.hours, transformer_best);
     } else if (const auto delayer_best =
-        GetTriggerInInventory(settings.delayers, settings.delayer_allowed_stages,
+                   GetTriggerInInventory(settings.delayers | std::views::keys, settings.delayer_allowed_stages,
                               settings.delayer_containers, a_inv, queue_info, instance, time.phase)) {
         SetDelayOfInstance(instance, time.hours, delayer_best);
     } else {
