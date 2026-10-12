@@ -63,7 +63,7 @@ namespace {
                 } else {
                     queue_info.update_flags.set(QueueInfo::UpdateFlag::kVisualEffect);
                     const auto [it, inserted] = watch.visual_effects.try_emplace(trigger);
-                    if (inserted) it->second = CellScanner::GetSingleton()->GetCache()->HasInventoryEffect(owner->GetHandle(), trigger);
+                    if (inserted) it->second = Utils::WorldObject::HasCachedAppliedEffect(owner, trigger);
                     if (it->second) return trigger_fid;
                 }
                 // ReSharper disable once CppDependentTemplateWithoutTemplateKeyword
@@ -1336,6 +1336,7 @@ FormID Source::FindWorldTrigger(RE::TESObjectREFR* a_obj, const WorldTriggers& t
             }
 
             for (const auto& e : it->second) {
+                if (!e.world_candidate) continue;
                 if (appliedEffect && e.refid == a_obj->GetFormID()) return triggerID;
                 const float dx = e.pos.x - originPos.x;
                 const float dy = e.pos.y - originPos.y;

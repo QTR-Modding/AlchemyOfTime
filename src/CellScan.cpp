@@ -12,7 +12,7 @@ void CellScanner::RequestRefresh(const std::vector<Request>& requests, const std
     }
 
     if (((work->bases->empty() && work->keywords.empty() && work->visual_effects.empty() && work->magic_effects.empty() && work->factions.empty()) || work->refInfos->empty()) &&
-        work->inventory_effects.empty()) {
+        work->inventory_owners.empty()) {
         Publish_(std::move(work->next));
         return;
     }
@@ -70,8 +70,8 @@ CellScanner::WorkItemPtr CellScanner::BuildWorkItem_(const std::uint64_t gen,
 
     for (const auto& inventory : inventories) {
         if (inventory.update_flags.none(QueueInfo::UpdateFlag::kVisualEffect)) continue;
-        auto& forms = work->inventory_effects[inventory.ref_info.ref_handle];
-        for (const auto form : inventory.inventory_watch->visual_effects | std::views::keys) forms.insert(form);
+        work->inventory_owners.insert(inventory.ref_info.ref_handle);
+        for (const auto form : inventory.inventory_watch->visual_effects | std::views::keys) work->visual_effects.insert(form);
     }
 
     return work;
@@ -152,10 +152,12 @@ void CellScanner::CollectCellsToScan_(const std::vector<RefInfo>& refInfos,
     }
 }
 
-void CellScanner::AddEntry_(const FormID triggerID, const RE::TESObjectREFR* ref, Cache& outCache) {
+void CellScanner::AddEntry_(const FormID triggerID, const RE::TESObjectREFR* ref, Cache& outCache,
+                            const bool world_candidate) {
     Entry e;
     e.refid = ref->GetFormID();
     e.pos = Utils::WorldObject::GetPosition(ref);
+    e.world_candidate = world_candidate;
     outCache.byTrigger[triggerID].push_back(e);
 }
 
@@ -218,20 +220,16 @@ void CellScanner::ScanCells_(const std::unordered_set<RE::TESObjectCELL*>& cells
 
 void CellScanner::ScanAppliedEffects_(const std::unordered_set<RE::TESObjectCELL*>& cellsToScan,
                                       const std::unordered_set<RE::TESForm*>& forms,
-                                      const InventoryEffects& inventories, Cache& outCache) {
-    auto interests = forms;
-    for (const auto& [owner, effects] : inventories) interests.insert_range(effects);
-    for (const auto& [form, handle] : Utils::WorldObject::CollectAppliedEffectTargets(interests)) {
+                                      const std::unordered_set<RE::ObjectRefHandle, RE::BSCRC32<RE::ObjectRefHandle>>& inventories,
+                                      Cache& outCache) {
+    for (const auto& [form, handle] : Utils::WorldObject::CollectAppliedEffectTargets(forms)) {
         const auto ref = handle.get();
         if (!ref) continue;
 
-        if (const auto it = inventories.find(handle); it != inventories.end() && it->second.contains(form)) {
-            outCache.inventory_effects[handle].insert(form);
-        }
-        if (!forms.contains(form) || !Utils::WorldObject::IsActive(ref.get()) ||
-            !cellsToScan.contains(ref->GetParentCell())) continue;
+        const bool world_candidate = Utils::WorldObject::IsActive(ref.get()) && cellsToScan.contains(ref->GetParentCell());
+        if (!world_candidate && !inventories.contains(handle)) continue;
 
-        AddEntry_(form->GetFormID(), ref.get(), outCache);
+        AddEntry_(form->GetFormID(), ref.get(), outCache, world_candidate);
     }
 }
 
@@ -246,8 +244,8 @@ void CellScanner::RunScanTaskOnGameThread_(const WorkItemPtr& work) {
     if (!work->bases->empty() || !work->keywords.empty() || !work->magic_effects.empty() || !work->factions.empty()) {
         ScanCells_(cellsToScan, *work->bases, work->keywords, work->magic_effects, work->factions, *work->next);
     }
-    if (!work->visual_effects.empty() || !work->inventory_effects.empty()) {
-        ScanAppliedEffects_(cellsToScan, work->visual_effects, work->inventory_effects, *work->next);
+    if (!work->visual_effects.empty()) {
+        ScanAppliedEffects_(cellsToScan, work->visual_effects, work->inventory_owners, *work->next);
     }
 
     if (IsStale_(work->gen)) {

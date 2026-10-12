@@ -128,6 +128,8 @@ namespace Utils {
         std::vector<std::pair<RE::TESForm*, RE::ObjectRefHandle>> CollectAppliedEffectTargets(
             const std::unordered_set<RE::TESForm*>& forms);
 
+        bool HasCachedAppliedEffect(RE::TESObjectREFR* ref, RE::TESForm* effect);
+
         std::unordered_set<RE::EffectSetting*> CollectActiveMagicEffects(RE::TESObjectREFR* ref);
 
         bool IsPlacedObject(RE::TESObjectREFR* ref);

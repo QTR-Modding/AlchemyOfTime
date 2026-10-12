@@ -12,20 +12,12 @@ public:
     struct Entry {
         RefID refid{0};
         RE::NiPoint3 pos{};
+        bool world_candidate{true};
     };
-
-    using InventoryEffects = std::unordered_map<RE::ObjectRefHandle, std::unordered_set<RE::TESForm*>,
-                                               RE::BSCRC32<RE::ObjectRefHandle>>;
 
     struct Cache {
         std::uint64_t generation{0};
         std::unordered_map<FormID, std::vector<Entry>> byTrigger;
-        InventoryEffects inventory_effects;
-
-        bool HasInventoryEffect(RE::ObjectRefHandle owner, RE::TESForm* effect) const {
-            const auto it = inventory_effects.find(owner);
-            return it != inventory_effects.end() && it->second.contains(effect);
-        }
     };
 
     using CachePtr = std::shared_ptr<const Cache>;
@@ -44,7 +36,7 @@ private:
         std::shared_ptr<Cache> next;
         std::shared_ptr<std::unordered_set<FormID>> bases;
         std::unordered_set<RE::TESForm*> visual_effects;
-        InventoryEffects inventory_effects;
+        std::unordered_set<RE::ObjectRefHandle, RE::BSCRC32<RE::ObjectRefHandle>> inventory_owners;
         std::unordered_set<RE::EffectSetting*> magic_effects;
         std::unordered_set<FormID> keywords;
         std::unordered_set<RE::TESFaction*> factions;
@@ -69,7 +61,8 @@ private:
     static void CollectCellsToScan_(const std::vector<RefInfo>& refInfos,
                                     std::unordered_set<RE::TESObjectCELL*>& cellsToScan);
 
-    static void AddEntry_(FormID triggerID, const RE::TESObjectREFR* ref, Cache& outCache);
+    static void AddEntry_(FormID triggerID, const RE::TESObjectREFR* ref, Cache& outCache,
+                          bool world_candidate = true);
 
     static void ScanCells_(const std::unordered_set<RE::TESObjectCELL*>& cellsToScan,
                            const std::unordered_set<FormID>& basesOfInterest,
@@ -79,7 +72,8 @@ private:
 
     static void ScanAppliedEffects_(const std::unordered_set<RE::TESObjectCELL*>& cellsToScan,
                                     const std::unordered_set<RE::TESForm*>& forms,
-                                    const InventoryEffects& inventories, Cache& outCache);
+                                    const std::unordered_set<RE::ObjectRefHandle, RE::BSCRC32<RE::ObjectRefHandle>>& inventories,
+                                    Cache& outCache);
 
     void Publish_(std::shared_ptr<Cache> next);
 

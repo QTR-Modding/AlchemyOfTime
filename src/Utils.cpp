@@ -1,4 +1,5 @@
 #include "Utils.h"
+#include "CellScan.h"
 #include "CLibUtilsQTR/FormReader.hpp"
 #include "Settings.h"
 #include "CLibUtilsQTR/DrawDebug.hpp"
@@ -437,6 +438,14 @@ std::vector<std::pair<RE::TESForm*, RE::ObjectRefHandle>> Utils::WorldObject::Co
         });
     }
     return targets;
+}
+
+bool Utils::WorldObject::HasCachedAppliedEffect(RE::TESObjectREFR* ref, RE::TESForm* effect) {
+    const auto cache = CellScanner::GetSingleton()->GetCache();
+    const auto it = cache->byTrigger.find(effect->GetFormID());
+    return it != cache->byTrigger.end() && std::ranges::any_of(it->second, [id = ref->GetFormID()](const auto& entry) {
+        return entry.refid == id;
+    });
 }
 
 std::unordered_set<RE::EffectSetting*> Utils::WorldObject::CollectActiveMagicEffects(RE::TESObjectREFR* ref) {
