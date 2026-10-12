@@ -30,7 +30,7 @@ void RefStop::ApplyTint(const RE::TESObjectREFR* a_obj) {
 
 void RefStop::ApplyArtObject(RE::TESObjectREFR* a_ref, const float duration) {
     auto& art_object = features.art_object;
-    if (!art_object.id) return RemoveArtObject();
+    if (!art_object.id) return RemoveTempEffects(true, false);
     if (art_object.enabled) return;
     const auto a_art_obj = RE::TESForm::LookupByID<RE::BGSArtObject>(art_object.id);
     if (!a_art_obj) {
@@ -52,7 +52,7 @@ void RefStop::ApplyArtObject(RE::TESObjectREFR* a_ref, const float duration) {
 
 void RefStop::ApplyShader(RE::TESObjectREFR* a_ref, const float duration) {
     auto& effect_shader = features.effect_shader;
-    if (!effect_shader.id) return RemoveShader();
+    if (!effect_shader.id) return RemoveTempEffects(false, true);
     if (effect_shader.enabled) return;
     const auto eff_shader = RE::TESForm::LookupByID<RE::TESEffectShader>(effect_shader.id);
     if (!eff_shader) {
@@ -98,78 +98,54 @@ void RefStop::RemoveTint() {
     }
 }
 
-void RefStop::RemoveArtObject() {
-    // if (model_ref_eff) model_ref_eff->finished = true;
+void RefStop::RemoveTempEffects(bool remove_art, bool remove_shader) {
+    remove_art = remove_art && !applied_art_objects.empty();
+    remove_shader = remove_shader && !applied_effect_shaders.empty();
+    if (!remove_art && !remove_shader) return;
 
-    if (applied_art_objects.empty()) return;
+    constexpr float removal_delay = 5.f;
+
     if (const auto a_ref = GetRef()) {
         if (const auto processLists = RE::ProcessLists::GetSingleton()) {
             const auto handle = a_ref->CreateRefHandle();
-            processLists->ForEachModelEffect([&](RE::ModelReferenceEffect* a_modelEffect) {
-                if (a_modelEffect->target == handle && a_modelEffect->artObject) {
-                    if (applied_art_objects.contains(a_modelEffect->artObject->GetFormID())) {
-                        if (a_modelEffect->lifetime < 0.f) {
-                            a_modelEffect->lifetime = a_modelEffect->age + 5.f;
-                        }
+
+            processLists->ForEachMagicTempEffect([&](RE::BSTempEffect* a_effect) {
+                RE::ReferenceEffect* matched = nullptr;
+
+                if (const auto model = a_effect->As<RE::ModelReferenceEffect>()) {
+                    if (remove_art && model->artObject && applied_art_objects.contains(model->artObject->GetFormID())) {
+                        matched = model;
+                    }
+                } else if (const auto shader = a_effect->As<RE::ShaderReferenceEffect>()) {
+                    if (remove_shader && shader->effectData &&
+                        applied_effect_shaders.contains(shader->effectData->GetFormID())) {
+                        matched = shader;
                     }
                 }
+
+                if (matched && matched->target == handle && matched->lifetime < 0.f) {
+                    matched->lifetime = matched->age + removal_delay;
+                }
+
                 return RE::BSContainer::ForEachResult::kContinue;
             });
         }
     }
-    applied_art_objects.clear();
 
-    features.art_object.enabled = false;
-}
-
-void RefStop::RemoveShader() {
-    // if (shader_ref_eff) shader_ref_eff->finished = true;
-    // if (const auto a_ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(ref_id)) {
-    //	if (const auto processLists = RE::ProcessLists::GetSingleton()) {
-    //		processLists->StopAllMagicEffects(*a_ref);
-    //	}
-
-    //}
-    if (applied_effect_shaders.empty()) return;
-    if (const auto a_ref = GetRef()) {
-        if (const auto processLists = RE::ProcessLists::GetSingleton()) {
-            const auto handle = a_ref->CreateRefHandle();
-            processLists->ForEachShaderEffect([&](RE::ShaderReferenceEffect* a_modelEffect) {
-                if (a_modelEffect->target == handle && a_modelEffect->effectData) {
-                    if (applied_effect_shaders.contains(a_modelEffect->effectData->GetFormID())) {
-                        if (a_modelEffect->lifetime < 0.f) {
-                            a_modelEffect->lifetime = a_modelEffect->age + 5.f;
-                        }
-                    }
-                }
-                return RE::BSContainer::ForEachResult::kContinue;
-            });
-        }
+    if (remove_art) {
+        applied_art_objects.clear();
+        features.art_object.enabled = false;
     }
-    applied_effect_shaders.clear();
-    features.effect_shader.enabled = false;
+    if (remove_shader) {
+        applied_effect_shaders.clear();
+        features.effect_shader.enabled = false;
+    }
 }
 
 void RefStop::RemoveSound() {
     const auto soundhelper = SoundHelper::GetSingleton();
     soundhelper->Stop(ref_info.ref_id);
     features.sound.enabled = false;
-}
-
-bool RefStop::HasArtObject(RE::TESObjectREFR* a_ref, const RE::BGSArtObject* a_art) {
-    uint32_t count = 0;
-    if (const auto processLists = RE::ProcessLists::GetSingleton(); processLists) {
-        const auto handle = a_ref->CreateRefHandle();
-        processLists->ForEachModelEffect([&](const RE::ModelReferenceEffect* a_modelEffect) {
-            if (a_modelEffect->target == handle && a_modelEffect->artObject == a_art) {
-                if (!a_modelEffect->finished) {
-                    count++;
-                }
-            }
-            return RE::BSContainer::ForEachResult::kContinue;
-        });
-    }
-    return count > 0;
 }
 
 void RefStop::Update(const RefStop& other) {
@@ -186,14 +162,11 @@ void RefStop::Update(const RefStop& other) {
         RemoveTint();
         features.tint_color.id = other.features.tint_color.id;
     }
-    if (features.art_object.id != other.features.art_object.id) {
-        RemoveArtObject();
-        features.art_object.id = other.features.art_object.id;
-    }
-    if (features.effect_shader.id != other.features.effect_shader.id) {
-        RemoveShader();
-        features.effect_shader.id = other.features.effect_shader.id;
-    }
+    const bool remove_art = features.art_object.id != other.features.art_object.id;
+    const bool remove_shader = features.effect_shader.id != other.features.effect_shader.id;
+    RemoveTempEffects(remove_art, remove_shader);
+    features.art_object.id = other.features.art_object.id;
+    features.effect_shader.id = other.features.effect_shader.id;
     if (features.sound.id != other.features.sound.id) {
         RemoveSound();
         features.sound.id = other.features.sound.id;
