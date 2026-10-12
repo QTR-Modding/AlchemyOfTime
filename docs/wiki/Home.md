@@ -257,7 +257,7 @@ formsLists:
 
 `FoodBeef` selects raw beef, and `MyPreservationFaction` is the EditorID of a Faction (FACT) record. This addon pauses beef's stage progression in the inventory of an actor who belongs to that faction, or a container explicitly owned by that faction. The beef needs stages from a default or custom rule. Replace the faction with your own EditorID or FormID and change `magnitude` to the multiplier you need.
 
-For beef lying in the world, an actor in the faction or a reference explicitly owned by the faction can activate the trigger through the usual proximity checks. The beef's own explicit faction owner can also match. Only faction ownership assigned to the reference itself counts; cell ownership and ownership by an individual actor are not faction matches.
+For beef lying in the world, an actor in the faction or a non-actor reference explicitly owned by the faction can activate the trigger through the usual proximity checks. The beef's own explicit faction owner can also match. Only faction ownership assigned to the reference itself counts; cell ownership and ownership by an individual actor are not faction matches.
 
 World membership and ownership changes are recognized on the next scan. Inventory changes are recognized by the existing inventory-owner watch. Inventory matching checks the owner of the inventory; ownership of its individual contents does not activate this trigger.
 
