@@ -13,7 +13,11 @@
     "directxmath",
     "directxtk",
     "clib-util",
-    "clib-utils-qtr",
+    {
+      "name": "clib-utils-qtr",
+      "default-features": false,
+      "features": [ "hooks", "skyrim", "yaml-skyrim" ]
+    },
     "skse-mcp",
     "tsl-ordered-map",
     "yaml-cpp"
