@@ -1,6 +1,10 @@
 #pragma once
 #include "Data.h"
+#include "InventoryWatch.h"
+#include "Presets.h"
 #include "Serialization.h"
+#include "Stages.h"
+#include "WorldUpdates.h"
 #include "ClibUtilsQTR/Ticker.hpp"
 
 class QueueManager;

@@ -1,8 +1,15 @@
 #pragma once
+#include "InventoryWatch.h"
 #include "Settings.h"
 #include "CLibUtilsQTR/DynamicFormTracker.hpp"
-#include "Lorebox.h"
 #include "CLibUtilsQTR/FormReader.hpp"
+
+enum class UpdatePhase { kCatchUp, kCurrent };
+
+struct UpdateTime {
+    float hours;
+    UpdatePhase phase;
+};
 
 struct Source {
     using SourceData = std::unordered_map<RefID, std::vector<StageInstance>>;

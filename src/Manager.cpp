@@ -1,14 +1,10 @@
 #pragma once
 #include "Manager.h"
-#include "CLibUtilsQTR/DebugLocks.hpp"
-#include <unordered_set>
-#include "Data.h"
-#include <shared_mutex>
-#include <unordered_map>
 #include "CellScan.h"
 #include "Hooks.h"
 #include "Queue.h"
-#include "Settings.h"
+#include "CLibUtilsQTR/DebugLocks.hpp"
+
 
 #define AOT_CONCAT_INNER(a,b) a##b
 #define AOT_CONCAT(a,b) AOT_CONCAT_INNER(a,b)

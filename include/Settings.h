@@ -1,6 +1,6 @@
 #pragma once
-#include "CustomObjects.h"
 #include <yaml-cpp/yaml.h>
+#include "Presets.h"
 #include "rapidjson/document.h"
 
 
