@@ -13,6 +13,14 @@ struct InventoryWatchList {
         if (inserted) it->second = evaluate();
         return it->second;
     }
+
+    template <typename Evaluate>
+    bool HasChanged(Evaluate&& evaluate) const {
+        for (const auto& [trigger, previous] : list) {
+            if (evaluate(trigger) != previous) return true;
+        }
+        return false;
+    }
 };
 
 // it contains the results from the last check/loop so it can compare it in the next update when the new info comes

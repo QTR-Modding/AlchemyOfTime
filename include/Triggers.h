@@ -45,8 +45,7 @@ FormID GetTriggerInInventory(std::ranges::input_range auto&& trigger_ids,
                 queue_info.update_flags.set(QueueInfo::UpdateFlag::kInventory);
             }
 
-            auto& watch = *queue_info.inventory_watch;
-            if (watch.Eval(trigger, owner, inventory)) {
+            if (auto& watch = *queue_info.inventory_watch; watch.Eval(trigger, owner, inventory)) {
                 return a_trigger_id;
             }
         } else if (const auto keyword = trigger->As<RE::BGSKeyword>()) {

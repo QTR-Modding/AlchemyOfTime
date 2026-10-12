@@ -14,19 +14,14 @@ bool InventoryWatch::HasChanged(RE::TESObjectREFR* owner) {
             last_location = current;
         }
     }
-    for (const auto& [perk, matched] : perks.list) {
-        if (perk->perkConditions.IsTrue(owner, owner) != matched) return true;
-    }
+    if (perks.HasChanged([&](const RE::BGSPerk* perk) { return perk->perkConditions.IsTrue(owner, owner); }))
+        return true;
     if (!magic_effects.list.empty()) {
         const auto active = Utils::WorldObject::CollectActiveMagicEffects(owner);
-        for (const auto& [effect, matched] : magic_effects.list) {
-            if (active.contains(effect) != matched) return true;
-        }
+        if (magic_effects.HasChanged([&](RE::EffectSetting* effect) { return active.contains(effect); }))
+            return true;
     }
-    for (const auto& [faction, matched] : factions.list) {
-        if (Utils::WorldObject::MatchesFaction(owner, faction) != matched) return true;
-    }
-    return false;
+    return factions.HasChanged([&](const RE::TESFaction* faction) { return Utils::WorldObject::MatchesFaction(owner, faction); });
 }
 
 bool InventoryWatch::Eval(RE::TESForm* trigger, RE::TESObjectREFR* owner,
