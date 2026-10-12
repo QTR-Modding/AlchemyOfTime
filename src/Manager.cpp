@@ -257,7 +257,7 @@ void Manager::UpdateImpl(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const R
     {
         SRC_UNIQUE_GUARD;
         if (src = UpdateGetSource(ctx.what->GetFormID(), loc); src) {
-            ApplyTransferToSource_(*src, ctx, {ctx.to && ctx.to->HasContainer() ? ctx.to->GetInventory() : InvMap{}});
+            ApplyTransferToSource_(*src, ctx, {.items = ctx.to && ctx.to->HasContainer() ? ctx.to->GetInventory() : InvMap{}});
             SplitWorldObjectStackIfNeeded_(*src, ctx);
         }
     }
@@ -1146,7 +1146,7 @@ void Manager::SyncWithInventory(const RefInfo& a_info, Utils::Inventory::Snapsho
             if (count > 0) owner->AddObjectToContainer(bound, nullptr, count, nullptr);
             else if (count < 0) owner->RemoveItem(bound, -count, RE::ITEM_REMOVE_REASON::kRemove, nullptr, nullptr);
         }
-        inventory = {owner->GetInventory()};
+        inventory = {.items = owner->GetInventory()};
         locs_to_be_handled.erase(loc);
     }
 }
@@ -1156,7 +1156,7 @@ void Manager::UpdateQueuedRef(const QueueInfo& queue_info, const float curr_time
     if (queue_info.update_flags.any(QueueInfo::UpdateFlag::kWorldObject)) {
         UpdateQueuedWO(queue_info.ref_info, curr_time);
     }
-    if (queue_info.update_flags.any(QueueInfo::UpdateFlag::kLocation, QueueInfo::UpdateFlag::kPerk, QueueInfo::UpdateFlag::kMagicEffect, QueueInfo::UpdateFlag::kFaction)) {
+    if (queue_info.update_flags.any(QueueInfo::UpdateFlag::kInventory)) {
         UpdateQueuedInventory(queue_info);
     }
 }
@@ -1367,7 +1367,7 @@ void Manager::UpdateRef(RE::TESObjectREFR* loc) {
     if (loc->HasContainer()) {
         const auto base = loc->GetBaseObject();
         const RefInfo info(loc->GetFormID(), base ? base->GetFormID() : 0);
-        Utils::Inventory::Snapshot inv{loc->GetInventory()};
+        Utils::Inventory::Snapshot inv{.items = loc->GetInventory()};
         UpdateInventory(info, inv);
     } else {
         UpdateWO(loc);
@@ -1790,7 +1790,7 @@ void Manager::HandleLoc(RE::TESObjectREFR* loc_ref) {
         return;
     }
 
-    Utils::Inventory::Snapshot loc_inventory_temp{loc_ref->GetInventory()};
+    Utils::Inventory::Snapshot loc_inventory_temp{.items = loc_ref->GetInventory()};
 
     const auto loc_base = loc_ref->GetObjectReference()->GetFormID();
     SyncWithInventory(RefInfo(loc_refid, loc_base), loc_inventory_temp);
