@@ -24,7 +24,8 @@ namespace {
             const auto trigger = RE::TESForm::LookupByID(trigger_fid);
             if (!trigger) continue;
 
-            if (trigger->Is(RE::FormType::Location, RE::FormType::Perk, RE::FormType::MagicEffect, RE::FormType::Faction)) {
+            if (trigger->Is(RE::FormType::Location, RE::FormType::Perk, RE::FormType::MagicEffect, RE::FormType::Faction) ||
+                std::ranges::contains(CellScanner::applied_effect_trigger_types, trigger->GetFormType())) {
                 if (phase == UpdatePhase::kCatchUp) {
                     if (trigger_fid == instance.GetDelayerFormID()) return trigger_fid;
                     continue;
@@ -58,6 +59,11 @@ namespace {
                     queue_info.update_flags.set(QueueInfo::UpdateFlag::kFaction);
                     const auto [it, inserted] = watch.factions.try_emplace(faction);
                     if (inserted) it->second = Utils::WorldObject::MatchesFaction(owner, faction);
+                    if (it->second) return trigger_fid;
+                } else {
+                    queue_info.update_flags.set(QueueInfo::UpdateFlag::kVisualEffect);
+                    const auto [it, inserted] = watch.visual_effects.try_emplace(trigger);
+                    if (inserted) it->second = CellScanner::GetSingleton()->GetCache()->HasInventoryEffect(owner->GetHandle(), trigger);
                     if (it->second) return trigger_fid;
                 }
                 // ReSharper disable once CppDependentTemplateWithoutTemplateKeyword

@@ -1,5 +1,6 @@
 #include "CustomObjects.h"
 #include "Settings.h"
+#include "CellScan.h"
 #include "CLibUtilsQTR/FormReader.hpp"
 
 bool StageInstance::operator==(const StageInstance& other) const {
@@ -367,6 +368,13 @@ bool InventoryWatch::HasChanged(RE::TESObjectREFR* owner) {
     }
     for (const auto& [faction, matched] : factions) {
         if (Utils::WorldObject::MatchesFaction(owner, faction) != matched) return true;
+    }
+    if (!visual_effects.empty()) {
+        const auto cache = CellScanner::GetSingleton()->GetCache();
+        const auto handle = owner->GetHandle();
+        for (const auto& [effect, matched] : visual_effects) {
+            if (cache->HasInventoryEffect(handle, effect) != matched) return true;
+        }
     }
     return false;
 }

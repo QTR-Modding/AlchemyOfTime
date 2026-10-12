@@ -3,15 +3,16 @@
 #include "Utils.h"
 
 
-void CellScanner::RequestRefresh(const std::vector<Request>& requests) {
+void CellScanner::RequestRefresh(const std::vector<Request>& requests, const std::vector<QueueInfo>& inventories) {
     const auto gen = requestedGeneration_.fetch_add(1, std::memory_order_acq_rel) + 1;
 
-    auto work = BuildWorkItem_(gen, requests);
+    auto work = BuildWorkItem_(gen, requests, inventories);
     if (!work) {
         return;
     }
 
-    if ((work->bases->empty() && work->keywords.empty() && work->visual_effects.empty() && work->magic_effects.empty() && work->factions.empty()) || work->refInfos->empty()) {
+    if (((work->bases->empty() && work->keywords.empty() && work->visual_effects.empty() && work->magic_effects.empty() && work->factions.empty()) || work->refInfos->empty()) &&
+        work->inventory_effects.empty()) {
         Publish_(std::move(work->next));
         return;
     }
@@ -30,7 +31,8 @@ bool CellScanner::IsStale_(const std::uint64_t gen) const {
 }
 
 CellScanner::WorkItemPtr CellScanner::BuildWorkItem_(const std::uint64_t gen,
-                                                     const std::vector<Request>& requests) const {
+                                                     const std::vector<Request>& requests,
+                                                     const std::vector<QueueInfo>& inventories) const {
     if (IsStale_(gen)) {
         return nullptr;
     }
@@ -64,6 +66,12 @@ CellScanner::WorkItemPtr CellScanner::BuildWorkItem_(const std::uint64_t gen,
                 work->bases->insert(baseID);
             }
         }
+    }
+
+    for (const auto& inventory : inventories) {
+        if (inventory.update_flags.none(QueueInfo::UpdateFlag::kVisualEffect)) continue;
+        auto& forms = work->inventory_effects[inventory.ref_info.ref_handle];
+        for (const auto form : inventory.inventory_watch->visual_effects | std::views::keys) forms.insert(form);
     }
 
     return work;
@@ -209,10 +217,18 @@ void CellScanner::ScanCells_(const std::unordered_set<RE::TESObjectCELL*>& cells
 }
 
 void CellScanner::ScanAppliedEffects_(const std::unordered_set<RE::TESObjectCELL*>& cellsToScan,
-                                      const std::unordered_set<RE::TESForm*>& forms, Cache& outCache) {
-    for (const auto& [form, handle] : Utils::WorldObject::CollectAppliedEffectTargets(forms)) {
+                                      const std::unordered_set<RE::TESForm*>& forms,
+                                      const InventoryEffects& inventories, Cache& outCache) {
+    auto interests = forms;
+    for (const auto& [owner, effects] : inventories) interests.insert_range(effects);
+    for (const auto& [form, handle] : Utils::WorldObject::CollectAppliedEffectTargets(interests)) {
         const auto ref = handle.get();
-        if (!ref || !Utils::WorldObject::IsActive(ref.get()) ||
+        if (!ref) continue;
+
+        if (const auto it = inventories.find(handle); it != inventories.end() && it->second.contains(form)) {
+            outCache.inventory_effects[handle].insert(form);
+        }
+        if (!forms.contains(form) || !Utils::WorldObject::IsActive(ref.get()) ||
             !cellsToScan.contains(ref->GetParentCell())) continue;
 
         AddEntry_(form->GetFormID(), ref.get(), outCache);
@@ -230,8 +246,8 @@ void CellScanner::RunScanTaskOnGameThread_(const WorkItemPtr& work) {
     if (!work->bases->empty() || !work->keywords.empty() || !work->magic_effects.empty() || !work->factions.empty()) {
         ScanCells_(cellsToScan, *work->bases, work->keywords, work->magic_effects, work->factions, *work->next);
     }
-    if (!work->visual_effects.empty()) {
-        ScanAppliedEffects_(cellsToScan, work->visual_effects, *work->next);
+    if (!work->visual_effects.empty() || !work->inventory_effects.empty()) {
+        ScanAppliedEffects_(cellsToScan, work->visual_effects, work->inventory_effects, *work->next);
     }
 
     if (IsStale_(work->gen)) {

@@ -14,16 +14,25 @@ public:
         RE::NiPoint3 pos{};
     };
 
+    using InventoryEffects = std::unordered_map<RE::ObjectRefHandle, std::unordered_set<RE::TESForm*>,
+                                               RE::BSCRC32<RE::ObjectRefHandle>>;
+
     struct Cache {
         std::uint64_t generation{0};
         std::unordered_map<FormID, std::vector<Entry>> byTrigger;
+        InventoryEffects inventory_effects;
+
+        bool HasInventoryEffect(RE::ObjectRefHandle owner, RE::TESForm* effect) const {
+            const auto it = inventory_effects.find(owner);
+            return it != inventory_effects.end() && it->second.contains(effect);
+        }
     };
 
     using CachePtr = std::shared_ptr<const Cache>;
 
     using Request = std::pair<RefInfo, std::vector<RE::TESForm*>>;
 
-    void RequestRefresh(const std::vector<Request>& requests);
+    void RequestRefresh(const std::vector<Request>& requests, const std::vector<QueueInfo>& inventories);
 
     [[nodiscard]] CachePtr GetCache() const;
 
@@ -35,6 +44,7 @@ private:
         std::shared_ptr<Cache> next;
         std::shared_ptr<std::unordered_set<FormID>> bases;
         std::unordered_set<RE::TESForm*> visual_effects;
+        InventoryEffects inventory_effects;
         std::unordered_set<RE::EffectSetting*> magic_effects;
         std::unordered_set<FormID> keywords;
         std::unordered_set<RE::TESFaction*> factions;
@@ -45,7 +55,8 @@ private:
 
     [[nodiscard]] bool IsStale_(std::uint64_t gen) const;
 
-    [[nodiscard]] WorkItemPtr BuildWorkItem_(std::uint64_t gen, const std::vector<Request>& requests) const;
+    [[nodiscard]] WorkItemPtr BuildWorkItem_(std::uint64_t gen, const std::vector<Request>& requests,
+                                            const std::vector<QueueInfo>& inventories) const;
 
     void QueueScanTask_(WorkItemPtr work);
 
@@ -67,7 +78,8 @@ private:
                            const std::unordered_set<RE::TESFaction*>& factionsOfInterest, Cache& outCache);
 
     static void ScanAppliedEffects_(const std::unordered_set<RE::TESObjectCELL*>& cellsToScan,
-                                    const std::unordered_set<RE::TESForm*>& forms, Cache& outCache);
+                                    const std::unordered_set<RE::TESForm*>& forms,
+                                    const InventoryEffects& inventories, Cache& outCache);
 
     void Publish_(std::shared_ptr<Cache> next);
 

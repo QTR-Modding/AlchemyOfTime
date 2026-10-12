@@ -265,7 +265,7 @@ Use the faction in a transformer's `FormEditorID` to transform the item instead.
 
 ### Art object triggers
 
-This addon pauses raw beef's stage progression while `MySmokeArt` is applied to the beef itself or a nearby reference:
+This addon pauses raw beef's stage progression while `MySmokeArt` is applied to its inventory owner, or to the beef itself or a nearby reference in the world:
 
 ```yaml
 formsLists:
@@ -277,13 +277,13 @@ formsLists:
 
 `MySmokeArt` is the EditorID of an Art Object (ARTO) record in your plugin. Another effect or script must apply it to a reference; this example detects that applied art object. Replace `MySmokeArt` with your art object's EditorID or FormID, and change `magnitude` to the stage-progression multiplier you need.
 
-Art object triggers apply to items lying in the world. An art object applied to the affected item itself also activates the trigger; an art object on another reference uses the existing nearby-object distance and proximity checks. AoT discovers attachments and removals at its scan refresh, so a change between scans is recognized on the next refresh. They do not activate inventory items.
+In an inventory, the art object must be applied to the reference holding the item, such as the player, an NPC, or a chest. For items lying in the world, an art object on the item itself activates the trigger; one on another reference uses the existing distance and proximity checks. Attachments and removals are recognized on the next shared scan refresh. If an inventory owner becomes unavailable, catch-up keeps the last selected trigger until the inventory is processed again.
 
 Use the art object's ID in a transformer's `FormEditorID` to transform the affected item instead. The `art_object` field applies an art object while a stage or trigger is active; `FormEditorID` detects one that is already applied.
 
 ### Effect shader triggers
 
-This addon pauses raw beef's stage progression while `MyFireShader` is applied to the beef itself or a nearby reference:
+This addon pauses raw beef's stage progression while `MyFireShader` is applied to its inventory owner, or to the beef itself or a nearby reference in the world:
 
 ```yaml
 formsLists:
@@ -295,7 +295,7 @@ formsLists:
 
 `MyFireShader` is the EditorID of an Effect Shader (EFSH) record in your plugin. Another effect or script must apply it to a reference. Replace `MyFireShader` with your shader's EditorID or FormID; `magnitude: 0` pauses stage progression, and another multiplier changes its speed.
 
-Effect shader triggers apply to items lying in the world. A shader applied to the affected item itself activates the trigger; a shader on another reference uses the existing nearby-object distance and proximity checks. Attachments and removals are recognized on the next scan refresh. They do not activate inventory items.
+In an inventory, the shader must be applied to the reference holding the item, such as the player, an NPC, or a chest. For items lying in the world, a shader on the item itself activates the trigger; one on another reference uses the existing distance and proximity checks. Attachments and removals are recognized on the next shared scan refresh. If an inventory owner becomes unavailable, catch-up keeps the last selected trigger until the inventory is processed again.
 
 Use the shader's ID in a transformer's `FormEditorID` to transform the affected item instead. The `effect_shader` field applies a shader while a stage or trigger is active; `FormEditorID` detects one that is already applied.
 
