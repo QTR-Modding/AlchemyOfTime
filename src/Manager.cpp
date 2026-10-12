@@ -459,8 +459,7 @@ void Manager::RefreshRefs_(const UpdateCtx& ctx) {
 void Manager::PreDeleteRefStop(RefStop& a_ref_stop) {
     if (a_ref_stop.update_flags.none(QueueInfo::UpdateFlag::kWorldObject)) return;
     a_ref_stop.RemoveTint();
-    a_ref_stop.RemoveArtObject();
-    a_ref_stop.RemoveShader();
+    a_ref_stop.RemoveTempEffects(true, true);
     a_ref_stop.RemoveSound();
 }
 
