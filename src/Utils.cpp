@@ -416,7 +416,7 @@ void Utils::WorldObject::SwapObjects(RE::TESObjectREFR* a_from, RE::TESBoundObje
     });
 }
 
-bool Utils::WorldObject::MatchesFaction(RE::TESObjectREFR* ref, RE::TESFaction* faction) {
+bool Utils::WorldObject::MatchesFaction(RE::TESObjectREFR* ref, const RE::TESFaction* faction) {
     if (const auto actor = ref->As<RE::Actor>()) return actor->IsInFaction(faction);
     return ref->GetFactionOwner() == faction;
 }

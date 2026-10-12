@@ -119,7 +119,7 @@ namespace Utils {
             return !ref->IsDisabled() && !ref->IsDeleted() && !ref->IsMarkedForDeletion();
         }
 
-        bool MatchesFaction(RE::TESObjectREFR* ref, RE::TESFaction* faction);
+        bool MatchesFaction(RE::TESObjectREFR* ref, const RE::TESFaction* faction);
 
         RE::TESObjectREFR* DropObjectIntoTheWorld(RE::TESBoundObject* obj, Count count, bool player_owned = true);
 
