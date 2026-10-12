@@ -365,6 +365,9 @@ bool InventoryWatch::HasChanged(RE::TESObjectREFR* owner) {
             if (active.contains(effect) != matched) return true;
         }
     }
+    for (const auto& [faction, matched] : factions) {
+        if (Utils::WorldObject::MatchesFaction(owner, faction) != matched) return true;
+    }
     return false;
 }
 
