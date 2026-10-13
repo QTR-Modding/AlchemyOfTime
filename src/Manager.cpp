@@ -126,8 +126,8 @@ std::vector<Manager::ScanRequest> Manager::BuildCellScanRequests_(
             continue;
         }
 
-        const auto triggers_it = src->world_triggers.find(inst.no);
-        if (triggers_it == src->world_triggers.end() || triggers_it->second.scan_forms.empty()) continue;
+        const auto triggers_it = src->triggers.find(inst.no);
+        if (triggers_it == src->triggers.end() || triggers_it->second.scan_forms.empty()) continue;
 
         out.emplace_back(queue_info.ref_info, triggers_it->second.scan_forms);
     }
@@ -984,7 +984,7 @@ bool Manager::UpdateInventory(QueueInfo& queue_info, const UpdateTime t, const U
                 RemoveLocationIndex(refid, src_formid);
                 continue;
             }
-            sit->second->UpdateTimeModulationInInventory(queue_info, t, inv);
+            sit->second->UpdateInventoryItemTriggers(queue_info, t, inv);
         }
     } else {
         std::vector<FormID> mod_sources;
@@ -997,7 +997,7 @@ bool Manager::UpdateInventory(QueueInfo& queue_info, const UpdateTime t, const U
                 RemoveLocationIndex(refid, src_formid);
                 continue;
             }
-            sit->second->UpdateTimeModulationInInventory(queue_info, t, inv);
+            sit->second->UpdateInventoryItemTriggers(queue_info, t, inv);
         }
     }
 
@@ -1183,16 +1183,14 @@ void Manager::UpdateQueuedInventory(const QueueInfo& queue_info) {
 }
 
 void Manager::RestoreInventoryWatches() {
-    const auto needs_watch = [](const Source::WorldTriggers& triggers) {
-        return std::ranges::any_of(triggers.ordered, [](const auto& trigger) {
-            return std::visit([](const auto* form) {
-                return std::ranges::contains(poll_formtypes, form->GetFormType());
-            }, trigger);
+    const auto needs_watch = [](const Source::Triggers& triggers) {
+        return std::ranges::any_of(triggers.ordered, [](const RE::TESForm* form) {
+            return std::ranges::contains(poll_formtypes, form->GetFormType());
         });
     };
     for (const auto& source : sources | std::views::values) {
         if (!source->IsHealthy()) continue;
-        if (!std::ranges::any_of(source->world_triggers | std::views::values, needs_watch)) continue;
+        if (!std::ranges::any_of(source->triggers | std::views::values, needs_watch)) continue;
         for (const auto owner_id : source->data | std::views::keys) {
             if (const auto owner = RE::TESForm::LookupByID<RE::TESObjectREFR>(owner_id);
                 owner && owner->HasContainer()) {
@@ -1288,7 +1286,7 @@ void Manager::UpdateQueuedWO(const RefInfo& ref_info, const float curr_time) {
         ApplyStageInWorld(ref, source->GetStage(wo_inst.no), source->GetBoundObject());
     }
 
-    source->UpdateTimeModulationInWorld(ref, wo_inst, curr_time);
+    source->UpdateWorldItemTrigger(ref, wo_inst, curr_time);
     if (const auto next_update = source->GetNextUpdateTime(&wo_inst); next_update > curr_time) {
         RefStop a_ref_stop(refid, QueueInfo::UpdateFlag::kWorldObject);
         UpdateRefStop(*source, wo_inst, a_ref_stop, next_update);
@@ -1354,7 +1352,7 @@ void Manager::UpdateWO(RE::TESObjectREFR* ref) {
     }
     auto& wo_inst = it->second.front();
     if (wo_inst.xtra.is_fake) ApplyStageInWorld(ref, source->GetStage(wo_inst.no), source->GetBoundObject());
-    source->UpdateTimeModulationInWorld(ref, wo_inst, curr_time);
+    source->UpdateWorldItemTrigger(ref, wo_inst, curr_time);
     if (const auto next_update = source->GetNextUpdateTime(&wo_inst); next_update > curr_time) {
         RefStop a_ref_stop(refid, QueueInfo::UpdateFlag::kWorldObject);
         UpdateRefStop(*source, wo_inst, a_ref_stop, next_update);
@@ -1467,7 +1465,7 @@ void Manager::Register(const FormID some_formid, const Count count, const RefID 
     } else {
         const auto bound = src->IsFakeStage(stage_no) ? src->GetBoundObject() : nullptr;
         ApplyStageInWorld(ref, src->GetStage(stage_no), bound);
-        src->UpdateTimeModulationInWorld(ref, *inserted_instance, register_time);
+        src->UpdateWorldItemTrigger(ref, *inserted_instance, register_time);
         // add to the queue
         const auto hitting_time = src->GetNextUpdateTime(inserted_instance);
         RefStop a_ref_stop(location_refid, QueueInfo::UpdateFlag::kWorldObject);

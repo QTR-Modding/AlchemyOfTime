@@ -94,7 +94,7 @@ void Source::Init(const DefaultSettings* defaultsettings) {
         InitFailed();
         return;
     }
-    RebuildWorldTriggers();
+    RebuildTriggers();
 }
 
 std::string_view Source::GetName() const {
@@ -117,13 +117,13 @@ void Source::UpdateAddons() {
         InitFailed();
         return;
     }
-    RebuildWorldTriggers();
+    RebuildTriggers();
 }
 
 template <class T>
-void Source::AddWorldTriggers(const tsl::ordered_map<FormID, T>& triggers,
+void Source::AddTriggers(const tsl::ordered_map<FormID, T>& a_triggers,
                               const std::unordered_map<FormID, std::unordered_set<StageNo>>& allowed_stages) {
-    for (const auto trigger_id : triggers | std::views::keys) {
+    for (const auto trigger_id : a_triggers | std::views::keys) {
         const auto form = FormReader::GetFormByID(trigger_id);
         if (!form) continue;
         // ReSharper disable once CppDependentTemplateWithoutTemplateKeyword
@@ -136,24 +136,18 @@ void Source::AddWorldTriggers(const tsl::ordered_map<FormID, T>& triggers,
             !std::ranges::contains(CellScanner::applied_effect_trigger_types, form->GetFormType())) continue;
 
         for (const auto no : allowed_stages.at(trigger_id)) {
-            auto& prepared = world_triggers[no];
-            if (location) {
-                prepared.ordered.emplace_back(location);
-            } else if (perk) {
-                prepared.ordered.emplace_back(perk);
-            } else {
-                prepared.ordered.emplace_back(form);
-                prepared.scan_forms.push_back(form);
-            }
+            auto& prepared = triggers[no];
+            prepared.ordered.emplace_back(form);
+            if (!location && !perk) prepared.scan_forms.push_back(form);
         }
     }
 }
 
-void Source::RebuildWorldTriggers() {
-    world_triggers.clear();
-    AddWorldTriggers(settings.transformers, settings.transformer_allowed_stages);
-    AddWorldTriggers(settings.delayers, settings.delayer_allowed_stages);
-    for (auto& prepared : world_triggers | std::views::values) {
+void Source::RebuildTriggers() {
+    triggers.clear();
+    AddTriggers(settings.transformers, settings.transformer_allowed_stages);
+    AddTriggers(settings.delayers, settings.delayer_allowed_stages);
+    for (auto& prepared : triggers | std::views::values) {
         auto& forms = prepared.scan_forms;
         std::ranges::sort(forms);
         forms.erase(std::ranges::unique(forms).begin(), forms.end());
@@ -516,7 +510,7 @@ bool Source::IsDecayedItem(const FormID _form_id) const {
                                });
 }
 
-void Source::UpdateTimeModulationInWorld(RE::TESObjectREFR* wo, StageInstance& wo_inst, const float _time) const {
+void Source::UpdateWorldItemTrigger(RE::TESObjectREFR* wo, StageInstance& wo_inst, const float _time) const {
     if (wo_inst.count <= 0) return;
     const auto a_loc_base = wo->GetBaseObject()->GetFormID();
     if (ShouldFreezeEvolution(a_loc_base)) {
@@ -525,8 +519,8 @@ void Source::UpdateTimeModulationInWorld(RE::TESObjectREFR* wo, StageInstance& w
         return;
     }
 
-    const auto it = world_triggers.find(wo_inst.no);
-    if (const auto trigger = it != world_triggers.end() ? FindWorldTrigger(wo, it->second) : 0) {
+    const auto it = triggers.find(wo_inst.no);
+    if (const auto trigger = it != triggers.end() ? FindWorldTrigger(wo, it->second) : 0) {
         SetDelayOfInstance(wo_inst, _time, trigger);
     } else {
         wo_inst.RemoveTimeMod(_time);
@@ -567,7 +561,7 @@ float Source::GetNextUpdateTime(const StageInstance* st_inst) {
     return st_inst->GetHittingTime(schranke);
 }
 
-void Source::UpdateTimeModulationInInventory(QueueInfo& queue_info, const UpdateTime time, const Utils::Inventory::Snapshot& inv) {
+void Source::UpdateInventoryItemTriggers(QueueInfo& queue_info, const UpdateTime time, const Utils::Inventory::Snapshot& inv) {
     const auto it = data.find(queue_info.ref_info.ref_id);
     if (it == data.end()) return;
 
@@ -790,7 +784,7 @@ void Source::Reset() {
     formid = 0;
     editorid = "";
     stages.clear();
-    world_triggers.clear();
+    triggers.clear();
     data.clear();
     init_failed = false;
 }
@@ -1204,10 +1198,6 @@ namespace {
             BoundingBox::GetOBB(ref, obb2);
         }
 
-        #ifndef NDEBUG
-        if (UI::draw_debug) {
-        }
-        #endif
 
         if (!AreClose(obb1, obb2, proximity)) {
             return false;
@@ -1234,7 +1224,7 @@ namespace {
     }
 };
 
-FormID Source::FindWorldTrigger(RE::TESObjectREFR* a_obj, const WorldTriggers& triggers) {
+FormID Source::FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers) {
     if (!a_obj || triggers.ordered.empty()) return 0;
 
     const auto cache = triggers.scan_forms.empty() ? nullptr : CellScanner::GetSingleton()->GetCache();
@@ -1244,44 +1234,47 @@ FormID Source::FindWorldTrigger(RE::TESObjectREFR* a_obj, const WorldTriggers& t
     const float r2 = (r > 0.0f) ? (r * r) : std::numeric_limits<float>::infinity();
 
     const auto current_location = a_obj->GetCurrentLocation();
-    for (const auto& trigger : triggers.ordered) {
-        if (const auto location = std::get_if<RE::BGSLocation*>(&trigger)) {
-            if (Utils::IsInLocation(*location, current_location)) {
-                return (*location)->GetFormID();
+    for (const auto form : triggers.ordered) {
+        // doesnt need scan
+        switch (form->GetFormType()) {
+            case RE::FormType::Location: {
+                const auto location = static_cast<RE::BGSLocation*>(form);
+                if (Utils::IsInLocation(location, current_location)) {
+                    return form->GetFormID();
+                }
+                continue;
             }
-        } else if (const auto perk = std::get_if<RE::BGSPerk*>(&trigger)) {
-            if ((*perk)->perkConditions.IsTrue(a_obj, a_obj)) {
-                return (*perk)->GetFormID();
+            case RE::FormType::Perk: {
+                const auto perk = static_cast<RE::BGSPerk*>(form);
+                if (perk->perkConditions.IsTrue(a_obj, a_obj)) {
+                    return form->GetFormID();
+                }
+                continue;
             }
-        } else {
-            if (!cache) continue;
-            const auto form = std::get<RE::TESForm*>(trigger);
-            const bool appliedEffect = std::ranges::contains(CellScanner::applied_effect_trigger_types, form->GetFormType());
-            const auto triggerID = form->GetFormID();
-            const auto it = cache->byTrigger.find(triggerID);
-            if (it == cache->byTrigger.end()) {
+            default:
+                break;
+        }
+        if (!cache) continue;
+        const bool appliedEffect = std::ranges::contains(CellScanner::applied_effect_trigger_types, form->GetFormType());
+        const auto triggerID = form->GetFormID();
+        const auto it = cache->byTrigger.find(triggerID);
+        if (it == cache->byTrigger.end()) {
+            continue;
+        }
+
+        for (const auto& e : it->second) {
+            if (appliedEffect && e.refid == a_obj->GetFormID()) return triggerID;
+            if (originPos.GetSquaredDistance(e.pos) > r2) {
                 continue;
             }
 
-            for (const auto& e : it->second) {
-                if (appliedEffect && e.refid == a_obj->GetFormID()) return triggerID;
-                const float dx = e.pos.x - originPos.x;
-                const float dy = e.pos.y - originPos.y;
-                const float dz = e.pos.z - originPos.z;
-                const float d2 = dx * dx + dy * dy + dz * dz;
+            const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(e.refid);
+            if (!ref || !Utils::WorldObject::IsActive(ref)) {
+                continue;
+            }
 
-                if (d2 > r2) {
-                    continue;
-                }
-
-                const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(e.refid);
-                if (!ref || !Utils::WorldObject::IsActive(ref)) {
-                    continue;
-                }
-
-                if (SearchModulatorInCell_Sub(a_obj, ref)) {
-                    return triggerID;
-                }
+            if (SearchModulatorInCell_Sub(a_obj, ref)) {
+                return triggerID;
             }
         }
     }

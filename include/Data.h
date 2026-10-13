@@ -15,9 +15,9 @@ struct Source {
     using SourceData = std::unordered_map<RefID, std::vector<StageInstance>>;
     using StageDict = std::map<StageNo, Stage>;
 
-    struct WorldTriggers {
-        std::vector<std::variant<RE::BGSLocation*, RE::BGSPerk*, RE::TESForm*>> ordered;
-        std::vector<RE::TESForm*> scan_forms;
+    struct Triggers {
+        std::vector<RE::TESForm*> ordered; // from configs, in the given order
+        std::vector<RE::TESForm*> scan_forms; // excludes Locations and Perks because those are checked directly on the item
     };
 
     SourceData data;
@@ -26,7 +26,7 @@ struct Source {
     std::string editorid;
     std::string qFormType;
     DefaultSettings settings;
-    std::unordered_map<StageNo, WorldTriggers> world_triggers;
+    std::unordered_map<StageNo, Triggers> triggers;
 
 
     Source(const FormID id, const std::string& id_str, // NOLINT(modernize-pass-by-value)
@@ -78,10 +78,10 @@ struct Source {
 
     [[nodiscard]] bool IsDecayedItem(FormID _form_id) const;
 
-    void UpdateTimeModulationInWorld(RE::TESObjectREFR* wo, StageInstance& wo_inst, float _time) const;
+    void UpdateWorldItemTrigger(RE::TESObjectREFR* wo, StageInstance& wo_inst, float _time) const;
 
     // always update before doing this
-    void UpdateTimeModulationInInventory(QueueInfo& queue_info, UpdateTime time, const Utils::Inventory::Snapshot& inv);
+    void UpdateInventoryItemTriggers(QueueInfo& queue_info, UpdateTime time, const Utils::Inventory::Snapshot& inv);
 
 
     float GetNextUpdateTime(const StageInstance* st_inst);
@@ -106,9 +106,9 @@ struct Source {
 
 private:
     void Init(const DefaultSettings* defaultsettings);
-    void RebuildWorldTriggers();
+    void RebuildTriggers();
     template <class T>
-    void AddWorldTriggers(const tsl::ordered_map<FormID, T>& triggers,
+    void AddTriggers(const tsl::ordered_map<FormID, T>& a_triggers,
                           const std::unordered_map<FormID, std::unordered_set<StageNo>>& allowed_stages);
 
     RE::FormType formtype;
@@ -201,7 +201,7 @@ private:
 
     StageNo GetLastStageNo();
 
-    static FormID FindWorldTrigger(RE::TESObjectREFR* a_obj, const WorldTriggers& triggers);
+    static FormID FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers);
 };
 
 template <typename T>
