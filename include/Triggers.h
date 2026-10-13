@@ -1,13 +1,20 @@
 #pragma once
-#include "tsl/ordered_map.h"
+#include "InventoryWatch.h"
 #include "Stages.h"
-#include "Data.h"
 
+enum class UpdatePhase { kCatchUp, kCurrent };
 
 constexpr auto poll_formtypes =
     std::array{RE::FormType::Location, RE::FormType::Perk, RE::FormType::MagicEffect, RE::FormType::Faction,
                RE::FormType::ArtObject, RE::FormType::EffectShader};
 
+struct Triggers {
+    std::vector<RE::TESForm*> ordered;  // from configs, in the given order
+    std::vector<RE::TESForm*>
+        scan_forms;  // excludes Locations and Perks because those are checked directly on the item
+};
+
+FormID FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers);
 
 FormID GetTriggerInInventory(std::ranges::input_range auto&& trigger_ids,
                              const std::unordered_map<FormID, std::unordered_set<StageNo>>& allowed_stages,

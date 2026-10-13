@@ -1,5 +1,4 @@
 #include "InventoryWatch.h"
-#include "Utils.h"
 
 
 bool InventoryWatch::HasChanged(RE::TESObjectREFR* owner) {

@@ -134,8 +134,6 @@ namespace Utils {
 
         bool IsPlacedObject(RE::TESObjectREFR* ref);
 
-        RE::bhkRigidBody* GetRigidBody(const RE::TESObjectREFR* refr);
-
         RE::NiPoint3 GetPosition(const RE::TESObjectREFR* obj);
     };
 

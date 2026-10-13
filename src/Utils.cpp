@@ -1,8 +1,8 @@
 #include "Utils.h"
 #include "CLibUtilsQTR/FormReader.hpp"
 #include "Settings.h"
-#include "CLibUtilsQTR/DrawDebug.hpp"
 #include "MCP.h"
+#include "CLibUtilsQTR/BoundingBox.hpp"
 
 namespace {
     void AppendExpandedForm(RE::TESForm* form, std::vector<FormID>& expanded,
@@ -473,24 +473,13 @@ bool Utils::WorldObject::IsPlacedObject(RE::TESObjectREFR* ref) {
     return false;
 }
 
-RE::bhkRigidBody* Utils::WorldObject::GetRigidBody(const RE::TESObjectREFR* refr) {
-    const auto object3D = refr->GetCurrent3D();
-    if (!object3D) {
-        return nullptr;
-    }
-    if (const auto body = object3D->GetCollisionObject()) {
-        return body->GetRigidBody();
-    }
-    return nullptr;
-}
-
 RE::NiPoint3 Utils::WorldObject::GetPosition(const RE::TESObjectREFR* obj) {
     // Prefer accurate mesh world translate when available
     if (const auto mesh = obj->GetCurrent3D()) {
         return mesh->world.translate;
     }
     // Fallback to Havok/body or ref pos
-    const auto body = GetRigidBody(obj);
+    const auto body = BoundingBox::GetRigidBody(obj);
     if (!body) return obj->GetPosition();
     RE::hkVector4 havockPosition;
     body->GetPosition(havockPosition);

@@ -1,10 +1,8 @@
 #pragma once
-#include "InventoryWatch.h"
 #include "Settings.h"
+#include "Triggers.h"
 #include "CLibUtilsQTR/DynamicFormTracker.hpp"
 #include "CLibUtilsQTR/FormReader.hpp"
-
-enum class UpdatePhase { kCatchUp, kCurrent };
 
 struct UpdateTime {
     float hours;
@@ -14,11 +12,6 @@ struct UpdateTime {
 struct Source {
     using SourceData = std::unordered_map<RefID, std::vector<StageInstance>>;
     using StageDict = std::map<StageNo, Stage>;
-
-    struct Triggers {
-        std::vector<RE::TESForm*> ordered; // from configs, in the given order
-        std::vector<RE::TESForm*> scan_forms; // excludes Locations and Perks because those are checked directly on the item
-    };
 
     SourceData data;
 
@@ -201,7 +194,6 @@ private:
 
     StageNo GetLastStageNo();
 
-    static FormID FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers);
 };
 
 template <typename T>

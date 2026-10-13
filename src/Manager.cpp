@@ -1183,7 +1183,7 @@ void Manager::UpdateQueuedInventory(const QueueInfo& queue_info) {
 }
 
 void Manager::RestoreInventoryWatches() {
-    const auto needs_watch = [](const Source::Triggers& triggers) {
+    const auto needs_watch = [](const Triggers& triggers) {
         return std::ranges::any_of(triggers.ordered, [](const RE::TESForm* form) {
             return std::ranges::contains(poll_formtypes, form->GetFormType());
         });
