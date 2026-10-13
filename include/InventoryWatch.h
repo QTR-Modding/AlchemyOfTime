@@ -44,12 +44,9 @@ struct InventoryWatch {  // inventory owner watch
 // in `RefStop` for queuing.
 // 3. The shared loop later works with **`QueueInfo` copies** of those queued records.
 struct QueueInfo {
-    enum class UpdateFlag : std::uint32_t {
-        kWorldObject = 1u << 0,
-        kInventory = 1u << 1,
-    };
+    enum class UpdateType { kNone, kWorldObject, kInventory };
     RefInfo ref_info;
-    REX::EnumSet<UpdateFlag> update_flags;
+    UpdateType update_type = UpdateType::kNone;
     float stop_time = 0;
     std::shared_ptr<InventoryWatch> inventory_watch;
 };

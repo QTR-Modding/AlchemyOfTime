@@ -105,7 +105,7 @@ std::vector<Manager::ScanRequest> Manager::BuildCellScanRequests_(
     SRC_SHARED_GUARD;
 
     for (const auto& queue_info : refStopsCopy) {
-        if (queue_info.update_flags.none(QueueInfo::UpdateFlag::kWorldObject)) continue;
+        if (queue_info.update_type != QueueInfo::UpdateType::kWorldObject) continue;
         const auto refid = queue_info.ref_info.ref_id;
         if (!refid) {
             continue;
@@ -458,7 +458,7 @@ void Manager::RefreshRefs_(const UpdateCtx& ctx) {
 }
 
 void Manager::PreDeleteRefStop(RefStop& a_ref_stop) {
-    if (a_ref_stop.update_flags.none(QueueInfo::UpdateFlag::kWorldObject)) return;
+    if (a_ref_stop.update_type != QueueInfo::UpdateType::kWorldObject) return;
     a_ref_stop.RemoveTint();
     a_ref_stop.RemoveTempEffects(true, true);
     a_ref_stop.RemoveSound();
@@ -473,7 +473,7 @@ void Manager::UpdateLoop() {
         !queue_delete_.empty() || !Settings::world_objects_evolve.load() || !Settings::placed_objects_evolve.load()) {
         for (auto it = _ref_stops_.begin(); it != _ref_stops_.end();) {
             bool remove = queue_delete_.contains(it->first);
-            if (!remove && it->second.update_flags.any(QueueInfo::UpdateFlag::kWorldObject)) {
+            if (!remove && it->second.update_type == QueueInfo::UpdateType::kWorldObject) {
                 remove = !Settings::world_objects_evolve.load();
                 if (!remove && !Settings::placed_objects_evolve.load()) {
                     const auto ref = it->second.GetRef();
@@ -509,7 +509,7 @@ void Manager::UpdateLoop() {
         curr_time = cal->GetHoursPassed();
         for (QUE_UNIQUE_GUARD; const auto& queue_info : ref_stops_copy) {
             const auto it = _ref_stops_.find(queue_info.ref_info.ref_id);
-            if (it == _ref_stops_.end() || it->second.update_flags.none(QueueInfo::UpdateFlag::kWorldObject)) continue;
+            if (it == _ref_stops_.end() || it->second.update_type != QueueInfo::UpdateType::kWorldObject) continue;
 
             if (auto& val = it->second; val.IsDue(curr_time)) {
                 PreDeleteRefStop(val);
@@ -536,10 +536,11 @@ void Manager::UpdateLoop() {
 }
 
 void Manager::QueueRefUpdate(const RefStop& a_refstop) {
-    if (!a_refstop.update_flags) return;
-    if (a_refstop.update_flags.any(QueueInfo::UpdateFlag::kWorldObject) &&
-        !Settings::world_objects_evolve.load())
+    if (a_refstop.update_type == QueueInfo::UpdateType::kNone) return;
+    if (a_refstop.update_type == QueueInfo::UpdateType::kWorldObject &&
+        !Settings::world_objects_evolve.load()) {
         return;
+    }
 
     bool needStart;
     {
@@ -1020,7 +1021,7 @@ void Manager::UpdateInventory(const RefInfo& a_info, Utils::Inventory::Snapshot&
     }
 
     UpdateInventory(pending, {.hours = curr, .phase = UpdatePhase::kCurrent}, inv);
-    if (pending.update_flags) {
+    if (pending.update_type != QueueInfo::UpdateType::kNone) {
         QueueRefUpdate(RefStop(pending));
     } else {
         QueueRefDelete(a_info.ref_id);
@@ -1154,11 +1155,15 @@ void Manager::SyncWithInventory(const RefInfo& a_info, Utils::Inventory::Snapsho
 
 
 void Manager::UpdateQueuedRef(const QueueInfo& queue_info, const float curr_time) {
-    if (queue_info.update_flags.any(QueueInfo::UpdateFlag::kWorldObject)) {
-        UpdateQueuedWO(queue_info.ref_info, curr_time);
-    }
-    if (queue_info.update_flags.any(QueueInfo::UpdateFlag::kInventory)) {
-        UpdateQueuedInventory(queue_info);
+    switch (queue_info.update_type) {
+        case QueueInfo::UpdateType::kWorldObject:
+            UpdateQueuedWO(queue_info.ref_info, curr_time);
+            break;
+        case QueueInfo::UpdateType::kInventory:
+            UpdateQueuedInventory(queue_info);
+            break;
+        case QueueInfo::UpdateType::kNone:
+            break;
     }
 }
 
@@ -1288,7 +1293,7 @@ void Manager::UpdateQueuedWO(const RefInfo& ref_info, const float curr_time) {
 
     source->UpdateWorldItemTrigger(ref, wo_inst, curr_time);
     if (const auto next_update = source->GetNextUpdateTime(&wo_inst); next_update > curr_time) {
-        RefStop a_ref_stop(refid, QueueInfo::UpdateFlag::kWorldObject);
+        RefStop a_ref_stop(refid, QueueInfo::UpdateType::kWorldObject);
         UpdateRefStop(*source, wo_inst, a_ref_stop, next_update);
         QueueRefUpdate(a_ref_stop);
     }
@@ -1354,7 +1359,7 @@ void Manager::UpdateWO(RE::TESObjectREFR* ref) {
     if (wo_inst.xtra.is_fake) ApplyStageInWorld(ref, source->GetStage(wo_inst.no), source->GetBoundObject());
     source->UpdateWorldItemTrigger(ref, wo_inst, curr_time);
     if (const auto next_update = source->GetNextUpdateTime(&wo_inst); next_update > curr_time) {
-        RefStop a_ref_stop(refid, QueueInfo::UpdateFlag::kWorldObject);
+        RefStop a_ref_stop(refid, QueueInfo::UpdateType::kWorldObject);
         UpdateRefStop(*source, wo_inst, a_ref_stop, next_update);
         QueueRefUpdate(a_ref_stop);
     }
@@ -1468,7 +1473,7 @@ void Manager::Register(const FormID some_formid, const Count count, const RefID 
         src->UpdateWorldItemTrigger(ref, *inserted_instance, register_time);
         // add to the queue
         const auto hitting_time = src->GetNextUpdateTime(inserted_instance);
-        RefStop a_ref_stop(location_refid, QueueInfo::UpdateFlag::kWorldObject);
+        RefStop a_ref_stop(location_refid, QueueInfo::UpdateType::kWorldObject);
         UpdateRefStop(*src, *inserted_instance, a_ref_stop, hitting_time);
         QueueRefUpdate(a_ref_stop);
         UpdateLocationIndexForSource(*src, location_refid);
@@ -2064,7 +2069,7 @@ std::unordered_map<RefID, std::optional<float>> Manager::GetUpdateQueue() {
     std::unordered_map<RefID, std::optional<float>> _ref_stops_copy;
     QUE_SHARED_GUARD;
     for (const auto& [key, value] : _ref_stops_) {
-        _ref_stops_copy[key] = value.update_flags.any(QueueInfo::UpdateFlag::kWorldObject)
+        _ref_stops_copy[key] = value.update_type == QueueInfo::UpdateType::kWorldObject
                                    ? std::optional{value.stop_time}
                                    : std::nullopt;
     }

@@ -155,7 +155,7 @@ void RefStop::Update(const RefStop& other) {
     }
 
     ref_info = other.ref_info;
-    update_flags = other.update_flags;
+    update_type = other.update_type;
     inventory_watch = other.inventory_watch;
 
     if (features.tint_color.id != other.features.tint_color.id) {

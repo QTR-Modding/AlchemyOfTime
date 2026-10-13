@@ -76,7 +76,7 @@ CellScanner::WorkItemPtr CellScanner::BuildWorkItem_(const std::uint64_t gen,
     for (auto& [ref_info, forms] : requests) {
         work->refInfos->push_back(ref_info);
 
-        for (auto form : forms) {
+        for (const auto form : forms) {
             work->AddTrigger(form);
         }
     }

@@ -20,11 +20,11 @@ struct RefStop : QueueInfo {
 
     explicit RefStop(const QueueInfo& queue_info) : QueueInfo(queue_info) {}
 
-    explicit RefStop(const RefInfo& a_info, const REX::EnumSet<UpdateFlag> a_update_flags)
-        : RefStop(QueueInfo{.ref_info = a_info, .update_flags = a_update_flags}) {}
+    explicit RefStop(const RefInfo& a_info, const UpdateType a_update_type)
+        : RefStop(QueueInfo{.ref_info = a_info, .update_type = a_update_type}) {}
 
-    explicit RefStop(const RefID a_ref_id, const REX::EnumSet<UpdateFlag> a_update_flags)
-        : RefStop(RefInfo(a_ref_id), a_update_flags) {}
+    explicit RefStop(const RefID a_ref_id, const UpdateType a_update_type)
+        : RefStop(RefInfo(a_ref_id), a_update_type) {}
 
     [[nodiscard]] bool IsDue(float curr_time) const;
 

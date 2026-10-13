@@ -50,7 +50,7 @@ FormID GetTriggerInInventory(std::ranges::input_range auto&& trigger_ids,
             if (!queue_info.inventory_watch) {
                 queue_info.inventory_watch = std::make_shared<InventoryWatch>();
                 queue_info.inventory_watch->last_location = owner->GetCurrentLocation();
-                queue_info.update_flags.set(QueueInfo::UpdateFlag::kInventory);
+                queue_info.update_type = QueueInfo::UpdateType::kInventory;
             }
 
             if (auto& watch = *queue_info.inventory_watch; watch.Eval(trigger, owner, inventory)) {
