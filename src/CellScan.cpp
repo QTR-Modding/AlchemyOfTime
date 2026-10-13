@@ -159,45 +159,46 @@ void CellScanner::CollectCellsToScan_(const std::vector<RefInfo>& refInfos,
     }
 }
 
-void CellScanner::AddEntry_(const FormID triggerID, const RE::TESObjectREFR* ref, Cache& outCache) {
-    Entry e;
-    e.refid = ref->GetFormID();
-    e.pos = Utils::WorldObject::GetPosition(ref);
-    outCache.byTrigger[triggerID].push_back(e);
-}
-
 void CellScanner::CollectCellMatches_(RE::TESObjectREFR* ref,
                                       const std::unordered_map<MatchType, std::unordered_set<RE::TESForm*>>& triggers,
                                       Cache& outCache) {
     const auto base = ref->GetObjectReference();
     if (!base) return;
 
+    std::optional<Entry> entry;
+    const auto addEntry = [&](const FormID triggerID) {
+        if (!entry) {
+            entry.emplace(ref->GetFormID(), Utils::WorldObject::GetPosition(ref));
+        }
+        outCache.byTrigger[triggerID].push_back(*entry);
+    };
+
     for (const auto& [type, forms] : triggers) {
         switch (type) {
             case MatchType::kBaseObject:
-                if (forms.contains(base)) AddEntry_(base->GetFormID(), ref, outCache);
+                if (forms.contains(base)) addEntry(base->GetFormID());
                 break;
             case MatchType::kKeyword:
                 if (const auto keywords = base->As<RE::BGSKeywordForm>()) {
                     for (const auto keyword : keywords->GetKeywords()) {
                         if (!keyword || !forms.contains(keyword)) continue;
-                        AddEntry_(keyword->GetFormID(), ref, outCache);
+                        addEntry(keyword->GetFormID());
                     }
                 }
                 break;
             case MatchType::kMagicEffect:
                 for (const auto effect : Utils::WorldObject::CollectActiveMagicEffects(ref)) {
-                    if (forms.contains(effect)) AddEntry_(effect->GetFormID(), ref, outCache);
+                    if (forms.contains(effect)) addEntry(effect->GetFormID());
                 }
                 break;
             case MatchType::kFaction:
                 if (const auto actor = ref->As<RE::Actor>()) {
                     for (const auto form : forms) {
                         const auto faction = static_cast<RE::TESFaction*>(form);
-                        if (actor->IsInFaction(faction)) AddEntry_(faction->GetFormID(), ref, outCache);
+                        if (actor->IsInFaction(faction)) addEntry(faction->GetFormID());
                     }
                 } else if (const auto faction = ref->GetFactionOwner(); forms.contains(faction)) {
-                    AddEntry_(faction->GetFormID(), ref, outCache);
+                    addEntry(faction->GetFormID());
                 }
                 break;
             case MatchType::kTempEffect:
@@ -234,7 +235,7 @@ void CellScanner::ScanAppliedEffects_(const std::unordered_set<RE::TESObjectCELL
         if (!ref || !Utils::WorldObject::IsActive(ref.get()) ||
             !cellsToScan.contains(ref->GetParentCell())) continue;
 
-        AddEntry_(form->GetFormID(), ref.get(), outCache);
+        outCache.byTrigger[form->GetFormID()].push_back({ref->GetFormID(), Utils::WorldObject::GetPosition(ref.get())});
     }
 }
 

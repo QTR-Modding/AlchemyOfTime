@@ -64,8 +64,6 @@ private:
     static void CollectCellsToScan_(const std::vector<RefInfo>& refInfos,
                                     std::unordered_set<RE::TESObjectCELL*>& cellsToScan);
 
-    static void AddEntry_(FormID triggerID, const RE::TESObjectREFR* ref, Cache& outCache);
-
     static void CollectCellMatches_(RE::TESObjectREFR* ref,
                                     const std::unordered_map<MatchType, std::unordered_set<RE::TESForm*>>& triggers,
                                     Cache& outCache);
