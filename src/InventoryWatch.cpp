@@ -13,7 +13,7 @@ bool InventoryWatch::HasChanged(RE::TESObjectREFR* owner) {
         if (matches(location) != Utils::IsInLocation(location, last_location)) return true;
     }
     return perks.HasChanged(matches) || magic_effects.HasChanged(matches) || factions.HasChanged(matches) ||
-           art_objects.HasChanged(matches) || effect_shaders.HasChanged(matches);
+           temp_effects.HasChanged(matches);
 }
 
 bool InventoryWatch::Eval(RE::TESForm* trigger, RE::TESObjectREFR* owner,
@@ -36,14 +36,9 @@ bool InventoryWatch::Eval(RE::TESForm* trigger, RE::TESObjectREFR* owner,
             const auto faction = static_cast<RE::TESFaction*>(trigger);
             return factions.Eval(faction, [&] { return Utils::WorldObject::MatchesFaction(owner, faction); });
         }
-        case RE::FormType::ArtObject: {
-            const auto effect = static_cast<RE::BGSArtObject*>(trigger);
-            return art_objects.Eval(effect, [&] { return inventory.HasTempEffect(owner, effect); });
-        }
-        case RE::FormType::EffectShader: {
-            const auto effect = static_cast<RE::TESEffectShader*>(trigger);
-            return effect_shaders.Eval(effect, [&] { return inventory.HasTempEffect(owner, effect); });
-        }
+        case RE::FormType::ArtObject:
+        case RE::FormType::EffectShader:
+            return temp_effects.Eval(trigger, [&] { return inventory.HasTempEffect(owner, trigger); });
         default:
             return false;
     }
