@@ -210,9 +210,9 @@ void Scanner::RequestRefresh(std::vector<Request> requests) {
 }
 
 
-std::optional<bool> Scanner::Cache::HasTempEffect(RE::TESObjectREFR* owner, RE::TESForm* effect) const {
-    if (!global_cache.requested_temp_effects.contains(effect) || !global_cache.temp_effs) return std::nullopt;
-    return global_cache.HasTempEff(owner, effect);
+std::optional<bool> Scanner::Cache::TryGetMatch(RE::TESObjectREFR* ref, RE::TESForm* property) const {
+    if (!global_cache.requested_temp_effects.contains(property) || !global_cache.temp_effs) return std::nullopt;
+    return global_cache.HasTempEff(ref, property);
 }
 
 Scanner::CachePtr Scanner::GetCache() const {

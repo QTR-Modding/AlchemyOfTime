@@ -55,7 +55,7 @@ public:
             return it != byTrigger.end() && it->second.contains(refid);
         }
 
-        [[nodiscard]] std::optional<bool> HasTempEffect(RE::TESObjectREFR* owner, RE::TESForm* effect) const;
+        [[nodiscard]] std::optional<bool> TryGetMatch(RE::TESObjectREFR* ref, RE::TESForm* property) const;
 
     private:
         friend class Scanner;

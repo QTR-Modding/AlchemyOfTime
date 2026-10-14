@@ -543,7 +543,7 @@ bool Utils::Inventory::Snapshot::HasMagicEffect(RE::TESObjectREFR* owner, RE::Ef
 
 bool Utils::Inventory::Snapshot::HasTempEffect(RE::TESObjectREFR* owner, RE::TESForm* effect) const {
     if (temp_effects) return temp_effects->contains(effect);
-    if (const auto cached = Scanner::GetSingleton()->GetCache()->HasTempEffect(owner, effect); cached.has_value()) {
+    if (const auto cached = Scanner::GetSingleton()->GetCache()->TryGetMatch(owner, effect); cached.has_value()) {
         return *cached;
     }
     temp_effects = WorldObject::CollectTempEffects(owner);
