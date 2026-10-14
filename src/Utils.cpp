@@ -424,9 +424,9 @@ bool Utils::WorldObject::MatchesFaction(RE::TESObjectREFR* ref, const RE::TESFac
 
 namespace {
     template <class Visit>
-    bool ForEachActiveTempEffect(Visit&& visit) {
+    void ForEachActiveTempEffect(Visit&& visit) {
         const auto processLists = RE::ProcessLists::GetSingleton();
-        if (!processLists) return false;
+        if (!processLists) return;
 
         processLists->ForEachMagicTempEffect([&](RE::BSTempEffect* tempEffect) {
             const auto effect = tempEffect->As<RE::ModelReferenceEffect>();
@@ -438,28 +438,29 @@ namespace {
             }
             return RE::BSContainer::ForEachResult::kContinue;
         });
-        return true;
     }
 }
 
 std::unordered_map<RE::ObjectRefHandle, std::unordered_set<RE::TESForm*>, RE::BSCRC32<RE::ObjectRefHandle>> Utils::WorldObject::CollectTempEffects(
     const std::unordered_set<RE::TESForm*>& forms) {
+    std::vector<std::pair<RE::ObjectRefHandle, RE::TESForm*>> targets;
+    ForEachActiveTempEffect([&](RE::ObjectRefHandle target, RE::TESForm* form) {
+        if (forms.contains(form)) targets.emplace_back(target, form);
+    });
     std::unordered_map<RE::ObjectRefHandle, std::unordered_set<RE::TESForm*>, RE::BSCRC32<RE::ObjectRefHandle>> temp_effs;
-    if (ForEachActiveTempEffect([&](RE::ObjectRefHandle target, RE::TESForm* form) {
-            if (forms.contains(form)) temp_effs[target].insert(form);
-        })) {
-        temp_effs[RE::ObjectRefHandle{}] = {};
+    for (const auto& [target, form] : targets) {
+        temp_effs[target].insert(form);
     }
     return temp_effs;
 }
 
 std::unordered_set<RE::TESForm*> Utils::WorldObject::CollectTempEffects(RE::TESObjectREFR* owner) {
-    std::unordered_set<RE::TESForm*> effects;
+    std::vector<RE::TESForm*> effects;
     const auto handle = owner->GetHandle();
     ForEachActiveTempEffect([&](RE::ObjectRefHandle target, RE::TESForm* form) {
-        if (target == handle) effects.insert(form);
+        if (target == handle) effects.push_back(form);
     });
-    return effects;
+    return {effects.begin(), effects.end()};
 }
 
 std::unordered_set<RE::EffectSetting*> Utils::WorldObject::CollectMagicEffects(RE::TESObjectREFR* ref) {

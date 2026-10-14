@@ -7,7 +7,7 @@
 
 struct LazyCache {
     std::unordered_set<RE::TESForm*> requested_temp_effects;
-    mutable std::unordered_map<RE::ObjectRefHandle, std::unordered_set<RE::TESForm*>, RE::BSCRC32<RE::ObjectRefHandle>> temp_effs;
+    mutable std::optional<std::unordered_map<RE::ObjectRefHandle, std::unordered_set<RE::TESForm*>, RE::BSCRC32<RE::ObjectRefHandle>>> temp_effs;
     mutable std::unordered_map<RefID, std::unordered_set<RE::EffectSetting*>> mg_effs;
     mutable std::unordered_map<FormID, std::unordered_set<RE::BGSKeyword*>> keywords;
     mutable std::unordered_map<RefID, RE::BGSLocation*> locations;

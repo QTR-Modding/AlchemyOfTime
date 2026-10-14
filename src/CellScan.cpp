@@ -5,10 +5,10 @@
 
 const std::unordered_map<RE::ObjectRefHandle, std::unordered_set<RE::TESForm*>, RE::BSCRC32<RE::ObjectRefHandle>>&
 LazyCache::GetTempEffects() const {
-    if (temp_effs.empty()) {
+    if (!temp_effs) {
         temp_effs = Utils::WorldObject::CollectTempEffects(requested_temp_effects);
     }
-    return temp_effs;
+    return *temp_effs;
 }
 
 const std::unordered_set<RE::EffectSetting*>& LazyCache::GetMagicEffects(RE::TESObjectREFR* a_ref) const {
@@ -211,9 +211,10 @@ void Scanner::RequestRefresh(std::vector<Request> requests) {
 
 
 std::optional<bool> Scanner::Cache::HasTempEffect(RE::TESObjectREFR* owner, RE::TESForm* effect) const {
-    if (!global_cache.requested_temp_effects.contains(effect) || global_cache.temp_effs.empty()) return std::nullopt;
-    const auto it = global_cache.temp_effs.find(owner->GetHandle());
-    return it != global_cache.temp_effs.end() && it->second.contains(effect);
+    if (!global_cache.requested_temp_effects.contains(effect) || !global_cache.temp_effs) return std::nullopt;
+    const auto& effects = *global_cache.temp_effs;
+    const auto it = effects.find(owner->GetHandle());
+    return it != effects.end() && it->second.contains(effect);
 }
 
 Scanner::CachePtr Scanner::GetCache() const {
