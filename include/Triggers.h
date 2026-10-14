@@ -5,9 +5,9 @@
 
 enum class UpdatePhase { kCatchUp, kCurrent };
 
-constexpr auto poll_formtypes =
-    std::array{RE::FormType::Location, RE::FormType::Perk, RE::FormType::MagicEffect, RE::FormType::Faction,
-               RE::FormType::ArtObject, RE::FormType::EffectShader};
+constexpr auto poll_matchtypes =
+    std::array{MatchType::kLocation, MatchType::kPerk, MatchType::kMagicEffect, MatchType::kFaction,
+               MatchType::kTempEffect};
 
 REX::EnumSet<Scanner::Scope> GetWorldTriggerScope(RE::TESForm* form);
 
@@ -41,7 +41,7 @@ FormID GetTriggerInInventory(std::ranges::input_range auto&& trigger_ids,
         const auto trigger = RE::TESForm::LookupByID(a_trigger_id);
         if (!trigger) continue;
 
-        if (std::ranges::contains(poll_formtypes, trigger->GetFormType())) {
+        if (std::ranges::contains(poll_matchtypes, GetMatchType_(trigger->GetFormType()))) {
             if (phase == UpdatePhase::kCatchUp) {
                 if (a_trigger_id == instance.GetDelayerFormID()) return a_trigger_id;
                 continue;

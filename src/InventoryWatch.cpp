@@ -18,26 +18,25 @@ bool InventoryWatch::HasChanged(const RE::TESObjectREFR* owner) const {
 
 bool InventoryWatch::Eval(RE::TESForm* trigger, RE::TESObjectREFR* owner,
                           const Utils::Inventory::Snapshot& inventory) {
-    switch (trigger->GetFormType()) {
-        case RE::FormType::Location: {
+    switch (GetMatchType_(trigger->GetFormType())) {
+        case MatchType::kLocation: {
             const auto location = static_cast<RE::BGSLocation*>(trigger);
             locations.insert(location);
             return Utils::IsInLocation(location, last_location);
         }
-        case RE::FormType::Perk: {
+        case MatchType::kPerk: {
             const auto perk = static_cast<RE::BGSPerk*>(trigger);
             return perks.Eval(perk, [&] { return perk->perkConditions.IsTrue(owner, owner); });
         }
-        case RE::FormType::MagicEffect: {
+        case MatchType::kMagicEffect: {
             const auto magicEffect = static_cast<RE::EffectSetting*>(trigger);
             return magic_effects.Eval(magicEffect, [&] { return inventory.HasMagicEffect(owner, magicEffect); });
         }
-        case RE::FormType::Faction: {
+        case MatchType::kFaction: {
             const auto faction = static_cast<RE::TESFaction*>(trigger);
             return factions.Eval(faction, [&] { return Utils::WorldObject::MatchesFaction(owner, faction); });
         }
-        case RE::FormType::ArtObject:
-        case RE::FormType::EffectShader:
+        case MatchType::kTempEffect:
             return temp_effects.Eval(trigger, [&] { return inventory.HasTempEffect(owner, trigger); });
         default:
             return false;

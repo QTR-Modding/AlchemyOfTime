@@ -1189,7 +1189,7 @@ void Manager::UpdateQueuedInventory(const QueueInfo& queue_info) {
 void Manager::RestoreInventoryWatches() {
     const auto needs_watch = [](const Triggers& triggers) {
         return std::ranges::any_of(triggers.ordered, [](const Scanner::ScopedForm& trigger) {
-            return std::ranges::contains(poll_formtypes, trigger.form->GetFormType());
+            return std::ranges::contains(poll_matchtypes, GetMatchType_(trigger.form->GetFormType()));
         });
     };
     for (const auto& source : sources | std::views::values) {
