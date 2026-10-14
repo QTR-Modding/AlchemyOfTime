@@ -212,9 +212,7 @@ void Scanner::RequestRefresh(std::vector<Request> requests) {
 
 std::optional<bool> Scanner::Cache::HasTempEffect(RE::TESObjectREFR* owner, RE::TESForm* effect) const {
     if (!global_cache.requested_temp_effects.contains(effect) || !global_cache.temp_effs) return std::nullopt;
-    const auto& effects = *global_cache.temp_effs;
-    const auto it = effects.find(owner->GetHandle());
-    return it != effects.end() && it->second.contains(effect);
+    return global_cache.HasTempEff(owner, effect);
 }
 
 Scanner::CachePtr Scanner::GetCache() const {
