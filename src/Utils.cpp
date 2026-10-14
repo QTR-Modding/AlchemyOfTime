@@ -1,4 +1,5 @@
 #include "Utils.h"
+#include "CellScan.h"
 #include "CLibUtilsQTR/FormReader.hpp"
 #include "Settings.h"
 #include "MCP.h"
@@ -421,42 +422,63 @@ bool Utils::WorldObject::MatchesFaction(RE::TESObjectREFR* ref, const RE::TESFac
     return ref->GetFactionOwner() == faction;
 }
 
-bool Utils::WorldObject::HasTempEffect(RE::TESObjectREFR*, RE::TESForm*) {
-    // Placeholder: temp-effect detection will be implemented separately.
-    return false;
-}
+namespace {
+    template <class Visit>
+    bool ForEachActiveTempEffect(Visit&& visit) {
+        const auto processLists = RE::ProcessLists::GetSingleton();
+        if (!processLists) return false;
 
-std::vector<std::pair<RE::TESForm*, RE::ObjectRefHandle>> Utils::WorldObject::CollectAppliedEffectTargets(
-    const std::unordered_set<RE::TESForm*>& forms) {
-    std::vector<std::pair<RE::TESForm*, RE::ObjectRefHandle>> targets;
-    if (const auto processLists = RE::ProcessLists::GetSingleton()) {
         processLists->ForEachMagicTempEffect([&](RE::BSTempEffect* tempEffect) {
             const auto effect = tempEffect->As<RE::ModelReferenceEffect>();
-            if (effect && !effect->finished && forms.contains(effect->artObject)) {
-                targets.emplace_back(effect->artObject, effect->target);
+            if (effect && !effect->finished && effect->artObject) {
+                if (effect->target) visit(effect->target, effect->artObject);
             } else if (const auto shader = tempEffect->As<RE::ShaderReferenceEffect>();
-                       shader && !shader->finished && forms.contains(shader->effectData)) {
-                targets.emplace_back(shader->effectData, shader->target);
+                       shader && !shader->finished && shader->effectData) {
+                if (shader->target) visit(shader->target, shader->effectData);
             }
             return RE::BSContainer::ForEachResult::kContinue;
         });
+        return true;
     }
-    return targets;
 }
 
-std::unordered_set<RE::EffectSetting*> Utils::WorldObject::CollectActiveMagicEffects(RE::TESObjectREFR* ref) {
-    std::unordered_set<RE::EffectSetting*> effects;
-    const auto target = ref->GetMagicTarget();
-    if (!target) return effects;
-    if (const auto list = target->GetActiveEffectList()) {
-        for (const auto effect : *list) {
-            if (!effect || effect->flags.any(RE::ActiveEffect::Flag::kInactive, RE::ActiveEffect::Flag::kDispelled) ||
-                effect->conditionStatus == RE::ActiveEffect::ConditionStatus::kFalse) continue;
-            if (const auto base = effect->GetBaseObject()) effects.insert(base);
-        }
+std::unordered_map<RE::ObjectRefHandle, std::unordered_set<RE::TESForm*>, RE::BSCRC32<RE::ObjectRefHandle>> Utils::WorldObject::CollectTempEffects(
+    const std::unordered_set<RE::TESForm*>& forms) {
+    std::unordered_map<RE::ObjectRefHandle, std::unordered_set<RE::TESForm*>, RE::BSCRC32<RE::ObjectRefHandle>> temp_effs;
+    if (ForEachActiveTempEffect([&](RE::ObjectRefHandle target, RE::TESForm* form) {
+            if (forms.contains(form)) temp_effs[target].insert(form);
+        })) {
+        temp_effs[RE::ObjectRefHandle{}] = {};
     }
+    return temp_effs;
+}
+
+std::unordered_set<RE::TESForm*> Utils::WorldObject::CollectTempEffects(RE::TESObjectREFR* owner) {
+    std::unordered_set<RE::TESForm*> effects;
+    const auto handle = owner->GetHandle();
+    ForEachActiveTempEffect([&](RE::ObjectRefHandle target, RE::TESForm* form) {
+        if (target == handle) effects.insert(form);
+    });
     return effects;
 }
+
+std::unordered_set<RE::EffectSetting*> Utils::WorldObject::CollectMagicEffects(RE::TESObjectREFR* ref) {
+    std::unordered_set<RE::EffectSetting*> magic_effects;
+    if (const auto target = ref->GetMagicTarget()) {
+        if (const auto list = target->GetActiveEffectList()) {
+            for (const auto effect : *list) {
+                if (!effect || effect->flags.any(RE::ActiveEffect::Flag::kInactive, RE::ActiveEffect::Flag::kDispelled) ||
+                    effect->conditionStatus == RE::ActiveEffect::ConditionStatus::kFalse) continue;
+                if (const auto base = effect->GetBaseObject()) {
+                    magic_effects.insert(base);
+                }
+            }
+        }
+    }
+    return magic_effects;
+}
+
+
 
 bool Utils::WorldObject::IsPlacedObject(RE::TESObjectREFR* ref) {
     if (ref->extraList.HasType(RE::ExtraDataType::kStartingPosition)) {
@@ -514,8 +536,17 @@ bool Utils::Inventory::Snapshot::HasKeyword(RE::BGSKeyword* keyword) const {
 }
 
 bool Utils::Inventory::Snapshot::HasMagicEffect(RE::TESObjectREFR* owner, RE::EffectSetting* effect) const {
-    if (!magic_effects) magic_effects = WorldObject::CollectActiveMagicEffects(owner);
+    if (!magic_effects) magic_effects = WorldObject::CollectMagicEffects(owner);
     return magic_effects->contains(effect);
+}
+
+bool Utils::Inventory::Snapshot::HasTempEffect(RE::TESObjectREFR* owner, RE::TESForm* effect) const {
+    if (temp_effects) return temp_effects->contains(effect);
+    if (const auto cached = Scanner::GetSingleton()->GetCache()->HasTempEffect(owner, effect); cached.has_value()) {
+        return *cached;
+    }
+    temp_effects = WorldObject::CollectTempEffects(owner);
+    return temp_effects->contains(effect);
 }
 
 bool Utils::Inventory::IsQuestItem(const FormID formid, const InvMap& a_inv) {

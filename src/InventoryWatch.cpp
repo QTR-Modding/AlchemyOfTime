@@ -1,33 +1,19 @@
 #include "InventoryWatch.h"
+#include "CellScan.h"
 
 
 bool InventoryWatch::HasChanged(RE::TESObjectREFR* owner) {
-    if (!locations.empty()) {
-        if (const auto current = owner->GetCurrentLocation(); current != last_location) {
-            for (const auto location : locations) {
-                if (Utils::IsInLocation(location, last_location) != Utils::IsInLocation(location, current)) {
-                    return true;
-                }
-            }
-            last_location = current;
-        }
+    const auto cache = Scanner::GetSingleton()->GetCache();
+    const auto ownerID = owner->GetFormID();
+    const auto matches = [&](const RE::TESForm* form) {
+        return cache->HasMatch(ownerID, form->GetFormID());
+    };
+
+    for (const auto location : locations) {
+        if (matches(location) != Utils::IsInLocation(location, last_location)) return true;
     }
-    if (perks.HasChanged([&](const RE::BGSPerk* perk) { return perk->perkConditions.IsTrue(owner, owner); })) {
-        return true;
-    }
-    if (!magic_effects.list.empty()) {
-        const auto active = Utils::WorldObject::CollectActiveMagicEffects(owner);
-        if (magic_effects.HasChanged([&](RE::EffectSetting* effect) { return active.contains(effect); })) {
-            return true;
-        }
-    }
-    if (factions.HasChanged([&](const RE::TESFaction* faction) { return Utils::WorldObject::MatchesFaction(owner, faction); })) {
-        return true;
-    }
-    if (art_objects.HasChanged([&](RE::BGSArtObject* effect) { return Utils::WorldObject::HasTempEffect(owner, effect); })) {
-        return true;
-    }
-    return effect_shaders.HasChanged([&](RE::TESEffectShader* effect) { return Utils::WorldObject::HasTempEffect(owner, effect); });
+    return perks.HasChanged(matches) || magic_effects.HasChanged(matches) || factions.HasChanged(matches) ||
+           art_objects.HasChanged(matches) || effect_shaders.HasChanged(matches);
 }
 
 bool InventoryWatch::Eval(RE::TESForm* trigger, RE::TESObjectREFR* owner,
@@ -52,11 +38,11 @@ bool InventoryWatch::Eval(RE::TESForm* trigger, RE::TESObjectREFR* owner,
         }
         case RE::FormType::ArtObject: {
             const auto effect = static_cast<RE::BGSArtObject*>(trigger);
-            return art_objects.Eval(effect, [&] { return Utils::WorldObject::HasTempEffect(owner, effect); });
+            return art_objects.Eval(effect, [&] { return inventory.HasTempEffect(owner, effect); });
         }
         case RE::FormType::EffectShader: {
             const auto effect = static_cast<RE::TESEffectShader*>(trigger);
-            return effect_shaders.Eval(effect, [&] { return Utils::WorldObject::HasTempEffect(owner, effect); });
+            return effect_shaders.Eval(effect, [&] { return inventory.HasTempEffect(owner, effect); });
         }
         default:
             return false;

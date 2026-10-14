@@ -66,47 +66,53 @@ namespace {
     }
 }
 
+REX::EnumSet<Scanner::Scope> GetWorldTriggerScope(RE::TESForm* form) {
+    switch (form->GetFormType()) {
+        case RE::FormType::Location:
+        case RE::FormType::Perk:
+            return {Scanner::Scope::kSelf};
+        case RE::FormType::ArtObject:
+        case RE::FormType::EffectShader:
+        case RE::FormType::MagicEffect:
+        case RE::FormType::Faction:
+            return {Scanner::Scope::kSelf, Scanner::Scope::kProximity};
+        default:
+            if (form->As<RE::BGSKeyword>()) {
+                return {Scanner::Scope::kSelf, Scanner::Scope::kProximity};
+            }
+            if (form->As<RE::TESBoundObject>()) {
+                return {Scanner::Scope::kProximity};
+            }
+            return {};
+    }
+}
+
+
 FormID FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers) {
     if (!a_obj || triggers.ordered.empty()) return 0;
 
-    const auto cache = triggers.scan_forms.empty() ? nullptr : CellScanner::GetSingleton()->GetCache();
+    const auto cache = Scanner::GetSingleton()->GetCache();
+    LazyCache live_cache;
+    const auto originID = a_obj->GetFormID();
     const auto originPos = Utils::WorldObject::GetPosition(a_obj);
 
     const float r = Settings::search_radius;
     const float r2 = (r > 0.0f) ? (r * r) : std::numeric_limits<float>::infinity();
 
-    const auto current_location = a_obj->GetCurrentLocation();
-    for (const auto form : triggers.ordered) {
-        // doesnt need scan
-        switch (form->GetFormType()) {
-            case RE::FormType::Location: {
-                const auto location = static_cast<RE::BGSLocation*>(form);
-                if (Utils::IsInLocation(location, current_location)) {
-                    return form->GetFormID();
-                }
-                continue;
-            }
-            case RE::FormType::Perk: {
-                const auto perk = static_cast<RE::BGSPerk*>(form);
-                if (perk->perkConditions.IsTrue(a_obj, a_obj)) {
-                    return form->GetFormID();
-                }
-                continue;
-            }
-            default:
-                break;
-        }
-        if (!cache) continue;
-        const bool appliedEffect =
-            std::ranges::contains(CellScanner::applied_effect_trigger_types, form->GetFormType());
+    for (const auto& [form, scope] : triggers.ordered) {
         const auto triggerID = form->GetFormID();
+        if (!scope.any(Scanner::Scope::kProximity)) {
+            if (scope.any(Scanner::Scope::kSelf) && Matches(a_obj, form, live_cache)) return triggerID;
+            continue;
+        }
+        if (scope.any(Scanner::Scope::kSelf) && cache->HasMatch(originID, triggerID)) return triggerID;
+
         const auto it = cache->byTrigger.find(triggerID);
         if (it == cache->byTrigger.end()) {
             continue;
         }
 
         for (const auto& e : it->second) {
-            if (appliedEffect && e.refid == a_obj->GetFormID()) return triggerID;
             if (originPos.GetSquaredDistance(e.pos) > r2) {
                 continue;
             }

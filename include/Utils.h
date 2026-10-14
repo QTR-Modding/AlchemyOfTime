@@ -121,16 +121,14 @@ namespace Utils {
 
         bool MatchesFaction(RE::TESObjectREFR* ref, const RE::TESFaction* faction);
 
-        bool HasTempEffect(RE::TESObjectREFR* ref, RE::TESForm* effect);
-
         RE::TESObjectREFR* DropObjectIntoTheWorld(RE::TESBoundObject* obj, Count count, bool player_owned = true);
 
         void SwapObjects(RE::TESObjectREFR* a_from, RE::TESBoundObject* a_to, bool apply_havok = true);
 
-        std::vector<std::pair<RE::TESForm*, RE::ObjectRefHandle>> CollectAppliedEffectTargets(
-            const std::unordered_set<RE::TESForm*>& forms);
-
-        std::unordered_set<RE::EffectSetting*> CollectActiveMagicEffects(RE::TESObjectREFR* ref);
+        std::unordered_map<RE::ObjectRefHandle, std::unordered_set<RE::TESForm*>, RE::BSCRC32<RE::ObjectRefHandle>>
+        CollectTempEffects(const std::unordered_set<RE::TESForm*>& forms);
+        std::unordered_set<RE::TESForm*> CollectTempEffects(RE::TESObjectREFR* owner);
+        std::unordered_set<RE::EffectSetting*> CollectMagicEffects(RE::TESObjectREFR* ref);
 
         bool IsPlacedObject(RE::TESObjectREFR* ref);
 
@@ -142,9 +140,11 @@ namespace Utils {
             InvMap items;
             mutable std::optional<std::unordered_set<RE::BGSKeyword*>> keywords;
             mutable std::optional<std::unordered_set<RE::EffectSetting*>> magic_effects;
+            mutable std::optional<std::unordered_set<RE::TESForm*>> temp_effects;
 
             bool HasKeyword(RE::BGSKeyword* keyword) const;
             bool HasMagicEffect(RE::TESObjectREFR* owner, RE::EffectSetting* effect) const;
+            bool HasTempEffect(RE::TESObjectREFR* owner, RE::TESForm* effect) const;
         };
 
         bool IsQuestItem(FormID formid, const InvMap& a_inv);

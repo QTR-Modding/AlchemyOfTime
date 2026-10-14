@@ -1,4 +1,5 @@
 #pragma once
+#include "CellScan.h"
 #include "InventoryWatch.h"
 #include "Stages.h"
 
@@ -8,10 +9,10 @@ constexpr auto poll_formtypes =
     std::array{RE::FormType::Location, RE::FormType::Perk, RE::FormType::MagicEffect, RE::FormType::Faction,
                RE::FormType::ArtObject, RE::FormType::EffectShader};
 
+REX::EnumSet<Scanner::Scope> GetWorldTriggerScope(RE::TESForm* form);
+
 struct Triggers {
-    std::vector<RE::TESForm*> ordered;  // from configs, in the given order
-    std::vector<RE::TESForm*>
-        scan_forms;  // excludes Locations and Perks because those are checked directly on the item
+    std::vector<Scanner::ScopedForm> ordered;  // from configs, in the given order
 };
 
 FormID FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers);

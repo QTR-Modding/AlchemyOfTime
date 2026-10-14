@@ -119,20 +119,16 @@ void Source::UpdateAddons() {
 
 template <class T>
 void Source::AddTriggers(const tsl::ordered_map<FormID, T>& a_triggers,
-                              const std::unordered_map<FormID, std::unordered_set<StageNo>>& allowed_stages) {
+                         const std::unordered_map<FormID, std::unordered_set<StageNo>>& allowed_stages) {
     for (const auto trigger_id : a_triggers | std::views::keys) {
         const auto form = FormReader::GetFormByID(trigger_id);
         if (!form) continue;
-        const auto location = form->As<RE::BGSLocation>();
-        const auto perk = location ? nullptr : form->As<RE::BGSPerk>();
-        const auto base = location || perk ? nullptr : form->As<RE::TESBoundObject>();
-        if (!location && !perk && !base && !form->As<RE::BGSKeyword>() && !form->As<RE::TESFaction>() &&
-            !std::ranges::contains(CellScanner::applied_effect_trigger_types, form->GetFormType())) continue;
+
+        const auto scope = GetWorldTriggerScope(form);
+        if (!scope) continue;
 
         for (const auto no : allowed_stages.at(trigger_id)) {
-            auto& prepared = triggers[no];
-            prepared.ordered.emplace_back(form);
-            if (!location && !perk) prepared.scan_forms.push_back(form);
+            triggers[no].ordered.push_back({.form = form, .scope = scope});
         }
     }
 }
@@ -141,11 +137,6 @@ void Source::RebuildTriggers() {
     triggers.clear();
     AddTriggers(settings.transformers, settings.transformer_allowed_stages);
     AddTriggers(settings.delayers, settings.delayer_allowed_stages);
-    for (auto& prepared : triggers | std::views::values) {
-        auto& forms = prepared.scan_forms;
-        std::ranges::sort(forms);
-        forms.erase(std::ranges::unique(forms).begin(), forms.end());
-    }
 }
 
 RE::TESBoundObject* Source::GetBoundObject() const {

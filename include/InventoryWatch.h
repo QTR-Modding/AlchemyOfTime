@@ -35,6 +35,9 @@ struct InventoryWatch {  // inventory owner watch
     [[nodiscard]] bool HasChanged(RE::TESObjectREFR* owner);
     bool Eval(RE::TESForm* trigger, RE::TESObjectREFR* owner,
               const Utils::Inventory::Snapshot& inventory);
+
+    template <typename Visit>
+    void ForEachTrigger(Visit&& visit) const;
 };
 
 
@@ -50,3 +53,21 @@ struct QueueInfo {
     float stop_time = 0;
     std::shared_ptr<InventoryWatch> inventory_watch;
 };
+
+
+template <typename Visit>
+void InventoryWatch::ForEachTrigger(Visit&& visit) const {
+    for (const auto trigger : locations) visit(trigger);
+
+    const auto visitList = [&visit](const auto& watch) {
+        for (const auto trigger : watch.list | std::views::keys) {
+            visit(trigger);
+        }
+    };
+
+    visitList(perks);
+    visitList(magic_effects);
+    visitList(factions);
+    visitList(art_objects);
+    visitList(effect_shaders);
+}

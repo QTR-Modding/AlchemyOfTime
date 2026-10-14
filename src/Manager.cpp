@@ -96,40 +96,39 @@ void Manager::RefreshLocationIndex(const RefID location_id) {
     }
 }
 
-std::vector<Manager::ScanRequest> Manager::BuildCellScanRequests_(
-    const std::vector<QueueInfo>& refStopsCopy) {
-    std::vector<ScanRequest> out;
+std::vector<Scanner::Request> Manager::BuildScanRequests_(const std::vector<QueueInfo>& refStopsCopy) {
+
+    std::vector<Scanner::Request> out;
     out.reserve(refStopsCopy.size());
 
     // Only touches plugin-owned data => guarded by sourceMutex_.
     SRC_SHARED_GUARD;
-
     for (const auto& queue_info : refStopsCopy) {
-        if (queue_info.update_type != QueueInfo::UpdateType::kWorldObject) continue;
-        const auto refid = queue_info.ref_info.ref_id;
-        if (!refid) {
-            continue;
+        const auto& ref_info = queue_info.ref_info;
+        Scanner::Request request{.ref = ref_info};
+
+        if (queue_info.update_type == QueueInfo::UpdateType::kInventory) {
+            queue_info.inventory_watch->ForEachTrigger([&request](RE::TESForm* form) {
+                request.forms.push_back({.form = form, .scope = {Scanner::Scope::kSelf}});
+            });
+        } else {
+            const auto src = GetSourceByLocation(ref_info.ref_id);
+            if (!src) continue;
+
+            const auto& inst = src->data.at(ref_info.ref_id).front();
+            if (inst.count <= 0) continue;
+
+            const auto triggers_it = src->triggers.find(inst.no);
+            if (triggers_it == src->triggers.end()) continue;
+
+            for (const auto& trigger : triggers_it->second.ordered) {
+                if (trigger.scope.any(Scanner::Scope::kProximity)) request.forms.push_back(trigger);
+            }
         }
 
-        const auto src = GetSourceByLocation(refid);
-        if (!src || !src->IsHealthy()) {
-            continue;
+        if (!request.forms.empty()) {
+            out.push_back(std::move(request));
         }
-
-        const auto it = src->data.find(refid);
-        if (it == src->data.end() || it->second.empty()) {
-            continue;
-        }
-
-        const auto& inst = it->second.front();
-        if (inst.count <= 0) {
-            continue;
-        }
-
-        const auto triggers_it = src->triggers.find(inst.no);
-        if (triggers_it == src->triggers.end() || triggers_it->second.scan_forms.empty()) continue;
-
-        out.emplace_back(queue_info.ref_info, triggers_it->second.scan_forms);
     }
 
     return out;
@@ -501,8 +500,8 @@ void Manager::UpdateLoop() {
 
     auto ref_stops_copy = GetRefStops();
 
-    const auto scanReq = BuildCellScanRequests_(ref_stops_copy);
-    CellScanner::GetSingleton()->RequestRefresh(scanReq);
+    const auto scanReq = BuildScanRequests_(ref_stops_copy);
+    Scanner::GetSingleton()->RequestRefresh(scanReq);
 
     float curr_time = -1.0f;
     if (const auto cal = RE::Calendar::GetSingleton()) {
@@ -1189,8 +1188,8 @@ void Manager::UpdateQueuedInventory(const QueueInfo& queue_info) {
 
 void Manager::RestoreInventoryWatches() {
     const auto needs_watch = [](const Triggers& triggers) {
-        return std::ranges::any_of(triggers.ordered, [](const RE::TESForm* form) {
-            return std::ranges::contains(poll_formtypes, form->GetFormType());
+        return std::ranges::any_of(triggers.ordered, [](const Scanner::ScopedForm& trigger) {
+            return std::ranges::contains(poll_formtypes, trigger.form->GetFormType());
         });
     };
     for (const auto& source : sources | std::views::values) {
