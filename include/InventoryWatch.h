@@ -26,7 +26,7 @@ struct InventoryWatchList {
 struct InventoryWatch {
     // inventory owner watch
     RE::BGSLocation* last_location = nullptr;
-    std::unordered_set<RE::BGSLocation*> locations;
+    InventoryWatchList<RE::BGSLocation> locations;
     InventoryWatchList<RE::BGSPerk> perks;
     InventoryWatchList<RE::EffectSetting> magic_effects;
     InventoryWatchList<RE::TESFaction> factions;
@@ -58,14 +58,13 @@ struct QueueInfo {
 
 template <typename Visit>
 void InventoryWatch::ForEachTrigger(Visit&& visit) const {
-    for (const auto trigger : locations) visit(trigger);
-
     const auto visitList = [&visit](const auto& watch) {
         for (const auto trigger : watch.list | std::views::keys) {
             visit(trigger);
         }
     };
 
+    visitList(locations);
     visitList(perks);
     visitList(magic_effects);
     visitList(factions);

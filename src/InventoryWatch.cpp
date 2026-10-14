@@ -9,11 +9,8 @@ bool InventoryWatch::HasChanged(const RE::TESObjectREFR* owner) const {
         return cache->HasMatch(ownerID, form->GetFormID());
     };
 
-    for (const auto location : locations) {
-        if (matches(location) != Utils::IsInLocation(location, last_location)) return true;
-    }
-    return perks.HasChanged(matches) || magic_effects.HasChanged(matches) || factions.HasChanged(matches) ||
-           temp_effects.HasChanged(matches);
+    return locations.HasChanged(matches) || perks.HasChanged(matches) || magic_effects.HasChanged(matches) ||
+           factions.HasChanged(matches) || temp_effects.HasChanged(matches);
 }
 
 bool InventoryWatch::Eval(RE::TESForm* trigger, RE::TESObjectREFR* owner,
@@ -21,8 +18,7 @@ bool InventoryWatch::Eval(RE::TESForm* trigger, RE::TESObjectREFR* owner,
     switch (GetMatchType_(trigger->GetFormType())) {
         case MatchType::kLocation: {
             const auto location = static_cast<RE::BGSLocation*>(trigger);
-            locations.insert(location);
-            return Utils::IsInLocation(location, last_location);
+            return locations.Eval(location, [&] { return Utils::IsInLocation(location, last_location); });
         }
         case MatchType::kPerk: {
             const auto perk = static_cast<RE::BGSPerk*>(trigger);
