@@ -3,6 +3,7 @@
 #include <shared_mutex>
 #include <unordered_set>
 #include "CustomObjects.h"
+#include "tsl/ordered_map.h"
 
 struct LazyCache {
     std::unordered_set<RE::TESForm*> requested_temp_effects;
@@ -43,13 +44,14 @@ public:
 
     struct Cache {
         std::uint64_t generation{0};
-        std::unordered_map<FormID, std::vector<Entry>> byTrigger;
+        std::unordered_map<FormID, tsl::ordered_map<
+            RefID, RE::NiPoint3, std::hash<RefID>, std::equal_to<RefID>,
+            std::allocator<std::pair<RefID, RE::NiPoint3>>,
+            std::vector<std::pair<RefID, RE::NiPoint3>>>> byTrigger;
 
         [[nodiscard]] bool HasMatch(RefID refid, FormID formid) const {
             const auto it = byTrigger.find(formid);
-            return it != byTrigger.end() && std::ranges::any_of(it->second, [refid](const Entry& entry) {
-                return entry.refid == refid;
-            });
+            return it != byTrigger.end() && it->second.contains(refid);
         }
 
         [[nodiscard]] std::optional<bool> HasTempEffect(RE::TESObjectREFR* owner, RE::TESForm* effect) const;

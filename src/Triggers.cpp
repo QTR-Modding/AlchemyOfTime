@@ -109,12 +109,12 @@ FormID FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers) {
             continue;
         }
 
-        for (const auto& e : it->second) {
-            if (originPos.GetSquaredDistance(e.pos) > r2) {
+        for (const auto& [refid, pos] : it->second) {
+            if (originPos.GetSquaredDistance(pos) > r2) {
                 continue;
             }
 
-            const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(e.refid);
+            const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(refid);
             if (!ref || !Utils::WorldObject::IsActive(ref)) {
                 continue;
             }

@@ -332,7 +332,7 @@ void Scanner::CollectCellMatches_(RE::TESObjectREFR* ref,
         if (!entry) {
             entry.emplace(ref->GetFormID(), Utils::WorldObject::GetPosition(ref));
         }
-        outCache.byTrigger[form->GetFormID()].push_back(*entry);
+        outCache.byTrigger[form->GetFormID()].try_emplace(entry->refid, entry->pos);
     };
 
     for (const auto& [type, forms] : triggers) {
@@ -379,7 +379,7 @@ void Scanner::ScanTempEffectTargets_(const std::unordered_set<RE::TESObjectCELL*
                     !cellsToScan.contains(ref->GetParentCell())) break;
                 entry.emplace(ref->GetFormID(), Utils::WorldObject::GetPosition(ref.get()));
             }
-            outCache.byTrigger[form->GetFormID()].push_back(*entry);
+            outCache.byTrigger[form->GetFormID()].try_emplace(entry->refid, entry->pos);
         }
     }
 }
@@ -400,7 +400,7 @@ void Scanner::RunScanTaskOnGameThread_(const WorkItemPtr& work) {
                 if (!entry) {
                     entry.emplace(a_ref->GetFormID(), Utils::WorldObject::GetPosition(a_ref));
                 }
-                work->next->byTrigger[a_form->GetFormID()].push_back(*entry);
+                work->next->byTrigger[a_form->GetFormID()].try_emplace(entry->refid, entry->pos);
                 continue;
             }
 
