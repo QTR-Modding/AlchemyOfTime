@@ -126,7 +126,8 @@ namespace Utils {
         void SwapObjects(RE::TESObjectREFR* a_from, RE::TESBoundObject* a_to, bool apply_havok = true);
 
         std::unordered_map<RE::ObjectRefHandle, std::unordered_set<RE::TESForm*>, RE::BSCRC32<RE::ObjectRefHandle>>
-        CollectTempEffects();
+        CollectTempEffects(const std::unordered_set<RE::TESForm*>& forms);
+        std::unordered_set<RE::TESForm*> CollectTempEffects(RE::TESObjectREFR* owner);
         std::unordered_set<RE::EffectSetting*> CollectMagicEffects(RE::TESObjectREFR* ref);
 
         bool IsPlacedObject(RE::TESObjectREFR* ref);

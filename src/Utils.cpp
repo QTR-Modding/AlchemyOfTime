@@ -441,16 +441,26 @@ namespace {
     }
 }
 
-std::unordered_map<RE::ObjectRefHandle, std::unordered_set<RE::TESForm*>, RE::BSCRC32<RE::ObjectRefHandle>> Utils::WorldObject::CollectTempEffects() {
+std::unordered_map<RE::ObjectRefHandle, std::unordered_set<RE::TESForm*>, RE::BSCRC32<RE::ObjectRefHandle>> Utils::WorldObject::CollectTempEffects(
+    const std::unordered_set<RE::TESForm*>& forms) {
     std::vector<std::pair<RE::ObjectRefHandle, RE::TESForm*>> targets;
     ForEachActiveTempEffect([&](RE::ObjectRefHandle target, RE::TESForm* form) {
-        targets.emplace_back(target, form);
+        if (forms.contains(form)) targets.emplace_back(target, form);
     });
     std::unordered_map<RE::ObjectRefHandle, std::unordered_set<RE::TESForm*>, RE::BSCRC32<RE::ObjectRefHandle>> temp_effs;
     for (const auto& [target, form] : targets) {
         temp_effs[target].insert(form);
     }
     return temp_effs;
+}
+
+std::unordered_set<RE::TESForm*> Utils::WorldObject::CollectTempEffects(RE::TESObjectREFR* owner) {
+    std::vector<RE::TESForm*> effects;
+    const auto handle = owner->GetHandle();
+    ForEachActiveTempEffect([&](RE::ObjectRefHandle target, RE::TESForm* form) {
+        if (target == handle) effects.push_back(form);
+    });
+    return {effects.begin(), effects.end()};
 }
 
 std::unordered_set<RE::EffectSetting*> Utils::WorldObject::CollectMagicEffects(RE::TESObjectREFR* ref) {
@@ -532,7 +542,11 @@ bool Utils::Inventory::Snapshot::HasMagicEffect(RE::TESObjectREFR* owner, RE::Ef
 }
 
 bool Utils::Inventory::Snapshot::HasTempEffect(RE::TESObjectREFR* owner, RE::TESForm* effect) const {
-    if (!temp_effects) temp_effects = Scanner::GetSingleton()->GetTempEffects(owner);
+    if (temp_effects) return temp_effects->contains(effect);
+    if (const auto cached = Scanner::GetSingleton()->GetCache()->HasTempEffect(owner, effect); cached.has_value()) {
+        return *cached;
+    }
+    temp_effects = WorldObject::CollectTempEffects(owner);
     return temp_effects->contains(effect);
 }
 

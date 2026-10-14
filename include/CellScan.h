@@ -6,6 +6,7 @@
 #include "tsl/ordered_map.h"
 
 struct LazyCache {
+    std::unordered_set<RE::TESForm*> requested_temp_effects;
     mutable std::optional<std::unordered_map<RE::ObjectRefHandle, std::unordered_set<RE::TESForm*>, RE::BSCRC32<RE::ObjectRefHandle>>> temp_effs;
     mutable std::unordered_map<RefID, std::unordered_set<RE::EffectSetting*>> mg_effs;
     mutable std::unordered_map<FormID, std::unordered_set<RE::BGSKeyword*>> keywords;
@@ -53,6 +54,8 @@ public:
             return it != byTrigger.end() && it->second.contains(refid);
         }
 
+        [[nodiscard]] std::optional<bool> HasTempEffect(RE::TESObjectREFR* owner, RE::TESForm* effect) const;
+
     private:
         friend class Scanner;
         LazyCache global_cache;
@@ -76,8 +79,6 @@ public:
 
     [[nodiscard]] CachePtr GetCache() const;
 
-    [[nodiscard]] std::unordered_set<RE::TESForm*> GetTempEffects(RE::TESObjectREFR* owner);
-
 private:
 
     struct WorkItem {
@@ -86,7 +87,6 @@ private:
         // Built off-thread
         std::shared_ptr<Cache> next;
         std::vector<Request> requests;
-        bool collect_temp_effects{false};
     };
 
     using WorkItemPtr = std::shared_ptr<WorkItem>;

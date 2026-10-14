@@ -6,7 +6,7 @@
 const std::unordered_map<RE::ObjectRefHandle, std::unordered_set<RE::TESForm*>, RE::BSCRC32<RE::ObjectRefHandle>>&
 LazyCache::GetTempEffects() const {
     if (!temp_effs) {
-        temp_effs = Utils::WorldObject::CollectTempEffects();
+        temp_effs = Utils::WorldObject::CollectTempEffects(requested_temp_effects);
     }
     return *temp_effs;
 }
@@ -210,21 +210,16 @@ void Scanner::RequestRefresh(std::vector<Request> requests) {
 }
 
 
+std::optional<bool> Scanner::Cache::HasTempEffect(RE::TESObjectREFR* owner, RE::TESForm* effect) const {
+    if (!global_cache.requested_temp_effects.contains(effect) || !global_cache.temp_effs) return std::nullopt;
+    const auto& effects = *global_cache.temp_effs;
+    const auto it = effects.find(owner->GetHandle());
+    return it != effects.end() && it->second.contains(effect);
+}
+
 Scanner::CachePtr Scanner::GetCache() const {
     std::shared_lock lock(cacheMutex_);
     return cache_;
-}
-
-std::unordered_set<RE::TESForm*> Scanner::GetTempEffects(RE::TESObjectREFR* owner) {
-    std::unique_lock lock(cacheMutex_);
-    const bool initialize = !cache_->global_cache.temp_effs;
-    const auto& effects = cache_->global_cache.GetTempEffects();
-    if (initialize) {
-        // Discard refreshes captured before this initial observation completed.
-        requestedGeneration_.fetch_add(1, std::memory_order_acq_rel);
-    }
-    const auto it = effects.find(owner->GetHandle());
-    return it != effects.end() ? it->second : std::unordered_set<RE::TESForm*>{};
 }
 
 bool Scanner::IsStale_(const std::uint64_t gen) const {
@@ -243,7 +238,7 @@ Scanner::WorkItemPtr Scanner::BuildWorkItem_(const std::uint64_t gen,
     for (const auto& request : work->requests) {
         for (const auto& entry : request.forms) {
             if (GetMatchType_(entry.form->GetFormType()) == MatchType::kTempEffect) {
-                work->collect_temp_effects = true;
+                work->next->global_cache.requested_temp_effects.insert(entry.form);
             }
         }
     }
@@ -254,7 +249,7 @@ Scanner::WorkItemPtr Scanner::BuildWorkItem_(const std::uint64_t gen,
 void Scanner::QueueScanTask_(const WorkItemPtr& work) {
     if (IsStale_(work->gen)) return;
 
-    if (work->collect_temp_effects) {
+    if (!work->next->global_cache.requested_temp_effects.empty()) {
         // ReSharper disable once CppExpressionWithoutSideEffects
         work->next->global_cache.GetTempEffects();
     }
