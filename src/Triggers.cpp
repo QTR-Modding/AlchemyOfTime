@@ -67,19 +67,16 @@ namespace {
 }
 
 REX::EnumSet<Scanner::Scope> GetWorldTriggerScope(RE::TESForm* form) {
-    switch (form->GetFormType()) {
-        case RE::FormType::Location:
-        case RE::FormType::Perk:
+    switch (GetMatchType_(form->GetFormType())) {
+        case MatchType::kLocation:
+        case MatchType::kPerk:
             return {Scanner::Scope::kSelf};
-        case RE::FormType::ArtObject:
-        case RE::FormType::EffectShader:
-        case RE::FormType::MagicEffect:
-        case RE::FormType::Faction:
+        case MatchType::kTempEffect:
+        case MatchType::kMagicEffect:
+        case MatchType::kFaction:
+        case MatchType::kKeyword:
             return {Scanner::Scope::kSelf, Scanner::Scope::kProximity};
         default:
-            if (form->As<RE::BGSKeyword>()) {
-                return {Scanner::Scope::kSelf, Scanner::Scope::kProximity};
-            }
             if (form->As<RE::TESBoundObject>()) {
                 return {Scanner::Scope::kProximity};
             }
