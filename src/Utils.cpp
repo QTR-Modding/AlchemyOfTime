@@ -457,7 +457,7 @@ std::unordered_map<RE::ObjectRefHandle, std::unordered_set<RE::TESForm*>, RE::BS
 std::unordered_set<RE::TESForm*> Utils::WorldObject::CollectTempEffects(RE::TESObjectREFR* owner) {
     std::vector<RE::TESForm*> effects;
     const auto handle = owner->GetHandle();
-    ForEachActiveTempEffect([&](RE::ObjectRefHandle target, RE::TESForm* form) {
+    ForEachActiveTempEffect([&](const RE::ObjectRefHandle& target, RE::TESForm* form) {
         if (target == handle) effects.push_back(form);
     });
     return {effects.begin(), effects.end()};

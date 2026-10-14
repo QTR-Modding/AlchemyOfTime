@@ -23,7 +23,8 @@ struct InventoryWatchList {
 };
 
 // it contains the results from the last check/loop so it can compare it in the next update when the new info comes
-struct InventoryWatch {  // inventory owner watch
+struct InventoryWatch {
+    // inventory owner watch
     RE::BGSLocation* last_location = nullptr;
     std::unordered_set<RE::BGSLocation*> locations;
     InventoryWatchList<RE::BGSPerk> perks;
@@ -31,7 +32,7 @@ struct InventoryWatch {  // inventory owner watch
     InventoryWatchList<RE::TESFaction> factions;
     InventoryWatchList<RE::TESForm> temp_effects;
 
-    [[nodiscard]] bool HasChanged(RE::TESObjectREFR* owner);
+    [[nodiscard]] bool HasChanged(const RE::TESObjectREFR* owner) const;
     bool Eval(RE::TESForm* trigger, RE::TESObjectREFR* owner,
               const Utils::Inventory::Snapshot& inventory);
 
@@ -47,6 +48,7 @@ struct InventoryWatch {  // inventory owner watch
 // 3. The shared loop later works with **`QueueInfo` copies** of those queued records.
 struct QueueInfo {
     enum class UpdateType { kNone, kWorldObject, kInventory };
+
     RefInfo ref_info;
     UpdateType update_type = UpdateType::kNone;
     float stop_time = 0;

@@ -7,19 +7,21 @@
 
 struct LazyCache {
     std::unordered_set<RE::TESForm*> requested_temp_effects;
-    mutable std::optional<std::unordered_map<RE::ObjectRefHandle, std::unordered_set<RE::TESForm*>, RE::BSCRC32<RE::ObjectRefHandle>>> temp_effs;
+    mutable std::optional<std::unordered_map<RE::ObjectRefHandle, std::unordered_set<RE::TESForm*>, RE::BSCRC32<
+                                                 RE::ObjectRefHandle>>> temp_effs;
     mutable std::unordered_map<RefID, std::unordered_set<RE::EffectSetting*>> mg_effs;
     mutable std::unordered_map<FormID, std::unordered_set<RE::BGSKeyword*>> keywords;
     mutable std::unordered_map<RefID, RE::BGSLocation*> locations;
 
-    const std::unordered_map<RE::ObjectRefHandle, std::unordered_set<RE::TESForm*>, RE::BSCRC32<RE::ObjectRefHandle>>& GetTempEffects() const;
+    const std::unordered_map<RE::ObjectRefHandle, std::unordered_set<RE::TESForm*>, RE::BSCRC32<RE::ObjectRefHandle>>&
+    GetTempEffects() const;
     const std::unordered_set<RE::EffectSetting*>& GetMagicEffects(RE::TESObjectREFR* a_ref) const;
-    const std::unordered_set<RE::BGSKeyword*>& GetKeywords(RE::TESObjectREFR* a_ref) const;
-    RE::BGSLocation* GetLocation(RE::TESObjectREFR* a_ref) const;
+    const std::unordered_set<RE::BGSKeyword*>& GetKeywords(const RE::TESObjectREFR* a_ref) const;
+    RE::BGSLocation* GetLocation(const RE::TESObjectREFR* a_ref) const;
 
     bool HasTempEff(RE::TESObjectREFR* a_ref, RE::TESForm* a_tempeff) const;
     bool HasMgEff(RE::TESObjectREFR* a_ref, RE::EffectSetting* a_magiceff) const;
-    bool HasKeyword(RE::TESObjectREFR* a_ref, RE::BGSKeyword* a_magiceff) const;
+    bool HasKeyword(const RE::TESObjectREFR* a_ref, RE::BGSKeyword* a_magiceff) const;
 };
 
 enum class MatchType { kBaseObject, kLocation, kPerk, kKeyword, kFaction, kMagicEffect, kTempEffect };
@@ -30,13 +32,12 @@ using Matcher = bool (*)(RE::TESObjectREFR*, RE::TESForm*, const LazyCache&);
 
 Matcher GetMatcher_(MatchType type);
 
-bool Matches(RE::TESObjectREFR* ref, RE::TESForm* property, const LazyCache& bank);
+bool Matches(RE::TESObjectREFR* ref, RE::TESForm* property, const LazyCache& global_cache);
 
 
 class Scanner final :
     public REX::Singleton<Scanner> {
 public:
-
     struct Entry {
         RefID refid{0};
         RE::NiPoint3 pos{};
@@ -45,11 +46,11 @@ public:
     struct Cache {
         std::uint64_t generation{0};
         std::unordered_map<FormID, tsl::ordered_map<
-            RefID, RE::NiPoint3, std::hash<RefID>, std::equal_to<RefID>,
-            std::allocator<std::pair<RefID, RE::NiPoint3>>,
-            std::vector<std::pair<RefID, RE::NiPoint3>>>> byTrigger;
+                               RefID, RE::NiPoint3, std::hash<RefID>, std::equal_to<RefID>,
+                               std::allocator<std::pair<RefID, RE::NiPoint3>>,
+                               std::vector<std::pair<RefID, RE::NiPoint3>>>> byTrigger;
 
-        [[nodiscard]] bool HasMatch(RefID refid, FormID formid) const {
+        [[nodiscard]] bool HasMatch(const RefID refid, const FormID formid) const {
             const auto it = byTrigger.find(formid);
             return it != byTrigger.end() && it->second.contains(refid);
         }
@@ -80,7 +81,6 @@ public:
     [[nodiscard]] CachePtr GetCache() const;
 
 private:
-
     struct WorkItem {
         std::uint64_t gen{0};
 
@@ -112,7 +112,8 @@ private:
                                     Cache& outCache);
 
     static void ScanCells_(const std::unordered_set<RE::TESObjectCELL*>& cellsToScan,
-                           const std::unordered_map<MatchType, std::unordered_set<RE::TESForm*>>& triggers, const LazyCache& global_cache,
+                           const std::unordered_map<MatchType, std::unordered_set<RE::TESForm*>>& triggers,
+                           const LazyCache& global_cache,
                            Cache& outCache);
 
     static void ScanTempEffectTargets_(const std::unordered_set<RE::TESObjectCELL*>& cellsToScan,

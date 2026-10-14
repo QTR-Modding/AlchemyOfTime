@@ -2,7 +2,7 @@
 #include "CellScan.h"
 
 
-bool InventoryWatch::HasChanged(RE::TESObjectREFR* owner) {
+bool InventoryWatch::HasChanged(const RE::TESObjectREFR* owner) const {
     const auto cache = Scanner::GetSingleton()->GetCache();
     const auto ownerID = owner->GetFormID();
     const auto matches = [&](const RE::TESForm* form) {

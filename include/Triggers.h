@@ -12,7 +12,7 @@ constexpr auto poll_formtypes =
 REX::EnumSet<Scanner::Scope> GetWorldTriggerScope(RE::TESForm* form);
 
 struct Triggers {
-    std::vector<Scanner::ScopedForm> ordered;  // from configs, in the given order
+    std::vector<Scanner::ScopedForm> ordered; // from configs, in the given order
 };
 
 FormID FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers);
@@ -24,10 +24,11 @@ FormID GetTriggerInInventory(std::ranges::input_range auto&& trigger_ids,
                              const StageInstance& instance, UpdatePhase phase);
 
 FormID GetTriggerInInventory(std::ranges::input_range auto&& trigger_ids,
-    const std::unordered_map<FormID, std::unordered_set<StageNo>>& allowed_stages,
-    const std::unordered_map<FormID, std::unordered_set<FormID>>& containers,
-    const Utils::Inventory::Snapshot& inventory, QueueInfo& queue_info, const StageInstance& instance,
-    const UpdatePhase phase) {
+                             const std::unordered_map<FormID, std::unordered_set<StageNo>>& allowed_stages,
+                             const std::unordered_map<FormID, std::unordered_set<FormID>>& containers,
+                             const Utils::Inventory::Snapshot& inventory, QueueInfo& queue_info,
+                             const StageInstance& instance,
+                             const UpdatePhase phase) {
     const auto& inv = inventory.items;
     if (inv.empty()) return 0;
 
@@ -35,7 +36,7 @@ FormID GetTriggerInInventory(std::ranges::input_range auto&& trigger_ids,
         if (!allowed_stages.at(a_trigger_id).contains(instance.no)) continue;
         if (const auto it = containers.find(a_trigger_id);
             it != containers.end() && !it->second.empty() && !it->second.contains(queue_info.ref_info.base_id)) {
-            continue;   
+            continue;
         }
         const auto trigger = RE::TESForm::LookupByID(a_trigger_id);
         if (!trigger) continue;
@@ -57,9 +58,9 @@ FormID GetTriggerInInventory(std::ranges::input_range auto&& trigger_ids,
             if (auto& watch = *queue_info.inventory_watch; watch.Eval(trigger, owner, inventory)) {
                 return a_trigger_id;
             }
-        } else if (const auto keyword = trigger->As<RE::BGSKeyword>()) {
+        } else if (const auto keyword = trigger->template As<RE::BGSKeyword>()) {
             if (inventory.HasKeyword(keyword)) return a_trigger_id;
-        } else if (const auto obj = trigger->As<RE::TESBoundObject>()) {
+        } else if (const auto obj = trigger->template As<RE::TESBoundObject>()) {
             if (const auto it = inv.find(obj); it != inv.end() && it->second.first > 0) {
                 return a_trigger_id;
             }

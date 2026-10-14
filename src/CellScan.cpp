@@ -19,7 +19,7 @@ const std::unordered_set<RE::EffectSetting*>& LazyCache::GetMagicEffects(RE::TES
     return it->second;
 }
 
-const std::unordered_set<RE::BGSKeyword*>& LazyCache::GetKeywords(RE::TESObjectREFR* a_ref) const {
+const std::unordered_set<RE::BGSKeyword*>& LazyCache::GetKeywords(const RE::TESObjectREFR* a_ref) const {
     // keywords map is from base form id to keywords, so we need to get the base form of the reference
     const auto base = a_ref->GetObjectReference();
     if (!base) {
@@ -37,7 +37,7 @@ const std::unordered_set<RE::BGSKeyword*>& LazyCache::GetKeywords(RE::TESObjectR
     return it->second;
 }
 
-RE::BGSLocation* LazyCache::GetLocation(RE::TESObjectREFR* a_ref) const {
+RE::BGSLocation* LazyCache::GetLocation(const RE::TESObjectREFR* a_ref) const {
     const auto [it, inserted] = locations.try_emplace(a_ref->GetFormID());
     if (inserted) it->second = a_ref->GetCurrentLocation();
     return it->second;
@@ -56,11 +56,11 @@ bool LazyCache::HasMgEff(RE::TESObjectREFR* a_ref, RE::EffectSetting* a_magiceff
 }
 
 
-bool LazyCache::HasKeyword(RE::TESObjectREFR* a_ref, RE::BGSKeyword* a_magiceff) const {
+bool LazyCache::HasKeyword(const RE::TESObjectREFR* a_ref, RE::BGSKeyword* a_magiceff) const {
     return GetKeywords(a_ref).contains(a_magiceff);
 }
 
-MatchType GetMatchType_(RE::FormType type) {
+MatchType GetMatchType_(const RE::FormType type) {
     switch (type) {
         case RE::FormType::Location:
             return MatchType::kLocation;
@@ -82,7 +82,7 @@ MatchType GetMatchType_(RE::FormType type) {
     }
 }
 
-Matcher GetMatcher_(MatchType type) {
+Matcher GetMatcher_(const MatchType type) {
     switch (type) {
         case MatchType::kBaseObject:
             return [](RE::TESObjectREFR* ref, RE::TESForm* form, const LazyCache&) {
@@ -135,7 +135,7 @@ bool Matches(RE::TESObjectREFR* ref, RE::TESForm* property, const LazyCache& glo
 namespace {
     // 2. `ForEachMatch_`: **Which of these properties does this ref have? **Calls `record` for every match.
     template <class Record>
-    void ForEachMatch_(RE::TESObjectREFR* ref, MatchType type,
+    void ForEachMatch_(RE::TESObjectREFR* ref, const MatchType type,
                        const std::unordered_set<RE::TESForm*>& forms,
                        const LazyCache& bank, Record&& record) {
         const auto recordMulti = [&](const auto& effects) {

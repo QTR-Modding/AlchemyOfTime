@@ -18,13 +18,16 @@ struct RefStop : QueueInfo {
     std::unordered_set<FormID> applied_art_objects;
     std::unordered_set<FormID> applied_effect_shaders;
 
-    explicit RefStop(const QueueInfo& queue_info) : QueueInfo(queue_info) {}
+    explicit RefStop(const QueueInfo& queue_info) : QueueInfo(queue_info) {
+    }
 
     explicit RefStop(const RefInfo& a_info, const UpdateType a_update_type)
-        : RefStop(QueueInfo{.ref_info = a_info, .update_type = a_update_type}) {}
+        : RefStop(QueueInfo{.ref_info = a_info, .update_type = a_update_type}) {
+    }
 
     explicit RefStop(const RefID a_ref_id, const UpdateType a_update_type)
-        : RefStop(RefInfo(a_ref_id), a_update_type) {}
+        : RefStop(RefInfo(a_ref_id), a_update_type) {
+    }
 
     [[nodiscard]] bool IsDue(float curr_time) const;
 

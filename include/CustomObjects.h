@@ -52,7 +52,6 @@ struct RefStopFeatures {
 };
 
 struct RefInfo {
-
     RefID ref_id = 0;
     FormID base_id = 0;
     mutable RE::ObjectRefHandle ref_handle{};
