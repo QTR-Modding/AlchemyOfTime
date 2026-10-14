@@ -245,12 +245,6 @@ Scanner::WorkItemPtr Scanner::BuildWorkItem_(const std::uint64_t gen,
     return work;
 }
 
-void Scanner::RecordEntry(const RE::TESObjectREFR* ref, const RE::TESForm* form, const WorkItemPtr& work) {
-    if (!ref || !form) return;
-    work->next->byTrigger[form->GetFormID()].push_back(
-        {.refid = ref->GetFormID(), .pos = Utils::WorldObject::GetPosition(ref)});
-}
-
 void Scanner::QueueScanTask_(const WorkItemPtr& work) {
     if (IsStale_(work->gen)) return;
 
@@ -285,19 +279,14 @@ void Scanner::TryAddExteriorCell_(RE::TESWorldSpace* ws, const std::int32_t x, c
     }
 }
 
-void Scanner::CollectCellsToScan_(const std::vector<RefInfo>& refInfos,
+void Scanner::CollectCellsToScan_(const std::vector<RE::TESObjectREFR*>& refs,
                                       std::unordered_set<RE::TESObjectCELL*>& cellsToScan) {
     std::unordered_set<RE::TESWorldSpace*> skyAdded;
-    skyAdded.reserve(refInfos.size());
+    skyAdded.reserve(refs.size());
 
-    cellsToScan.reserve(refInfos.size() * 10);
+    cellsToScan.reserve(refs.size() * 10);
 
-    for (const auto& refInfo : refInfos) {
-        const auto wo = refInfo.GetRef();
-        if (!wo) {
-            continue;
-        }
-
+    for (const auto wo : refs) {
         auto cell = wo->GetParentCell();
         if (!cell) {
             continue;
@@ -398,16 +387,20 @@ void Scanner::ScanTempEffectTargets_(const std::unordered_set<RE::TESObjectCELL*
 void Scanner::RunScanTaskOnGameThread_(const WorkItemPtr& work) {
     if (IsStale_(work->gen)) return;
 
-    std::vector<RefInfo> cellrefInfos;
+    std::vector<RE::TESObjectREFR*> cellrefs;
     std::unordered_map<MatchType, std::unordered_set<RE::TESForm*>> proximity_forms;
     for (auto& [ref_info, forms] : work->requests) {
         bool added = false;
         const auto a_ref = ref_info.GetRef();
         if (!a_ref) continue;
+        std::optional<Entry> entry;
 
         for (auto& [a_form, a_scope] : forms) {
             if (a_scope.any(Scope::kSelf) && Matches(a_ref, a_form, work->next->global_cache)) {
-                RecordEntry(a_ref, a_form, work);
+                if (!entry) {
+                    entry.emplace(a_ref->GetFormID(), Utils::WorldObject::GetPosition(a_ref));
+                }
+                work->next->byTrigger[a_form->GetFormID()].push_back(*entry);
                 continue;
             }
 
@@ -416,14 +409,14 @@ void Scanner::RunScanTaskOnGameThread_(const WorkItemPtr& work) {
             proximity_forms[GetMatchType_(a_form->GetFormType())].insert(a_form);
 
             if (!added) {
-                cellrefInfos.push_back(ref_info);
+                cellrefs.push_back(a_ref);
                 added = true;
             }
         }
     }
 
     std::unordered_set<RE::TESObjectCELL*> cells;
-    CollectCellsToScan_(cellrefInfos, cells);
+    CollectCellsToScan_(cellrefs, cells);
     const auto temp_forms = proximity_forms.extract(MatchType::kTempEffect);
     if (!proximity_forms.empty()) {
         ScanCells_(cells, proximity_forms, work->next->global_cache, *work->next);

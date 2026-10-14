@@ -93,8 +93,6 @@ private:
 
     [[nodiscard]] WorkItemPtr BuildWorkItem_(std::uint64_t gen, std::vector<Request>&& requests) const;
 
-    static void RecordEntry(const RE::TESObjectREFR* ref, const RE::TESForm* form, const WorkItemPtr& work);
-
     void QueueScanTask_(const WorkItemPtr& work);
 
     void RunScanTaskOnGameThread_(const WorkItemPtr& work);
@@ -103,7 +101,7 @@ private:
     static void TryAddExteriorCell_(RE::TESWorldSpace* ws, std::int32_t x, std::int32_t y,
                                     std::unordered_set<RE::TESObjectCELL*>& cellsToScan);
 
-    static void CollectCellsToScan_(const std::vector<RefInfo>& refInfos,
+    static void CollectCellsToScan_(const std::vector<RE::TESObjectREFR*>& refs,
                                     std::unordered_set<RE::TESObjectCELL*>& cellsToScan);
 
     static void CollectCellMatches_(RE::TESObjectREFR* ref,
