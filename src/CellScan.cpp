@@ -193,10 +193,10 @@ namespace {
     }
 }
 
-void Scanner::RequestRefresh(const std::vector<Request>& requests) {
+void Scanner::RequestRefresh(std::vector<Request> requests) {
     const auto gen = requestedGeneration_.fetch_add(1, std::memory_order_acq_rel) + 1;
 
-    auto work = BuildWorkItem_(gen, requests);
+    auto work = BuildWorkItem_(gen, std::move(requests));
     if (!work) {
         return;
     }
@@ -226,14 +226,14 @@ bool Scanner::IsStale_(const std::uint64_t gen) const {
 }
 
 Scanner::WorkItemPtr Scanner::BuildWorkItem_(const std::uint64_t gen,
-                                                     const std::vector<Request>& requests) const {
+                                                     std::vector<Request>&& requests) const {
     if (IsStale_(gen)) return nullptr;
 
     auto work = std::make_shared<WorkItem>();
     work->gen = gen;
     work->next = std::make_shared<Cache>();
     work->next->generation = gen;
-    work->requests = requests;
+    work->requests = std::move(requests);
     for (const auto& request : work->requests) {
         for (const auto& entry : request.forms) {
             if (GetMatchType_(entry.form->GetFormType()) == MatchType::kTempEffect) {

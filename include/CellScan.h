@@ -73,7 +73,7 @@ public:
         std::vector<ScopedForm> forms;
     };
 
-    void RequestRefresh(const std::vector<Request>& requests);
+    void RequestRefresh(std::vector<Request> requests);
 
     [[nodiscard]] CachePtr GetCache() const;
 
@@ -91,7 +91,7 @@ private:
 
     [[nodiscard]] bool IsStale_(std::uint64_t gen) const;
 
-    [[nodiscard]] WorkItemPtr BuildWorkItem_(std::uint64_t gen, const std::vector<Request>& requests) const;
+    [[nodiscard]] WorkItemPtr BuildWorkItem_(std::uint64_t gen, std::vector<Request>&& requests) const;
 
     static void RecordEntry(const RE::TESObjectREFR* ref, const RE::TESForm* form, const WorkItemPtr& work);
 

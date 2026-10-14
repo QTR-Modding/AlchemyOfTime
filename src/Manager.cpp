@@ -500,8 +500,8 @@ void Manager::UpdateLoop() {
 
     auto ref_stops_copy = GetRefStops();
 
-    const auto scanReq = BuildScanRequests_(ref_stops_copy);
-    Scanner::GetSingleton()->RequestRefresh(scanReq);
+    auto scanReq = BuildScanRequests_(ref_stops_copy);
+    Scanner::GetSingleton()->RequestRefresh(std::move(scanReq));
 
     float curr_time = -1.0f;
     if (const auto cal = RE::Calendar::GetSingleton()) {
