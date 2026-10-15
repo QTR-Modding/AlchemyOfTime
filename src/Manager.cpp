@@ -1705,7 +1705,7 @@ void Manager::Reset() {
     logger::info("Resetting manager...");
     Stop();
     ClearWOUpdateQueue();
-    Scanner::GetSingleton()->RequestRefresh({});
+    Scanner::GetSingleton()->Reset();
     {
         SRC_UNIQUE_GUARD;
         for (const auto& src : sources | std::views::values) src->Reset();

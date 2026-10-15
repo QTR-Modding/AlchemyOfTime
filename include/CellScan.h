@@ -76,6 +76,7 @@ public:
     };
 
     void RequestRefresh(std::vector<Request> requests);
+    void Reset();
 
     [[nodiscard]] CachePtr GetCache() const;
 
@@ -92,7 +93,7 @@ private:
 
     [[nodiscard]] bool IsStale_(std::uint64_t gen) const;
 
-    [[nodiscard]] WorkItemPtr BuildWorkItem_(std::uint64_t gen, std::vector<Request>&& requests) const;
+    [[nodiscard]] WorkItemPtr BuildWorkItem_();
 
     void QueueScanTask_(const WorkItemPtr& work);
 
@@ -121,6 +122,7 @@ private:
 
     mutable std::shared_mutex cacheMutex_{};
     CachePtr cache_{std::make_shared<Cache>()};
+    std::weak_ptr<WorkItem> activeWork_;
 
     std::atomic<std::uint64_t> requestedGeneration_{0};
 };

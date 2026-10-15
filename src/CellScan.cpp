@@ -239,15 +239,34 @@ namespace {
 }
 
 void Scanner::RequestRefresh(std::vector<Request> requests) {
-    const auto gen = requestedGeneration_.fetch_add(1, std::memory_order_acq_rel) + 1;
+    auto work = BuildWorkItem_();
     LazyCache::GetSingleton()->Flush();
 
-    auto work = BuildWorkItem_(gen, std::move(requests));
+    if (std::ranges::any_of(requests, [](const Request& request) {
+        return std::ranges::any_of(request.forms, [](const ScopedForm& entry) {
+            return GetMatchType_(entry.form->GetFormType()) == MatchType::kTempEffect;
+        });
+    })) {
+        // ReSharper disable once CppExpressionWithoutSideEffects
+        LazyCache::GetSingleton()->GetTempEffects();
+    }
+
     if (!work) {
         return;
     }
 
+    work->requests = std::move(requests);
     QueueScanTask_(std::move(work));
+}
+
+void Scanner::Reset() {
+    auto next = std::make_shared<Cache>();
+    {
+        std::unique_lock lock(cacheMutex_);
+        next->generation = requestedGeneration_.fetch_add(1, std::memory_order_acq_rel) + 1;
+        cache_ = std::move(next);
+    }
+    LazyCache::GetSingleton()->Flush();
 }
 
 
@@ -260,30 +279,21 @@ bool Scanner::IsStale_(const std::uint64_t gen) const {
     return gen != requestedGeneration_.load(std::memory_order_acquire);
 }
 
-Scanner::WorkItemPtr Scanner::BuildWorkItem_(const std::uint64_t gen,
-                                                     std::vector<Request>&& requests) const {
-    if (IsStale_(gen)) return nullptr;
+Scanner::WorkItemPtr Scanner::BuildWorkItem_() {
+    std::unique_lock lock(cacheMutex_);
+    if (!activeWork_.expired()) return nullptr;
 
     auto work = std::make_shared<WorkItem>();
-    work->gen = gen;
+    work->gen = requestedGeneration_.fetch_add(1, std::memory_order_acq_rel) + 1;
     work->next = std::make_shared<Cache>();
-    work->next->generation = gen;
-    work->requests = std::move(requests);
+    work->next->generation = work->gen;
+    activeWork_ = work;
 
     return work;
 }
 
 void Scanner::QueueScanTask_(const WorkItemPtr& work) {
     if (IsStale_(work->gen)) return;
-
-    if (std::ranges::any_of(work->requests, [](const Request& request) {
-        return std::ranges::any_of(request.forms, [](const ScopedForm& entry) {
-            return GetMatchType_(entry.form->GetFormType()) == MatchType::kTempEffect;
-        });
-    })) {
-        // ReSharper disable once CppExpressionWithoutSideEffects
-        LazyCache::GetSingleton()->GetTempEffects();
-    }
 
     for (auto& request : work->requests) {
         std::erase_if(request.forms, [](const ScopedForm& entry) { return !entry.scope; });
