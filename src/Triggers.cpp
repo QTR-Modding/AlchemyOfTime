@@ -91,7 +91,7 @@ FormID FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers) {
     Scanner::CachePtr cache;
     std::optional<RE::BGSLocation*> current_location;
     const auto originID = a_obj->GetFormID();
-    const auto originPos = Utils::WorldObject::GetPosition(a_obj);
+    std::optional<RE::NiPoint3> originPos;
 
     const float r = Settings::search_radius;
     const float r2 = (r > 0.0f) ? (r * r) : std::numeric_limits<float>::infinity();
@@ -116,7 +116,8 @@ FormID FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers) {
         if (scope.any(Scanner::Scope::kSelf) && it->second.contains(originID)) return triggerID;
 
         for (const auto& [refid, pos] : it->second) {
-            if (originPos.GetSquaredDistance(pos) > r2) {
+            if (!originPos) originPos = Utils::WorldObject::GetPosition(a_obj);
+            if (originPos->GetSquaredDistance(pos) > r2) {
                 continue;
             }
 
