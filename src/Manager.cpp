@@ -426,9 +426,7 @@ void Manager::SplitWorldObjectStackIfNeeded_(Source& src, const UpdateCtx& ctx) 
         UpdateLocationIndexForSource(src, ctx.to_refid);
         UpdateLocationIndexForSource(src, new_ref->GetFormID());
 
-        if (const auto a_ref = new_ref->GetHandle().get().get()) {
-            UpdateRef(a_ref);
-        }
+        UpdateRef(new_ref);
     }
 }
 
@@ -436,15 +434,11 @@ void Manager::RefreshRefs_(const UpdateCtx& ctx) {
     if (!ctx.refreshRefs) return;
 
     if (ctx.to) {
-        if (const auto a_ref = ctx.to->GetHandle().get().get()) {
-            MarkDirty_(a_ref);
-        }
+        MarkDirty_(ctx.to);
     }
 
     if (ctx.from && (ctx.from->HasContainer() || !ctx.to)) {
-        if (const auto a_ref = ctx.from->GetHandle().get().get()) {
-            MarkDirty_(a_ref);
-        }
+        MarkDirty_(ctx.from);
     }
 }
 
