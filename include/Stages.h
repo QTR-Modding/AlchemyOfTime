@@ -7,14 +7,16 @@ using StageNo = unsigned int;
 using StageName = std::string;
 
 struct StageEffect {
-    FormID beffect;          // base effect
-    float magnitude;         // in effectitem
-    std::uint32_t duration;  // in effectitem (not Duration, this is in seconds)
+    FormID beffect; // base effect
+    float magnitude; // in effectitem
+    std::uint32_t duration; // in effectitem (not Duration, this is in seconds)
 
-    StageEffect() : beffect(0), magnitude(0), duration(0) {}
+    StageEffect() : beffect(0), magnitude(0), duration(0) {
+    }
 
     StageEffect(const FormID be, const float mag, const DurationMGEFF dur)
-        : beffect(be), magnitude(mag), duration(dur) {}
+        : beffect(be), magnitude(mag), duration(dur) {
+    }
 
     [[nodiscard]] bool IsNull() const { return beffect == 0; }
     [[nodiscard]] bool HasMagnitude() const { return magnitude != 0; }
@@ -22,10 +24,10 @@ struct StageEffect {
 };
 
 struct Stage {
-    FormID formid = 0;  // with which item is it represented
-    Duration duration;  // duration of the stage
-    StageNo no;         // used for sorting when multiple stages are present
-    StageName name;     // name of the stage
+    FormID formid = 0; // with which item is it represented
+    Duration duration; // duration of the stage
+    StageNo no; // used for sorting when multiple stages are present
+    StageName name; // name of the stage
     std::vector<StageEffect> mgeffect;
 
     bool crafting_allowed;
@@ -33,7 +35,8 @@ struct Stage {
     uint32_t color;
 
     // ReSharper disable once CppPossiblyUninitializedMember
-    Stage() {}
+    Stage() {
+    }
 
     Stage(const FormID f, const Duration d, const StageNo s, StageName n, const bool ca,
           const std::vector<StageEffect>& e, const uint32_t color_ = 0)
@@ -83,11 +86,11 @@ struct StageInstancePlain {
     bool is_faved = false;
     bool is_equipped = false;
 
-    FormID form_id = 0;  // for fake stuff
+    FormID form_id = 0; // for fake stuff
 };
 
 struct StageInstance {
-    float start_time;  // start time of the stage
+    float start_time; // start time of the stage
     StageNo no;
     Count count;
     // RefID location;  // RefID of the container where the fake food is stored or the real food itself when it is
@@ -151,10 +154,10 @@ struct StageInstance {
     void SetDelay(const StageInstancePlain& plain);
 
 private:
-    float _elapsed;        // y coord of the ausgangspunkt/elapsed time since the stage started
-    float _delay_start;    // x coord of the ausgangspunkt
-    float _delay_mag;      // slope
-    FormID _delay_formid;  // formid of the time modulator
+    float _elapsed; // y coord of the ausgangspunkt/elapsed time since the stage started
+    float _delay_start; // x coord of the ausgangspunkt
+    float _delay_mag; // slope
+    FormID _delay_formid; // formid of the time modulator
 };
 
 struct StageUpdate {
@@ -165,5 +168,6 @@ struct StageUpdate {
     bool new_is_fake = false;
 
     StageUpdate(const Stage* old, const Stage* new_, const Count c, const Duration u_t, const bool fake)
-        : oldstage(old), newstage(new_), count(c), update_time(u_t), new_is_fake(fake) {}
+        : oldstage(old), newstage(new_), count(c), update_time(u_t), new_is_fake(fake) {
+    }
 };

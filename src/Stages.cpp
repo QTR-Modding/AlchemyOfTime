@@ -63,7 +63,7 @@ void StageInstance::SetNewStart(const float curr_time, const float overshot) {
 
 void StageInstance::SetDelay(const float time, const float delay, const FormID formid) {
     // yeni steigungla yeni ausgangspunkt yapiyoruz
-    // call only from UpdateTimeModulationInInventory
+    // call only from UpdateInventoryItemTriggers
     if (xtra.is_transforming) return;
     if (fabs(_delay_mag - delay) < EPSILON && _delay_formid == formid) return;
 

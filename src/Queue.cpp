@@ -86,11 +86,7 @@ bool QueueManager::ProcessPendingMoves(const int n_tasks) {
         for (const auto& [refid, tasks] : move_item_tasks) {
             if (refid == 0) continue;
 
-            const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(refid);
-            if (!ref) continue;
-
-            auto h = ref->GetHandle();
-            const auto owner = h.get().get();
+            const auto owner = RE::TESForm::LookupByID<RE::TESObjectREFR>(refid);
             if (!owner) continue;
 
             // 1) Snapshot inventory ONCE

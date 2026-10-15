@@ -1,12 +1,22 @@
 #pragma once
-#include "tsl/ordered_map.h"
+#include "CellScan.h"
+#include "InventoryWatch.h"
 #include "Stages.h"
-#include "Data.h"
 
+enum class UpdatePhase { kCatchUp, kCurrent };
 
-constexpr auto poll_formtypes =
-    std::array{RE::FormType::Location, RE::FormType::Perk, RE::FormType::MagicEffect, RE::FormType::Faction};
+constexpr auto poll_matchtypes =
+    std::array{MatchType::kLocation, MatchType::kPerk, MatchType::kMagicEffect, MatchType::kFaction,
+               MatchType::kTempEffect};
 
+REX::EnumSet<Scanner::Scope> GetWorldTriggerScope(RE::TESForm* form);
+
+struct Triggers {
+    std::vector<Scanner::ScopedForm> ordered; // from configs, in the given order
+    std::vector<Scanner::ScopedForm> scan_forms;
+};
+
+FormID FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers);
 
 FormID GetTriggerInInventory(std::ranges::input_range auto&& trigger_ids,
                              const std::unordered_map<FormID, std::unordered_set<StageNo>>& allowed_stages,
@@ -15,10 +25,11 @@ FormID GetTriggerInInventory(std::ranges::input_range auto&& trigger_ids,
                              const StageInstance& instance, UpdatePhase phase);
 
 FormID GetTriggerInInventory(std::ranges::input_range auto&& trigger_ids,
-    const std::unordered_map<FormID, std::unordered_set<StageNo>>& allowed_stages,
-    const std::unordered_map<FormID, std::unordered_set<FormID>>& containers,
-    const Utils::Inventory::Snapshot& inventory, QueueInfo& queue_info, const StageInstance& instance,
-    const UpdatePhase phase) {
+                             const std::unordered_map<FormID, std::unordered_set<StageNo>>& allowed_stages,
+                             const std::unordered_map<FormID, std::unordered_set<FormID>>& containers,
+                             const Utils::Inventory::Snapshot& inventory, QueueInfo& queue_info,
+                             const StageInstance& instance,
+                             const UpdatePhase phase) {
     const auto& inv = inventory.items;
     if (inv.empty()) return 0;
 
@@ -26,12 +37,13 @@ FormID GetTriggerInInventory(std::ranges::input_range auto&& trigger_ids,
         if (!allowed_stages.at(a_trigger_id).contains(instance.no)) continue;
         if (const auto it = containers.find(a_trigger_id);
             it != containers.end() && !it->second.empty() && !it->second.contains(queue_info.ref_info.base_id)) {
-            continue;   
+            continue;
         }
         const auto trigger = RE::TESForm::LookupByID(a_trigger_id);
         if (!trigger) continue;
 
-        if (std::ranges::contains(poll_formtypes, trigger->GetFormType())) {
+        const auto type = GetMatchType_(trigger->GetFormType());
+        if (std::ranges::contains(poll_matchtypes, type)) {
             if (phase == UpdatePhase::kCatchUp) {
                 if (a_trigger_id == instance.GetDelayerFormID()) return a_trigger_id;
                 continue;
@@ -41,11 +53,10 @@ FormID GetTriggerInInventory(std::ranges::input_range auto&& trigger_ids,
             if (!owner) continue;
             if (!queue_info.inventory_watch) {
                 queue_info.inventory_watch = std::make_shared<InventoryWatch>();
-                queue_info.inventory_watch->last_location = owner->GetCurrentLocation();
-                queue_info.update_flags.set(QueueInfo::UpdateFlag::kInventory);
+                queue_info.update_type = QueueInfo::UpdateType::kInventory;
             }
 
-            if (auto& watch = *queue_info.inventory_watch; watch.Eval(trigger, owner, inventory)) {
+            if (auto& watch = *queue_info.inventory_watch; watch.Eval(trigger, type, owner, inventory)) {
                 return a_trigger_id;
             }
         } else if (const auto keyword = trigger->As<RE::BGSKeyword>()) {

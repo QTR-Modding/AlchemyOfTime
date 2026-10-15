@@ -1,8 +1,9 @@
 #include "Utils.h"
+#include "CellScan.h"
 #include "CLibUtilsQTR/FormReader.hpp"
 #include "Settings.h"
-#include "CLibUtilsQTR/DrawDebug.hpp"
 #include "MCP.h"
+#include "CLibUtilsQTR/BoundingBox.hpp"
 
 namespace {
     void AppendExpandedForm(RE::TESForm* form, std::vector<FormID>& expanded,
@@ -421,38 +422,6 @@ bool Utils::WorldObject::MatchesFaction(RE::TESObjectREFR* ref, const RE::TESFac
     return ref->GetFactionOwner() == faction;
 }
 
-std::vector<std::pair<RE::TESForm*, RE::ObjectRefHandle>> Utils::WorldObject::CollectAppliedEffectTargets(
-    const std::unordered_set<RE::TESForm*>& forms) {
-    std::vector<std::pair<RE::TESForm*, RE::ObjectRefHandle>> targets;
-    if (const auto processLists = RE::ProcessLists::GetSingleton()) {
-        processLists->ForEachMagicTempEffect([&](RE::BSTempEffect* tempEffect) {
-            const auto effect = tempEffect->As<RE::ModelReferenceEffect>();
-            if (effect && !effect->finished && forms.contains(effect->artObject)) {
-                targets.emplace_back(effect->artObject, effect->target);
-            } else if (const auto shader = tempEffect->As<RE::ShaderReferenceEffect>();
-                       shader && !shader->finished && forms.contains(shader->effectData)) {
-                targets.emplace_back(shader->effectData, shader->target);
-            }
-            return RE::BSContainer::ForEachResult::kContinue;
-        });
-    }
-    return targets;
-}
-
-std::unordered_set<RE::EffectSetting*> Utils::WorldObject::CollectActiveMagicEffects(RE::TESObjectREFR* ref) {
-    std::unordered_set<RE::EffectSetting*> effects;
-    const auto target = ref->GetMagicTarget();
-    if (!target) return effects;
-    if (const auto list = target->GetActiveEffectList()) {
-        for (const auto effect : *list) {
-            if (!effect || effect->flags.any(RE::ActiveEffect::Flag::kInactive, RE::ActiveEffect::Flag::kDispelled) ||
-                effect->conditionStatus == RE::ActiveEffect::ConditionStatus::kFalse) continue;
-            if (const auto base = effect->GetBaseObject()) effects.insert(base);
-        }
-    }
-    return effects;
-}
-
 bool Utils::WorldObject::IsPlacedObject(RE::TESObjectREFR* ref) {
     if (ref->extraList.HasType(RE::ExtraDataType::kStartingPosition)) {
         if (const auto starting_pos = ref->extraList.GetByType<RE::ExtraStartingPosition>(); starting_pos->location) {
@@ -468,24 +437,13 @@ bool Utils::WorldObject::IsPlacedObject(RE::TESObjectREFR* ref) {
     return false;
 }
 
-RE::bhkRigidBody* Utils::WorldObject::GetRigidBody(const RE::TESObjectREFR* refr) {
-    const auto object3D = refr->GetCurrent3D();
-    if (!object3D) {
-        return nullptr;
-    }
-    if (const auto body = object3D->GetCollisionObject()) {
-        return body->GetRigidBody();
-    }
-    return nullptr;
-}
-
 RE::NiPoint3 Utils::WorldObject::GetPosition(const RE::TESObjectREFR* obj) {
     // Prefer accurate mesh world translate when available
     if (const auto mesh = obj->GetCurrent3D()) {
         return mesh->world.translate;
     }
     // Fallback to Havok/body or ref pos
-    const auto body = GetRigidBody(obj);
+    const auto body = BoundingBox::GetRigidBody(obj);
     if (!body) return obj->GetPosition();
     RE::hkVector4 havockPosition;
     body->GetPosition(havockPosition);
@@ -520,8 +478,13 @@ bool Utils::Inventory::Snapshot::HasKeyword(RE::BGSKeyword* keyword) const {
 }
 
 bool Utils::Inventory::Snapshot::HasMagicEffect(RE::TESObjectREFR* owner, RE::EffectSetting* effect) const {
-    if (!magic_effects) magic_effects = WorldObject::CollectActiveMagicEffects(owner);
+    if (!magic_effects) magic_effects = LazyCache::GetSingleton()->GetMagicEffects(owner);
     return magic_effects->contains(effect);
+}
+
+bool Utils::Inventory::Snapshot::HasTempEffect(RE::TESObjectREFR* owner, RE::TESForm* effect) const {
+    if (!temp_effects) temp_effects = LazyCache::GetSingleton()->GetTempEffects(owner);
+    return temp_effects->contains(effect);
 }
 
 bool Utils::Inventory::IsQuestItem(const FormID formid, const InvMap& a_inv) {

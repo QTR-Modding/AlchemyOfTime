@@ -162,7 +162,6 @@ namespace Settings {
 };
 
 namespace PresetParse {
-
     std::vector<std::string> LoadExcludeList(const std::string& postfix);
     AddOnSettings parseAddOns_(const YAML::Node& config);
     DefaultSettings parseDefaults_(const YAML::Node& config);

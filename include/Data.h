@@ -1,10 +1,8 @@
 #pragma once
-#include "InventoryWatch.h"
 #include "Settings.h"
+#include "Triggers.h"
 #include "CLibUtilsQTR/DynamicFormTracker.hpp"
 #include "CLibUtilsQTR/FormReader.hpp"
-
-enum class UpdatePhase { kCatchUp, kCurrent };
 
 struct UpdateTime {
     float hours;
@@ -15,18 +13,13 @@ struct Source {
     using SourceData = std::unordered_map<RefID, std::vector<StageInstance>>;
     using StageDict = std::map<StageNo, Stage>;
 
-    struct WorldTriggers {
-        std::vector<std::variant<RE::BGSLocation*, RE::BGSPerk*, RE::TESForm*>> ordered;
-        std::vector<RE::TESForm*> scan_forms;
-    };
-
     SourceData data;
 
     FormID formid = 0;
     std::string editorid;
     std::string qFormType;
     DefaultSettings settings;
-    std::unordered_map<StageNo, WorldTriggers> world_triggers;
+    std::unordered_map<StageNo, Triggers> triggers;
 
 
     Source(const FormID id, const std::string& id_str, // NOLINT(modernize-pass-by-value)
@@ -78,10 +71,10 @@ struct Source {
 
     [[nodiscard]] bool IsDecayedItem(FormID _form_id) const;
 
-    void UpdateTimeModulationInWorld(RE::TESObjectREFR* wo, StageInstance& wo_inst, float _time) const;
+    void UpdateWorldItemTrigger(RE::TESObjectREFR* wo, StageInstance& wo_inst, float _time) const;
 
     // always update before doing this
-    void UpdateTimeModulationInInventory(QueueInfo& queue_info, UpdateTime time, const Utils::Inventory::Snapshot& inv);
+    void UpdateInventoryItemTriggers(QueueInfo& queue_info, UpdateTime time, const Utils::Inventory::Snapshot& inv);
 
 
     float GetNextUpdateTime(const StageInstance* st_inst);
@@ -106,10 +99,10 @@ struct Source {
 
 private:
     void Init(const DefaultSettings* defaultsettings);
-    void RebuildWorldTriggers();
+    void RebuildTriggers();
     template <class T>
-    void AddWorldTriggers(const tsl::ordered_map<FormID, T>& triggers,
-                          const std::unordered_map<FormID, std::unordered_set<StageNo>>& allowed_stages);
+    void AddTriggers(const tsl::ordered_map<FormID, T>& a_triggers,
+                     const std::unordered_map<FormID, std::unordered_set<StageNo>>& allowed_stages);
 
     RE::FormType formtype;
     std::set<StageNo> fake_stages;
@@ -182,7 +175,8 @@ private:
 
     [[nodiscard]] Stage GetTransformedStage(FormID key_formid) const;
 
-    void SetDelayOfInstance(StageInstance& instance, UpdateTime time, QueueInfo& queue_info, const Utils::Inventory::Snapshot& a_inv) const;
+    void SetDelayOfInstance(StageInstance& instance, UpdateTime time, QueueInfo& queue_info,
+                            const Utils::Inventory::Snapshot& a_inv) const;
     void SetDelayOfInstance(StageInstance& instance, float a_time, FormID a_modulator) const;
 
     [[nodiscard]] bool CheckIntegrity();
@@ -200,8 +194,6 @@ private:
     FormID FetchFake(StageNo st_no);
 
     StageNo GetLastStageNo();
-
-    static FormID FindWorldTrigger(RE::TESObjectREFR* a_obj, const WorldTriggers& triggers);
 };
 
 template <typename T>

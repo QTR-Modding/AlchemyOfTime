@@ -1,4 +1,5 @@
 #pragma once
+#include "CellScan.h"
 #include "Data.h"
 #include "InventoryWatch.h"
 #include "Presets.h"
@@ -187,10 +188,8 @@ class Manager final : public Ticker, public SaveLoadData {
     // [expects: sourceMutex_] (unique)
     bool DeRegisterRef(RefID refid);
 
-    using ScanRequest = std::pair<RefInfo, std::vector<RE::TESForm*>>;
-
-    [[nodiscard]] std::vector<ScanRequest> BuildCellScanRequests_(
-        const std::vector<QueueInfo>& refStopsCopy);
+    [[nodiscard]] std::vector<Scanner::Request> BuildScanRequests_(const std::vector<QueueInfo>& refStopsCopy,
+                                                               bool& preload_temp_effects);
 
     static bool LocHasStage(Source* src, RefID loc, FormID stage_formid);
 

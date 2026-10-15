@@ -3,6 +3,7 @@
 #include "CellScan.h"
 #include "Hooks.h"
 #include "Queue.h"
+#include "Triggers.h"
 #include "CLibUtilsQTR/DebugLocks.hpp"
 
 
@@ -95,40 +96,31 @@ void Manager::RefreshLocationIndex(const RefID location_id) {
     }
 }
 
-std::vector<Manager::ScanRequest> Manager::BuildCellScanRequests_(
-    const std::vector<QueueInfo>& refStopsCopy) {
-    std::vector<ScanRequest> out;
+std::vector<Scanner::Request> Manager::BuildScanRequests_(const std::vector<QueueInfo>& refStopsCopy,
+                                                       bool& preload_temp_effects) {
+
+    std::vector<Scanner::Request> out;
     out.reserve(refStopsCopy.size());
 
     // Only touches plugin-owned data => guarded by sourceMutex_.
     SRC_SHARED_GUARD;
-
     for (const auto& queue_info : refStopsCopy) {
-        if (queue_info.update_flags.none(QueueInfo::UpdateFlag::kWorldObject)) continue;
-        const auto refid = queue_info.ref_info.ref_id;
-        if (!refid) {
+        if (queue_info.update_type == QueueInfo::UpdateType::kInventory) {
+            preload_temp_effects |= !queue_info.inventory_watch->temp_effects.list.empty();
             continue;
         }
 
-        const auto src = GetSourceByLocation(refid);
-        if (!src || !src->IsHealthy()) {
-            continue;
-        }
+        const auto& ref_info = queue_info.ref_info;
+        const auto src = GetSourceByLocation(ref_info.ref_id);
+        if (!src) continue;
 
-        const auto it = src->data.find(refid);
-        if (it == src->data.end() || it->second.empty()) {
-            continue;
-        }
+        const auto& inst = src->data.at(ref_info.ref_id).front();
+        if (inst.count <= 0) continue;
 
-        const auto& inst = it->second.front();
-        if (inst.count <= 0) {
-            continue;
-        }
+        const auto triggers_it = src->triggers.find(inst.no);
+        if (triggers_it == src->triggers.end() || triggers_it->second.scan_forms.empty()) continue;
 
-        const auto triggers_it = src->world_triggers.find(inst.no);
-        if (triggers_it == src->world_triggers.end() || triggers_it->second.scan_forms.empty()) continue;
-
-        out.emplace_back(queue_info.ref_info, triggers_it->second.scan_forms);
+        out.push_back({.ref = ref_info, .forms = triggers_it->second.scan_forms});
     }
 
     return out;
@@ -434,9 +426,7 @@ void Manager::SplitWorldObjectStackIfNeeded_(Source& src, const UpdateCtx& ctx) 
         UpdateLocationIndexForSource(src, ctx.to_refid);
         UpdateLocationIndexForSource(src, new_ref->GetFormID());
 
-        if (const auto a_ref = new_ref->GetHandle().get().get()) {
-            UpdateRef(a_ref);
-        }
+        UpdateRef(new_ref);
     }
 }
 
@@ -444,20 +434,16 @@ void Manager::RefreshRefs_(const UpdateCtx& ctx) {
     if (!ctx.refreshRefs) return;
 
     if (ctx.to) {
-        if (const auto a_ref = ctx.to->GetHandle().get().get()) {
-            MarkDirty_(a_ref);
-        }
+        MarkDirty_(ctx.to);
     }
 
     if (ctx.from && (ctx.from->HasContainer() || !ctx.to)) {
-        if (const auto a_ref = ctx.from->GetHandle().get().get()) {
-            MarkDirty_(a_ref);
-        }
+        MarkDirty_(ctx.from);
     }
 }
 
 void Manager::PreDeleteRefStop(RefStop& a_ref_stop) {
-    if (a_ref_stop.update_flags.none(QueueInfo::UpdateFlag::kWorldObject)) return;
+    if (a_ref_stop.update_type != QueueInfo::UpdateType::kWorldObject) return;
     a_ref_stop.RemoveTint();
     a_ref_stop.RemoveTempEffects(true, true);
     a_ref_stop.RemoveSound();
@@ -472,7 +458,7 @@ void Manager::UpdateLoop() {
         !queue_delete_.empty() || !Settings::world_objects_evolve.load() || !Settings::placed_objects_evolve.load()) {
         for (auto it = _ref_stops_.begin(); it != _ref_stops_.end();) {
             bool remove = queue_delete_.contains(it->first);
-            if (!remove && it->second.update_flags.any(QueueInfo::UpdateFlag::kWorldObject)) {
+            if (!remove && it->second.update_type == QueueInfo::UpdateType::kWorldObject) {
                 remove = !Settings::world_objects_evolve.load();
                 if (!remove && !Settings::placed_objects_evolve.load()) {
                     const auto ref = it->second.GetRef();
@@ -500,15 +486,16 @@ void Manager::UpdateLoop() {
 
     auto ref_stops_copy = GetRefStops();
 
-    const auto scanReq = BuildCellScanRequests_(ref_stops_copy);
-    CellScanner::GetSingleton()->RequestRefresh(scanReq);
+    bool preload_temp_effects = false;
+    auto scanReq = BuildScanRequests_(ref_stops_copy, preload_temp_effects);
+    Scanner::GetSingleton()->RequestRefresh(std::move(scanReq), preload_temp_effects);
 
     float curr_time = -1.0f;
     if (const auto cal = RE::Calendar::GetSingleton()) {
         curr_time = cal->GetHoursPassed();
         for (QUE_UNIQUE_GUARD; const auto& queue_info : ref_stops_copy) {
             const auto it = _ref_stops_.find(queue_info.ref_info.ref_id);
-            if (it == _ref_stops_.end() || it->second.update_flags.none(QueueInfo::UpdateFlag::kWorldObject)) continue;
+            if (it == _ref_stops_.end() || it->second.update_type != QueueInfo::UpdateType::kWorldObject) continue;
 
             if (auto& val = it->second; val.IsDue(curr_time)) {
                 PreDeleteRefStop(val);
@@ -535,10 +522,11 @@ void Manager::UpdateLoop() {
 }
 
 void Manager::QueueRefUpdate(const RefStop& a_refstop) {
-    if (!a_refstop.update_flags) return;
-    if (a_refstop.update_flags.any(QueueInfo::UpdateFlag::kWorldObject) &&
-        !Settings::world_objects_evolve.load())
+    if (a_refstop.update_type == QueueInfo::UpdateType::kNone) return;
+    if (a_refstop.update_type == QueueInfo::UpdateType::kWorldObject &&
+        !Settings::world_objects_evolve.load()) {
         return;
+    }
 
     bool needStart;
     {
@@ -983,7 +971,7 @@ bool Manager::UpdateInventory(QueueInfo& queue_info, const UpdateTime t, const U
                 RemoveLocationIndex(refid, src_formid);
                 continue;
             }
-            sit->second->UpdateTimeModulationInInventory(queue_info, t, inv);
+            sit->second->UpdateInventoryItemTriggers(queue_info, t, inv);
         }
     } else {
         std::vector<FormID> mod_sources;
@@ -996,7 +984,7 @@ bool Manager::UpdateInventory(QueueInfo& queue_info, const UpdateTime t, const U
                 RemoveLocationIndex(refid, src_formid);
                 continue;
             }
-            sit->second->UpdateTimeModulationInInventory(queue_info, t, inv);
+            sit->second->UpdateInventoryItemTriggers(queue_info, t, inv);
         }
     }
 
@@ -1019,7 +1007,7 @@ void Manager::UpdateInventory(const RefInfo& a_info, Utils::Inventory::Snapshot&
     }
 
     UpdateInventory(pending, {.hours = curr, .phase = UpdatePhase::kCurrent}, inv);
-    if (pending.update_flags) {
+    if (pending.update_type != QueueInfo::UpdateType::kNone) {
         QueueRefUpdate(RefStop(pending));
     } else {
         QueueRefDelete(a_info.ref_id);
@@ -1153,11 +1141,15 @@ void Manager::SyncWithInventory(const RefInfo& a_info, Utils::Inventory::Snapsho
 
 
 void Manager::UpdateQueuedRef(const QueueInfo& queue_info, const float curr_time) {
-    if (queue_info.update_flags.any(QueueInfo::UpdateFlag::kWorldObject)) {
-        UpdateQueuedWO(queue_info.ref_info, curr_time);
-    }
-    if (queue_info.update_flags.any(QueueInfo::UpdateFlag::kInventory)) {
-        UpdateQueuedInventory(queue_info);
+    switch (queue_info.update_type) {
+        case QueueInfo::UpdateType::kWorldObject:
+            UpdateQueuedWO(queue_info.ref_info, curr_time);
+            break;
+        case QueueInfo::UpdateType::kInventory:
+            UpdateQueuedInventory(queue_info);
+            break;
+        case QueueInfo::UpdateType::kNone:
+            break;
     }
 }
 
@@ -1182,16 +1174,14 @@ void Manager::UpdateQueuedInventory(const QueueInfo& queue_info) {
 }
 
 void Manager::RestoreInventoryWatches() {
-    const auto needs_watch = [](const Source::WorldTriggers& triggers) {
-        return std::ranges::any_of(triggers.ordered, [](const auto& trigger) {
-            if (const auto form = std::get_if<RE::TESForm*>(&trigger)) return (*form)->Is(RE::FormType::MagicEffect, RE::FormType::Faction);
-            return std::holds_alternative<RE::BGSLocation*>(trigger) ||
-                   std::holds_alternative<RE::BGSPerk*>(trigger);
+    const auto needs_watch = [](const Triggers& triggers) {
+        return std::ranges::any_of(triggers.ordered, [](const Scanner::ScopedForm& trigger) {
+            return std::ranges::contains(poll_matchtypes, GetMatchType_(trigger.form->GetFormType()));
         });
     };
     for (const auto& source : sources | std::views::values) {
         if (!source->IsHealthy()) continue;
-        if (!std::ranges::any_of(source->world_triggers | std::views::values, needs_watch)) continue;
+        if (!std::ranges::any_of(source->triggers | std::views::values, needs_watch)) continue;
         for (const auto owner_id : source->data | std::views::keys) {
             if (const auto owner = RE::TESForm::LookupByID<RE::TESObjectREFR>(owner_id);
                 owner && owner->HasContainer()) {
@@ -1287,9 +1277,9 @@ void Manager::UpdateQueuedWO(const RefInfo& ref_info, const float curr_time) {
         ApplyStageInWorld(ref, source->GetStage(wo_inst.no), source->GetBoundObject());
     }
 
-    source->UpdateTimeModulationInWorld(ref, wo_inst, curr_time);
+    source->UpdateWorldItemTrigger(ref, wo_inst, curr_time);
     if (const auto next_update = source->GetNextUpdateTime(&wo_inst); next_update > curr_time) {
-        RefStop a_ref_stop(refid, QueueInfo::UpdateFlag::kWorldObject);
+        RefStop a_ref_stop(refid, QueueInfo::UpdateType::kWorldObject);
         UpdateRefStop(*source, wo_inst, a_ref_stop, next_update);
         QueueRefUpdate(a_ref_stop);
     }
@@ -1353,9 +1343,9 @@ void Manager::UpdateWO(RE::TESObjectREFR* ref) {
     }
     auto& wo_inst = it->second.front();
     if (wo_inst.xtra.is_fake) ApplyStageInWorld(ref, source->GetStage(wo_inst.no), source->GetBoundObject());
-    source->UpdateTimeModulationInWorld(ref, wo_inst, curr_time);
+    source->UpdateWorldItemTrigger(ref, wo_inst, curr_time);
     if (const auto next_update = source->GetNextUpdateTime(&wo_inst); next_update > curr_time) {
-        RefStop a_ref_stop(refid, QueueInfo::UpdateFlag::kWorldObject);
+        RefStop a_ref_stop(refid, QueueInfo::UpdateType::kWorldObject);
         UpdateRefStop(*source, wo_inst, a_ref_stop, next_update);
         QueueRefUpdate(a_ref_stop);
     }
@@ -1466,10 +1456,10 @@ void Manager::Register(const FormID some_formid, const Count count, const RefID 
     } else {
         const auto bound = src->IsFakeStage(stage_no) ? src->GetBoundObject() : nullptr;
         ApplyStageInWorld(ref, src->GetStage(stage_no), bound);
-        src->UpdateTimeModulationInWorld(ref, *inserted_instance, register_time);
+        src->UpdateWorldItemTrigger(ref, *inserted_instance, register_time);
         // add to the queue
         const auto hitting_time = src->GetNextUpdateTime(inserted_instance);
-        RefStop a_ref_stop(location_refid, QueueInfo::UpdateFlag::kWorldObject);
+        RefStop a_ref_stop(location_refid, QueueInfo::UpdateType::kWorldObject);
         UpdateRefStop(*src, *inserted_instance, a_ref_stop, hitting_time);
         QueueRefUpdate(a_ref_stop);
         UpdateLocationIndexForSource(*src, location_refid);
@@ -1702,6 +1692,7 @@ void Manager::Reset() {
     logger::info("Resetting manager...");
     Stop();
     ClearWOUpdateQueue();
+    Scanner::GetSingleton()->Reset();
     {
         SRC_UNIQUE_GUARD;
         for (const auto& src : sources | std::views::values) src->Reset();
@@ -2065,7 +2056,7 @@ std::unordered_map<RefID, std::optional<float>> Manager::GetUpdateQueue() {
     std::unordered_map<RefID, std::optional<float>> _ref_stops_copy;
     QUE_SHARED_GUARD;
     for (const auto& [key, value] : _ref_stops_) {
-        _ref_stops_copy[key] = value.update_flags.any(QueueInfo::UpdateFlag::kWorldObject)
+        _ref_stops_copy[key] = value.update_type == QueueInfo::UpdateType::kWorldObject
                                    ? std::optional{value.stop_time}
                                    : std::nullopt;
     }

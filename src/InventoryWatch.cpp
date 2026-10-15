@@ -1,49 +1,54 @@
 #include "InventoryWatch.h"
-#include "Utils.h"
 
 
 bool InventoryWatch::HasChanged(RE::TESObjectREFR* owner) {
-    if (!locations.empty()) {
-        const auto current = owner->GetCurrentLocation();
+    if (!locations.list.empty()) {
+        const auto current = LazyCache::GetSingleton()->GetLocation(owner);
         if (current != last_location) {
-            for (const auto location : locations) {
-                if (Utils::IsInLocation(location, last_location) != Utils::IsInLocation(location, current)) {
-                    return true;
-                }
-            }
+            if (locations.HasChanged([&](RE::BGSLocation* location) {
+                return Utils::IsInLocation(location, current);
+            })) return true;
             last_location = current;
         }
     }
-    if (perks.HasChanged([&](const RE::BGSPerk* perk) { return perk->perkConditions.IsTrue(owner, owner); }))
-        return true;
+
+    const auto perk_matcher = GetMatcher_(MatchType::kPerk);
+    if (perks.HasChanged([&](RE::BGSPerk* perk) { return perk_matcher(owner, perk); })) return true;
     if (!magic_effects.list.empty()) {
-        const auto active = Utils::WorldObject::CollectActiveMagicEffects(owner);
-        if (magic_effects.HasChanged([&](RE::EffectSetting* effect) { return active.contains(effect); }))
-            return true;
+        const auto active = LazyCache::GetSingleton()->GetMagicEffects(owner);
+        if (magic_effects.HasChanged([&](RE::EffectSetting* effect) { return active->contains(effect); })) return true;
     }
-    return factions.HasChanged([&](const RE::TESFaction* faction) { return Utils::WorldObject::MatchesFaction(owner, faction); });
+    const auto faction_matcher = GetMatcher_(MatchType::kFaction);
+    if (factions.HasChanged([&](RE::TESFaction* faction) { return faction_matcher(owner, faction); })) return true;
+    if (!temp_effects.list.empty()) {
+        const auto active = LazyCache::GetSingleton()->GetTempEffects(owner);
+        return temp_effects.HasChanged([&](RE::TESForm* effect) { return active->contains(effect); });
+    }
+    return false;
 }
 
-bool InventoryWatch::Eval(RE::TESForm* trigger, RE::TESObjectREFR* owner,
+bool InventoryWatch::Eval(RE::TESForm* trigger, const MatchType type, RE::TESObjectREFR* owner,
                           const Utils::Inventory::Snapshot& inventory) {
-    switch (trigger->GetFormType()) {
-        case RE::FormType::Location: {
+    switch (type) {
+        case MatchType::kLocation: {
+            if (locations.list.empty()) last_location = LazyCache::GetSingleton()->GetLocation(owner);
             const auto location = static_cast<RE::BGSLocation*>(trigger);
-            locations.insert(location);
-            return Utils::IsInLocation(location, last_location);
+            return locations.Eval(location, [&] { return Utils::IsInLocation(location, last_location); });
         }
-        case RE::FormType::Perk: {
+        case MatchType::kPerk: {
             const auto perk = static_cast<RE::BGSPerk*>(trigger);
-            return perks.Eval(perk, [&] { return perk->perkConditions.IsTrue(owner, owner); });
+            return perks.Eval(perk, [&] { return GetMatcher_(MatchType::kPerk)(owner, perk); });
         }
-        case RE::FormType::MagicEffect: {
+        case MatchType::kMagicEffect: {
             const auto magicEffect = static_cast<RE::EffectSetting*>(trigger);
             return magic_effects.Eval(magicEffect, [&] { return inventory.HasMagicEffect(owner, magicEffect); });
         }
-        case RE::FormType::Faction: {
+        case MatchType::kFaction: {
             const auto faction = static_cast<RE::TESFaction*>(trigger);
-            return factions.Eval(faction, [&] { return Utils::WorldObject::MatchesFaction(owner, faction); });
+            return factions.Eval(faction, [&] { return GetMatcher_(MatchType::kFaction)(owner, faction); });
         }
+        case MatchType::kTempEffect:
+            return temp_effects.Eval(trigger, [&] { return inventory.HasTempEffect(owner, trigger); });
         default:
             return false;
     }

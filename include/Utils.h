@@ -125,14 +125,7 @@ namespace Utils {
 
         void SwapObjects(RE::TESObjectREFR* a_from, RE::TESBoundObject* a_to, bool apply_havok = true);
 
-        std::vector<std::pair<RE::TESForm*, RE::ObjectRefHandle>> CollectAppliedEffectTargets(
-            const std::unordered_set<RE::TESForm*>& forms);
-
-        std::unordered_set<RE::EffectSetting*> CollectActiveMagicEffects(RE::TESObjectREFR* ref);
-
         bool IsPlacedObject(RE::TESObjectREFR* ref);
-
-        RE::bhkRigidBody* GetRigidBody(const RE::TESObjectREFR* refr);
 
         RE::NiPoint3 GetPosition(const RE::TESObjectREFR* obj);
     };
@@ -141,10 +134,12 @@ namespace Utils {
         struct Snapshot {
             InvMap items;
             mutable std::optional<std::unordered_set<RE::BGSKeyword*>> keywords;
-            mutable std::optional<std::unordered_set<RE::EffectSetting*>> magic_effects;
+            mutable std::shared_ptr<const std::unordered_set<RE::EffectSetting*>> magic_effects;
+            mutable std::shared_ptr<const std::unordered_set<RE::TESForm*>> temp_effects;
 
             bool HasKeyword(RE::BGSKeyword* keyword) const;
             bool HasMagicEffect(RE::TESObjectREFR* owner, RE::EffectSetting* effect) const;
+            bool HasTempEffect(RE::TESObjectREFR* owner, RE::TESForm* effect) const;
         };
 
         bool IsQuestItem(FormID formid, const InvMap& a_inv);

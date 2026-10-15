@@ -1,5 +1,5 @@
 #pragma once
-#include <unordered_set>
+#include "CellScan.h"
 #include "CustomObjects.h"
 #include "Utils.h"
 
@@ -24,15 +24,17 @@ struct InventoryWatchList {
 };
 
 // it contains the results from the last check/loop so it can compare it in the next update when the new info comes
-struct InventoryWatch {  // inventory owner watch
+struct InventoryWatch {
+    // inventory owner watch
     RE::BGSLocation* last_location = nullptr;
-    std::unordered_set<RE::BGSLocation*> locations;
+    InventoryWatchList<RE::BGSLocation> locations;
     InventoryWatchList<RE::BGSPerk> perks;
     InventoryWatchList<RE::EffectSetting> magic_effects;
     InventoryWatchList<RE::TESFaction> factions;
+    InventoryWatchList<RE::TESForm> temp_effects;
 
     [[nodiscard]] bool HasChanged(RE::TESObjectREFR* owner);
-    bool Eval(RE::TESForm* trigger, RE::TESObjectREFR* owner,
+    bool Eval(RE::TESForm* trigger, MatchType type, RE::TESObjectREFR* owner,
               const Utils::Inventory::Snapshot& inventory);
 };
 
@@ -43,12 +45,10 @@ struct InventoryWatch {  // inventory owner watch
 // in `RefStop` for queuing.
 // 3. The shared loop later works with **`QueueInfo` copies** of those queued records.
 struct QueueInfo {
-    enum class UpdateFlag : std::uint32_t {
-        kWorldObject = 1u << 0,
-        kInventory = 1u << 1,
-    };
+    enum class UpdateType { kNone, kWorldObject, kInventory };
+
     RefInfo ref_info;
-    REX::EnumSet<UpdateFlag> update_flags;
+    UpdateType update_type = UpdateType::kNone;
     float stop_time = 0;
     std::shared_ptr<InventoryWatch> inventory_watch;
 };
