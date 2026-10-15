@@ -28,6 +28,12 @@ std::shared_ptr<const std::unordered_map<RE::ObjectRefHandle, std::unordered_set
                 return RE::BSContainer::ForEachResult::kContinue;
             });
         }
+        if (targets.empty()) {
+            static const auto empty = std::make_shared<const std::unordered_map<
+                RE::ObjectRefHandle, std::unordered_set<RE::TESForm*>, RE::BSCRC32<RE::ObjectRefHandle>>>();
+            temp_effs_ = empty;
+            return temp_effs_;
+        }
         auto collected = std::make_shared<std::unordered_map<RE::ObjectRefHandle, std::unordered_set<RE::TESForm*>,
                                                               RE::BSCRC32<RE::ObjectRefHandle>>>();
         for (const auto& [target, form] : targets) {
