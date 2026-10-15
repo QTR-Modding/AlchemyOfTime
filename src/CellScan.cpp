@@ -265,15 +265,10 @@ namespace {
     }
 }
 
-void Scanner::RequestRefresh(std::vector<Request> requests, const bool preload_temp_effects) {
-    auto work = BuildWorkItem_();
+void Scanner::RequestRefresh(WorkItemPtr work, const bool preload_temp_effects) {
     LazyCache::GetSingleton()->Flush();
 
-    if (preload_temp_effects || std::ranges::any_of(requests, [](const Request& request) {
-        return std::ranges::any_of(request.forms, [](const ScopedForm& entry) {
-            return GetMatchType_(entry.form->GetFormType()) == MatchType::kTempEffect;
-        });
-    })) {
+    if (preload_temp_effects) {
         // ReSharper disable once CppExpressionWithoutSideEffects
         LazyCache::GetSingleton()->GetTempEffects();
     }
@@ -282,7 +277,6 @@ void Scanner::RequestRefresh(std::vector<Request> requests, const bool preload_t
         return;
     }
 
-    work->requests = std::move(requests);
     QueueScanTask_(std::move(work));
 }
 
@@ -306,7 +300,7 @@ bool Scanner::IsStale_(const std::uint64_t gen) const {
     return gen != requestedGeneration_.load(std::memory_order_acquire);
 }
 
-Scanner::WorkItemPtr Scanner::BuildWorkItem_() {
+Scanner::WorkItemPtr Scanner::TryBeginRefresh() {
     std::unique_lock lock(cacheMutex_);
     if (!activeWork_.expired()) return nullptr;
 
@@ -353,10 +347,10 @@ void Scanner::TryAddExteriorCell_(RE::TESWorldSpace* ws, const std::int32_t x, c
 
 void Scanner::CollectCellsToScan_(const std::vector<RE::TESObjectREFR*>& refs,
                                       std::unordered_set<RE::TESObjectCELL*>& cellsToScan) {
-    std::unordered_set<RE::TESWorldSpace*> skyAdded;
-    skyAdded.reserve(refs.size());
+    if (refs.empty()) return;
 
-    cellsToScan.reserve(refs.size() * 10);
+    std::optional<std::unordered_set<RE::TESObjectCELL*>> expandedOrigins;
+    std::unordered_set<RE::TESWorldSpace*> skyAdded;
 
     for (const auto wo : refs) {
         auto cell = wo->GetParentCell();
@@ -374,6 +368,9 @@ void Scanner::CollectCellsToScan_(const std::vector<RE::TESObjectREFR*>& refs,
         if (!ws) {
             continue;
         }
+
+        if (!expandedOrigins) expandedOrigins.emplace();
+        if (!expandedOrigins->insert(cell).second) continue;
 
         if (const auto coords = cell->GetCoordinates()) {
             const std::int32_t x = coords->cellX;

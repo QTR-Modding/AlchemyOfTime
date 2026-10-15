@@ -76,12 +76,6 @@ public:
         std::vector<ScopedForm> forms;
     };
 
-    void RequestRefresh(std::vector<Request> requests, bool preload_temp_effects);
-    void Reset();
-
-    [[nodiscard]] CachePtr GetCache() const;
-
-private:
     struct WorkItem {
         std::uint64_t gen{0};
 
@@ -92,9 +86,14 @@ private:
 
     using WorkItemPtr = std::shared_ptr<WorkItem>;
 
-    [[nodiscard]] bool IsStale_(std::uint64_t gen) const;
+    [[nodiscard]] WorkItemPtr TryBeginRefresh();
+    void RequestRefresh(WorkItemPtr work, bool preload_temp_effects);
+    void Reset();
 
-    [[nodiscard]] WorkItemPtr BuildWorkItem_();
+    [[nodiscard]] CachePtr GetCache() const;
+
+private:
+    [[nodiscard]] bool IsStale_(std::uint64_t gen) const;
 
     void QueueScanTask_(const WorkItemPtr& work);
 
