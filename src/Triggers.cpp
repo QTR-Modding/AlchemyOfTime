@@ -1,5 +1,6 @@
 #include "Triggers.h"
 #include "CellScan.h"
+#include "Settings.h"
 #include "CLibUtilsQTR/BoundingBox.hpp"
 #include "CLibUtilsQTR/DrawDebug.hpp"
 #ifndef NDEBUG
