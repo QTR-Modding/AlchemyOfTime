@@ -96,15 +96,15 @@ void Manager::RefreshLocationIndex(const RefID location_id) {
     }
 }
 
-std::vector<Scanner::Request> Manager::BuildScanRequests_(const std::vector<QueueInfo>& refStopsCopy,
-                                                       bool& preload_temp_effects) {
-
-    std::vector<Scanner::Request> out;
-    out.reserve(refStopsCopy.size());
+bool Manager::BuildScanRequests_(const std::vector<QueueInfo>& refStopsCopy,
+                                std::vector<Scanner::Request>* requests) {
+    bool preload_temp_effects = false;
+    if (requests) requests->reserve(refStopsCopy.size());
 
     // Only touches plugin-owned data => guarded by sourceMutex_.
     SRC_SHARED_GUARD;
     for (const auto& queue_info : refStopsCopy) {
+        if (!requests && preload_temp_effects) break;
         if (queue_info.update_type == QueueInfo::UpdateType::kInventory) {
             preload_temp_effects |= !queue_info.inventory_watch->temp_effects.list.empty();
             continue;
@@ -120,10 +120,14 @@ std::vector<Scanner::Request> Manager::BuildScanRequests_(const std::vector<Queu
         const auto triggers_it = src->triggers.find(inst.no);
         if (triggers_it == src->triggers.end() || triggers_it->second.scan_forms.empty()) continue;
 
-        out.push_back({.ref = ref_info, .forms = triggers_it->second.scan_forms});
+        preload_temp_effects = preload_temp_effects ||
+            std::ranges::any_of(triggers_it->second.scan_forms, [](const Scanner::ScopedForm& entry) {
+                return GetMatchType_(entry.form->GetFormType()) == MatchType::kTempEffect;
+            });
+        if (requests) requests->push_back({.ref = ref_info, .forms = triggers_it->second.scan_forms});
     }
 
-    return out;
+    return preload_temp_effects;
 }
 
 bool Manager::LocHasStage(Source* src, const RefID loc, const FormID stage_formid) {
@@ -486,9 +490,10 @@ void Manager::UpdateLoop() {
 
     auto ref_stops_copy = GetRefStops();
 
-    bool preload_temp_effects = false;
-    auto scanReq = BuildScanRequests_(ref_stops_copy, preload_temp_effects);
-    Scanner::GetSingleton()->RequestRefresh(std::move(scanReq), preload_temp_effects);
+    const auto scanner = Scanner::GetSingleton();
+    auto work = scanner->TryBeginRefresh();
+    const auto preload_temp_effects = BuildScanRequests_(ref_stops_copy, work ? &work->requests : nullptr);
+    scanner->RequestRefresh(std::move(work), preload_temp_effects);
 
     float curr_time = -1.0f;
     if (const auto cal = RE::Calendar::GetSingleton()) {

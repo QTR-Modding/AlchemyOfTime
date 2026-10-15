@@ -20,6 +20,7 @@ namespace {
     }
 
     bool SearchModulatorInCell_Sub(const RE::TESObjectREFR* a_origin, const RE::TESObjectREFR* ref,
+                                   std::optional<DirectX::BoundingOrientedBox>& originOBB,
                                    const float proximity = Settings::proximity_range) {
         const auto cell = a_origin->GetParentCell();
         const auto targetCell = ref->GetParentCell();
@@ -28,13 +29,15 @@ namespace {
                                     !a_origin->GetWorldspace() || a_origin->GetWorldspace() != ref->GetWorldspace())))
             return false;
 
-        DirectX::BoundingOrientedBox obb1{};
         DirectX::BoundingOrientedBox obb2{};
 
-        if (const auto a_rigidbody1 = BoundingBox::GetRigidBody(a_origin)) {
-            BoundingBox::GetOBB(a_rigidbody1, obb1);
-        } else {
-            BoundingBox::GetOBB(a_origin, obb1);
+        if (!originOBB) {
+            originOBB.emplace();
+            if (const auto a_rigidbody1 = BoundingBox::GetRigidBody(a_origin)) {
+                BoundingBox::GetOBB(a_rigidbody1, *originOBB);
+            } else {
+                BoundingBox::GetOBB(a_origin, *originOBB);
+            }
         }
         if (const auto a_rigidbody2 = BoundingBox::GetRigidBody(ref)) {
             BoundingBox::GetOBB(a_rigidbody2, obb2);
@@ -42,20 +45,20 @@ namespace {
             BoundingBox::GetOBB(ref, obb2);
         }
 
-        if (!AreClose(obb1, obb2, proximity)) {
+        if (!AreClose(*originOBB, obb2, proximity)) {
             return false;
         }
 
 #ifndef NDEBUG
         if (UI::draw_debug) {
             DebugAPI_IMPL::DrawDebug::DrawOBB(obb2);
-            DebugAPI_IMPL::DrawDebug::DrawOBB(obb1);
+            DebugAPI_IMPL::DrawDebug::DrawOBB(*originOBB);
 
             DebugAPI_IMPL::DrawDebug::draw_line(Utils::WorldObject::GetPosition(ref),
                                                 Utils::WorldObject::GetPosition(RE::PlayerCharacter::GetSingleton()),
                                                 3.f, RE::NiColorA(0.f, 0.f, 1.f, 1.f));
 
-            const RE::NiPoint3 c1{obb1.Center.x, obb1.Center.y, obb1.Center.z};
+            const RE::NiPoint3 c1{originOBB->Center.x, originOBB->Center.y, originOBB->Center.z};
             const RE::NiPoint3 c2{obb2.Center.x, obb2.Center.y, obb2.Center.z};
             // yellow debug line between centers
             DebugAPI_IMPL::DrawDebug::draw_line(c1, c2, 2, RE::NiColorA(1.f, 1.f, 0.f, 1.f));
@@ -92,6 +95,7 @@ FormID FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers) {
     std::optional<RE::BGSLocation*> current_location;
     const auto originID = a_obj->GetFormID();
     std::optional<RE::NiPoint3> originPos;
+    std::optional<DirectX::BoundingOrientedBox> originOBB;
 
     const float r = Settings::search_radius;
     const float r2 = (r > 0.0f) ? (r * r) : std::numeric_limits<float>::infinity();
@@ -126,7 +130,7 @@ FormID FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers) {
                 continue;
             }
 
-            if (SearchModulatorInCell_Sub(a_obj, ref)) {
+            if (SearchModulatorInCell_Sub(a_obj, ref, originOBB)) {
                 return triggerID;
             }
         }
