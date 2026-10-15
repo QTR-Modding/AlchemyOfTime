@@ -33,7 +33,7 @@ bool InventoryWatch::Eval(RE::TESForm* trigger, RE::TESObjectREFR* owner,
         }
         case MatchType::kPerk: {
             const auto perk = static_cast<RE::BGSPerk*>(trigger);
-            return perks.Eval(perk, [&] { return perk->perkConditions.IsTrue(owner, owner); });
+            return perks.Eval(perk, [&] { return Matches(owner, trigger); });
         }
         case MatchType::kMagicEffect: {
             const auto magicEffect = static_cast<RE::EffectSetting*>(trigger);
@@ -41,7 +41,7 @@ bool InventoryWatch::Eval(RE::TESForm* trigger, RE::TESObjectREFR* owner,
         }
         case MatchType::kFaction: {
             const auto faction = static_cast<RE::TESFaction*>(trigger);
-            return factions.Eval(faction, [&] { return Utils::WorldObject::MatchesFaction(owner, faction); });
+            return factions.Eval(faction, [&] { return Matches(owner, trigger); });
         }
         case MatchType::kTempEffect:
             return temp_effects.Eval(trigger, [&] { return inventory.HasTempEffect(owner, trigger); });

@@ -108,11 +108,9 @@ std::vector<Scanner::Request> Manager::BuildScanRequests_(const std::vector<Queu
         Scanner::Request request{.ref = ref_info};
 
         if (queue_info.update_type == QueueInfo::UpdateType::kInventory) {
-            queue_info.inventory_watch->ForEachTrigger([&request](RE::TESForm* form) {
-                if (GetMatchType_(form->GetFormType()) == MatchType::kTempEffect) {
-                    request.forms.push_back({.form = form, .scope = {}});
-                }
-            });
+            for (const auto form : queue_info.inventory_watch->temp_effects.list | std::views::keys) {
+                request.forms.push_back({.form = form, .scope = {}});
+            }
         } else {
             const auto src = GetSourceByLocation(ref_info.ref_id);
             if (!src) continue;
