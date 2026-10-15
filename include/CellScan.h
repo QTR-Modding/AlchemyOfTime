@@ -20,12 +20,17 @@ struct LazyCache : REX::Singleton<LazyCache> {
     bool HasKeyword(const RE::TESObjectREFR* a_ref, RE::BGSKeyword* a_keyword) const;
 
 private:
+    using MagicEffectsPtr = std::shared_ptr<const std::unordered_set<RE::EffectSetting*>>;
+    using MagicEffectsEntry = std::pair<RE::ObjectRefHandle, MagicEffectsPtr>;
+
     mutable std::mutex temp_mutex_;
     mutable std::mutex info_mutex_;
     mutable std::shared_ptr<const std::unordered_map<RE::ObjectRefHandle, std::unordered_set<RE::TESForm*>,
                                                    RE::BSCRC32<RE::ObjectRefHandle>>> temp_effs_;
-    mutable std::unordered_map<RE::ObjectRefHandle, std::shared_ptr<const std::unordered_set<RE::EffectSetting*>>,
-                               RE::BSCRC32<RE::ObjectRefHandle>> mg_effs_;
+    mutable tsl::ordered_map<
+        RE::ObjectRefHandle, MagicEffectsPtr, RE::BSCRC32<RE::ObjectRefHandle>,
+        std::equal_to<RE::ObjectRefHandle>, std::allocator<MagicEffectsEntry>,
+        std::vector<MagicEffectsEntry>> mg_effs_;
     mutable std::unordered_map<FormID, std::shared_ptr<const std::unordered_set<RE::BGSKeyword*>>> keywords_;
     mutable std::unordered_map<RE::ObjectRefHandle, RE::BGSLocation*, RE::BSCRC32<RE::ObjectRefHandle>> locations_;
 };
