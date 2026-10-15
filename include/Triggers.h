@@ -42,7 +42,8 @@ FormID GetTriggerInInventory(std::ranges::input_range auto&& trigger_ids,
         const auto trigger = RE::TESForm::LookupByID(a_trigger_id);
         if (!trigger) continue;
 
-        if (std::ranges::contains(poll_matchtypes, GetMatchType_(trigger->GetFormType()))) {
+        const auto type = GetMatchType_(trigger->GetFormType());
+        if (std::ranges::contains(poll_matchtypes, type)) {
             if (phase == UpdatePhase::kCatchUp) {
                 if (a_trigger_id == instance.GetDelayerFormID()) return a_trigger_id;
                 continue;
@@ -52,16 +53,15 @@ FormID GetTriggerInInventory(std::ranges::input_range auto&& trigger_ids,
             if (!owner) continue;
             if (!queue_info.inventory_watch) {
                 queue_info.inventory_watch = std::make_shared<InventoryWatch>();
-                queue_info.inventory_watch->last_location = LazyCache::GetSingleton()->GetLocation(owner);
                 queue_info.update_type = QueueInfo::UpdateType::kInventory;
             }
 
-            if (auto& watch = *queue_info.inventory_watch; watch.Eval(trigger, owner, inventory)) {
+            if (auto& watch = *queue_info.inventory_watch; watch.Eval(trigger, type, owner, inventory)) {
                 return a_trigger_id;
             }
-        } else if (const auto keyword = trigger->template As<RE::BGSKeyword>()) {
+        } else if (const auto keyword = trigger->As<RE::BGSKeyword>()) {
             if (inventory.HasKeyword(keyword)) return a_trigger_id;
-        } else if (const auto obj = trigger->template As<RE::TESBoundObject>()) {
+        } else if (const auto obj = trigger->As<RE::TESBoundObject>()) {
             if (const auto it = inv.find(obj); it != inv.end() && it->second.first > 0) {
                 return a_trigger_id;
             }

@@ -1,4 +1,5 @@
 #pragma once
+#include "CellScan.h"
 #include "CustomObjects.h"
 #include "Utils.h"
 
@@ -33,7 +34,7 @@ struct InventoryWatch {
     InventoryWatchList<RE::TESForm> temp_effects;
 
     [[nodiscard]] bool HasChanged(RE::TESObjectREFR* owner);
-    bool Eval(RE::TESForm* trigger, RE::TESObjectREFR* owner,
+    bool Eval(RE::TESForm* trigger, MatchType type, RE::TESObjectREFR* owner,
               const Utils::Inventory::Snapshot& inventory);
 };
 

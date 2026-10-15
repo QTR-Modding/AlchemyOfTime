@@ -1,5 +1,4 @@
 #include "InventoryWatch.h"
-#include "CellScan.h"
 
 
 bool InventoryWatch::HasChanged(RE::TESObjectREFR* owner) {
@@ -28,10 +27,11 @@ bool InventoryWatch::HasChanged(RE::TESObjectREFR* owner) {
     return false;
 }
 
-bool InventoryWatch::Eval(RE::TESForm* trigger, RE::TESObjectREFR* owner,
+bool InventoryWatch::Eval(RE::TESForm* trigger, const MatchType type, RE::TESObjectREFR* owner,
                           const Utils::Inventory::Snapshot& inventory) {
-    switch (GetMatchType_(trigger->GetFormType())) {
+    switch (type) {
         case MatchType::kLocation: {
+            if (locations.list.empty()) last_location = LazyCache::GetSingleton()->GetLocation(owner);
             const auto location = static_cast<RE::BGSLocation*>(trigger);
             return locations.Eval(location, [&] { return Utils::IsInLocation(location, last_location); });
         }
