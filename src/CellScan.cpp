@@ -38,45 +38,61 @@ std::shared_ptr<const std::unordered_map<RE::ObjectRefHandle, std::unordered_set
     return temp_effs_;
 }
 
+std::shared_ptr<const std::unordered_set<RE::TESForm*>> LazyCache::GetTempEffects(RE::TESObjectREFR* a_ref) const {
+    auto effects = GetTempEffects();
+    if (const auto it = effects->find(a_ref->GetHandle()); it != effects->end()) {
+        return {std::move(effects), &it->second};
+    }
+    static const auto empty = std::make_shared<const std::unordered_set<RE::TESForm*>>();
+    return empty;
+}
+
 std::shared_ptr<const std::unordered_set<RE::EffectSetting*>> LazyCache::GetMagicEffects(RE::TESObjectREFR* a_ref) const {
     const auto handle = a_ref->GetHandle();
     std::lock_guard lock(info_mutex_);
     auto& effects = mg_effs_[handle];
     if (!effects) {
-        auto collected = std::make_shared<std::unordered_set<RE::EffectSetting*>>();
+        std::shared_ptr<std::unordered_set<RE::EffectSetting*>> collected;
         if (const auto target = a_ref->GetMagicTarget()) {
             if (const auto list = target->GetActiveEffectList()) {
                 for (const auto effect : *list) {
                     if (!effect || effect->flags.any(RE::ActiveEffect::Flag::kInactive, RE::ActiveEffect::Flag::kDispelled) ||
                         effect->conditionStatus == RE::ActiveEffect::ConditionStatus::kFalse) continue;
                     if (const auto base = effect->GetBaseObject()) {
+                        if (!collected) collected = std::make_shared<std::unordered_set<RE::EffectSetting*>>();
                         collected->insert(base);
                     }
                 }
             }
         }
-        effects = std::move(collected);
+        if (collected) {
+            effects = std::move(collected);
+        } else {
+            static const auto empty = std::make_shared<const std::unordered_set<RE::EffectSetting*>>();
+            effects = empty;
+        }
     }
     return effects;
 }
 
 std::shared_ptr<const std::unordered_set<RE::BGSKeyword*>> LazyCache::GetKeywords(const RE::TESObjectREFR* a_ref) const {
+    static const auto empty = std::make_shared<const std::unordered_set<RE::BGSKeyword*>>();
     // keywords map is from base form id to keywords, so we need to get the base form of the reference
     const auto base = a_ref->GetObjectReference();
     if (!base) {
-        static const auto empty = std::make_shared<const std::unordered_set<RE::BGSKeyword*>>();
         return empty;
     }
     std::lock_guard lock(info_mutex_);
     auto& keywords = keywords_[base->GetFormID()];
     if (!keywords) {
-        auto collected = std::make_shared<std::unordered_set<RE::BGSKeyword*>>();
+        std::shared_ptr<std::unordered_set<RE::BGSKeyword*>> collected;
         if (const auto kw_form = base->As<RE::BGSKeywordForm>()) {
             for (const auto keyword : kw_form->GetKeywords()) {
+                if (!collected) collected = std::make_shared<std::unordered_set<RE::BGSKeyword*>>();
                 collected->insert(keyword);
             }
         }
-        keywords = std::move(collected);
+        keywords = collected ? std::move(collected) : empty;
     }
     return keywords;
 }
@@ -238,11 +254,11 @@ namespace {
     }
 }
 
-void Scanner::RequestRefresh(std::vector<Request> requests) {
+void Scanner::RequestRefresh(std::vector<Request> requests, const bool preload_temp_effects) {
     auto work = BuildWorkItem_();
     LazyCache::GetSingleton()->Flush();
 
-    if (std::ranges::any_of(requests, [](const Request& request) {
+    if (preload_temp_effects || std::ranges::any_of(requests, [](const Request& request) {
         return std::ranges::any_of(request.forms, [](const ScopedForm& entry) {
             return GetMatchType_(entry.form->GetFormType()) == MatchType::kTempEffect;
         });
@@ -295,12 +311,6 @@ Scanner::WorkItemPtr Scanner::BuildWorkItem_() {
 void Scanner::QueueScanTask_(const WorkItemPtr& work) {
     if (IsStale_(work->gen)) return;
 
-    for (auto& request : work->requests) {
-        std::erase_if(request.forms, [](const ScopedForm& entry) { return !entry.scope; });
-    }
-    std::erase_if(work->requests, [](const Request& request) { return request.forms.empty(); });
-
-    if (IsStale_(work->gen)) return;
     if (work->requests.empty()) {
         Publish_(std::move(work->next));
         return;
@@ -446,7 +456,8 @@ void Scanner::RunScanTaskOnGameThread_(const WorkItemPtr& work) {
         std::optional<Entry> entry;
 
         for (auto& [a_form, a_scope] : forms) {
-            if (a_scope.any(Scope::kSelf) && Matches(a_ref, a_form)) {
+            const auto type = GetMatchType_(a_form->GetFormType());
+            if (a_scope.any(Scope::kSelf) && GetMatcher_(type)(a_ref, a_form)) {
                 if (!entry) {
                     entry.emplace(a_ref->GetFormID(), Utils::WorldObject::GetPosition(a_ref));
                 }
@@ -456,7 +467,7 @@ void Scanner::RunScanTaskOnGameThread_(const WorkItemPtr& work) {
 
             if (!a_scope.any(Scope::kProximity)) continue;
 
-            proximity_forms[GetMatchType_(a_form->GetFormType())].insert(a_form);
+            proximity_forms[type].insert(a_form);
 
             if (!added) {
                 cellrefs.push_back(a_ref);

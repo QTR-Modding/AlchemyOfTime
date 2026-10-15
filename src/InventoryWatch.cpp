@@ -13,15 +13,19 @@ bool InventoryWatch::HasChanged(RE::TESObjectREFR* owner) {
         }
     }
 
-    const auto matches = [&](RE::TESForm* form) {
-        return Matches(owner, form);
-    };
-    const Utils::Inventory::Snapshot inventory{};
-
-    return perks.HasChanged(matches) ||
-           magic_effects.HasChanged([&](RE::EffectSetting* effect) { return inventory.HasMagicEffect(owner, effect); }) ||
-           factions.HasChanged(matches) ||
-           temp_effects.HasChanged([&](RE::TESForm* effect) { return inventory.HasTempEffect(owner, effect); });
+    const auto perk_matcher = GetMatcher_(MatchType::kPerk);
+    if (perks.HasChanged([&](RE::BGSPerk* perk) { return perk_matcher(owner, perk); })) return true;
+    if (!magic_effects.list.empty()) {
+        const auto active = LazyCache::GetSingleton()->GetMagicEffects(owner);
+        if (magic_effects.HasChanged([&](RE::EffectSetting* effect) { return active->contains(effect); })) return true;
+    }
+    const auto faction_matcher = GetMatcher_(MatchType::kFaction);
+    if (factions.HasChanged([&](RE::TESFaction* faction) { return faction_matcher(owner, faction); })) return true;
+    if (!temp_effects.list.empty()) {
+        const auto active = LazyCache::GetSingleton()->GetTempEffects(owner);
+        return temp_effects.HasChanged([&](RE::TESForm* effect) { return active->contains(effect); });
+    }
+    return false;
 }
 
 bool InventoryWatch::Eval(RE::TESForm* trigger, RE::TESObjectREFR* owner,
@@ -33,7 +37,7 @@ bool InventoryWatch::Eval(RE::TESForm* trigger, RE::TESObjectREFR* owner,
         }
         case MatchType::kPerk: {
             const auto perk = static_cast<RE::BGSPerk*>(trigger);
-            return perks.Eval(perk, [&] { return Matches(owner, trigger); });
+            return perks.Eval(perk, [&] { return GetMatcher_(MatchType::kPerk)(owner, perk); });
         }
         case MatchType::kMagicEffect: {
             const auto magicEffect = static_cast<RE::EffectSetting*>(trigger);
@@ -41,7 +45,7 @@ bool InventoryWatch::Eval(RE::TESForm* trigger, RE::TESObjectREFR* owner,
         }
         case MatchType::kFaction: {
             const auto faction = static_cast<RE::TESFaction*>(trigger);
-            return factions.Eval(faction, [&] { return Matches(owner, trigger); });
+            return factions.Eval(faction, [&] { return GetMatcher_(MatchType::kFaction)(owner, faction); });
         }
         case MatchType::kTempEffect:
             return temp_effects.Eval(trigger, [&] { return inventory.HasTempEffect(owner, trigger); });

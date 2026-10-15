@@ -88,7 +88,8 @@ REX::EnumSet<Scanner::Scope> GetWorldTriggerScope(RE::TESForm* form) {
 FormID FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers) {
     if (!a_obj || triggers.ordered.empty()) return 0;
 
-    const auto cache = Scanner::GetSingleton()->GetCache();
+    Scanner::CachePtr cache;
+    std::optional<RE::BGSLocation*> current_location;
     const auto originID = a_obj->GetFormID();
     const auto originPos = Utils::WorldObject::GetPosition(a_obj);
 
@@ -98,15 +99,21 @@ FormID FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers) {
     for (const auto& [form, scope] : triggers.ordered) {
         const auto triggerID = form->GetFormID();
         if (!scope.any(Scanner::Scope::kProximity)) {
-            if (scope.any(Scanner::Scope::kSelf) && Matches(a_obj, form)) return triggerID;
+            if (scope.any(Scanner::Scope::kSelf)) {
+                if (const auto location = form->As<RE::BGSLocation>()) {
+                    if (!current_location) current_location = LazyCache::GetSingleton()->GetLocation(a_obj);
+                    if (Utils::IsInLocation(location, *current_location)) return triggerID;
+                } else if (Matches(a_obj, form)) return triggerID;
+            }
             continue;
         }
-        if (scope.any(Scanner::Scope::kSelf) && cache->HasMatch(originID, triggerID)) return triggerID;
 
+        if (!cache) cache = Scanner::GetSingleton()->GetCache();
         const auto it = cache->byTrigger.find(triggerID);
         if (it == cache->byTrigger.end()) {
             continue;
         }
+        if (scope.any(Scanner::Scope::kSelf) && it->second.contains(originID)) return triggerID;
 
         for (const auto& [refid, pos] : it->second) {
             if (originPos.GetSquaredDistance(pos) > r2) {

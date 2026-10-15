@@ -13,6 +13,7 @@ REX::EnumSet<Scanner::Scope> GetWorldTriggerScope(RE::TESForm* form);
 
 struct Triggers {
     std::vector<Scanner::ScopedForm> ordered; // from configs, in the given order
+    std::vector<Scanner::ScopedForm> scan_forms;
 };
 
 FormID FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers);

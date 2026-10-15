@@ -96,7 +96,8 @@ void Manager::RefreshLocationIndex(const RefID location_id) {
     }
 }
 
-std::vector<Scanner::Request> Manager::BuildScanRequests_(const std::vector<QueueInfo>& refStopsCopy) {
+std::vector<Scanner::Request> Manager::BuildScanRequests_(const std::vector<QueueInfo>& refStopsCopy,
+                                                       bool& preload_temp_effects) {
 
     std::vector<Scanner::Request> out;
     out.reserve(refStopsCopy.size());
@@ -104,31 +105,22 @@ std::vector<Scanner::Request> Manager::BuildScanRequests_(const std::vector<Queu
     // Only touches plugin-owned data => guarded by sourceMutex_.
     SRC_SHARED_GUARD;
     for (const auto& queue_info : refStopsCopy) {
-        const auto& ref_info = queue_info.ref_info;
-        Scanner::Request request{.ref = ref_info};
-
         if (queue_info.update_type == QueueInfo::UpdateType::kInventory) {
-            for (const auto form : queue_info.inventory_watch->temp_effects.list | std::views::keys) {
-                request.forms.push_back({.form = form, .scope = {}});
-            }
-        } else {
-            const auto src = GetSourceByLocation(ref_info.ref_id);
-            if (!src) continue;
-
-            const auto& inst = src->data.at(ref_info.ref_id).front();
-            if (inst.count <= 0) continue;
-
-            const auto triggers_it = src->triggers.find(inst.no);
-            if (triggers_it == src->triggers.end()) continue;
-
-            for (const auto& trigger : triggers_it->second.ordered) {
-                if (trigger.scope.any(Scanner::Scope::kProximity)) request.forms.push_back(trigger);
-            }
+            preload_temp_effects |= !queue_info.inventory_watch->temp_effects.list.empty();
+            continue;
         }
 
-        if (!request.forms.empty()) {
-            out.push_back(std::move(request));
-        }
+        const auto& ref_info = queue_info.ref_info;
+        const auto src = GetSourceByLocation(ref_info.ref_id);
+        if (!src) continue;
+
+        const auto& inst = src->data.at(ref_info.ref_id).front();
+        if (inst.count <= 0) continue;
+
+        const auto triggers_it = src->triggers.find(inst.no);
+        if (triggers_it == src->triggers.end() || triggers_it->second.scan_forms.empty()) continue;
+
+        out.push_back({.ref = ref_info, .forms = triggers_it->second.scan_forms});
     }
 
     return out;
@@ -500,8 +492,9 @@ void Manager::UpdateLoop() {
 
     auto ref_stops_copy = GetRefStops();
 
-    auto scanReq = BuildScanRequests_(ref_stops_copy);
-    Scanner::GetSingleton()->RequestRefresh(std::move(scanReq));
+    bool preload_temp_effects = false;
+    auto scanReq = BuildScanRequests_(ref_stops_copy, preload_temp_effects);
+    Scanner::GetSingleton()->RequestRefresh(std::move(scanReq), preload_temp_effects);
 
     float curr_time = -1.0f;
     if (const auto cal = RE::Calendar::GetSingleton()) {

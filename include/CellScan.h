@@ -10,6 +10,7 @@ struct LazyCache : REX::Singleton<LazyCache> {
 
     std::shared_ptr<const std::unordered_map<RE::ObjectRefHandle, std::unordered_set<RE::TESForm*>,
                                            RE::BSCRC32<RE::ObjectRefHandle>>> GetTempEffects() const;
+    std::shared_ptr<const std::unordered_set<RE::TESForm*>> GetTempEffects(RE::TESObjectREFR* a_ref) const;
     std::shared_ptr<const std::unordered_set<RE::EffectSetting*>> GetMagicEffects(RE::TESObjectREFR* a_ref) const;
     std::shared_ptr<const std::unordered_set<RE::BGSKeyword*>> GetKeywords(const RE::TESObjectREFR* a_ref) const;
 
@@ -54,11 +55,6 @@ public:
                                RefID, RE::NiPoint3, std::hash<RefID>, std::equal_to<RefID>,
                                std::allocator<std::pair<RefID, RE::NiPoint3>>,
                                std::vector<std::pair<RefID, RE::NiPoint3>>>> byTrigger;
-
-        [[nodiscard]] bool HasMatch(const RefID refid, const FormID formid) const {
-            const auto it = byTrigger.find(formid);
-            return it != byTrigger.end() && it->second.contains(refid);
-        }
     };
 
     using CachePtr = std::shared_ptr<const Cache>;
@@ -67,7 +63,7 @@ public:
 
     struct ScopedForm {
         RE::TESForm* form;
-        REX::EnumSet<Scope> scope; // Empty scope only populates the lazy cache.
+        REX::EnumSet<Scope> scope;
     };
 
     struct Request {
@@ -75,7 +71,7 @@ public:
         std::vector<ScopedForm> forms;
     };
 
-    void RequestRefresh(std::vector<Request> requests);
+    void RequestRefresh(std::vector<Request> requests, bool preload_temp_effects);
     void Reset();
 
     [[nodiscard]] CachePtr GetCache() const;

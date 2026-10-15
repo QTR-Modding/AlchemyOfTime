@@ -128,7 +128,9 @@ void Source::AddTriggers(const tsl::ordered_map<FormID, T>& a_triggers,
         if (!scope) continue;
 
         for (const auto no : allowed_stages.at(trigger_id)) {
-            triggers[no].ordered.push_back({.form = form, .scope = scope});
+            auto& prepared = triggers[no];
+            prepared.ordered.push_back({.form = form, .scope = scope});
+            if (scope.any(Scanner::Scope::kProximity)) prepared.scan_forms.push_back({.form = form, .scope = scope});
         }
     }
 }
@@ -137,6 +139,11 @@ void Source::RebuildTriggers() {
     triggers.clear();
     AddTriggers(settings.transformers, settings.transformer_allowed_stages);
     AddTriggers(settings.delayers, settings.delayer_allowed_stages);
+    for (auto& prepared : triggers | std::views::values) {
+        auto& forms = prepared.scan_forms;
+        std::ranges::sort(forms, {}, &Scanner::ScopedForm::form);
+        forms.erase(std::ranges::unique(forms, {}, &Scanner::ScopedForm::form).begin(), forms.end());
+    }
 }
 
 RE::TESBoundObject* Source::GetBoundObject() const {

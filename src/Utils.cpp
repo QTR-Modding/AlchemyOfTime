@@ -483,9 +483,8 @@ bool Utils::Inventory::Snapshot::HasMagicEffect(RE::TESObjectREFR* owner, RE::Ef
 }
 
 bool Utils::Inventory::Snapshot::HasTempEffect(RE::TESObjectREFR* owner, RE::TESForm* effect) const {
-    if (!temp_effects) temp_effects = LazyCache::GetSingleton()->GetTempEffects();
-    const auto it = temp_effects->find(owner->GetHandle());
-    return it != temp_effects->end() && it->second.contains(effect);
+    if (!temp_effects) temp_effects = LazyCache::GetSingleton()->GetTempEffects(owner);
+    return temp_effects->contains(effect);
 }
 
 bool Utils::Inventory::IsQuestItem(const FormID formid, const InvMap& a_inv) {

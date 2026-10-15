@@ -135,8 +135,7 @@ namespace Utils {
             InvMap items;
             mutable std::optional<std::unordered_set<RE::BGSKeyword*>> keywords;
             mutable std::shared_ptr<const std::unordered_set<RE::EffectSetting*>> magic_effects;
-            mutable std::shared_ptr<const std::unordered_map<RE::ObjectRefHandle, std::unordered_set<RE::TESForm*>,
-                                                             RE::BSCRC32<RE::ObjectRefHandle>>> temp_effects;
+            mutable std::shared_ptr<const std::unordered_set<RE::TESForm*>> temp_effects;
 
             bool HasKeyword(RE::BGSKeyword* keyword) const;
             bool HasMagicEffect(RE::TESObjectREFR* owner, RE::EffectSetting* effect) const;
