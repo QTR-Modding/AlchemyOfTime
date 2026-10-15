@@ -220,9 +220,14 @@ namespace {
                 return;
             }
 
-            case MatchType::kKeyword:
-                recordMulti(*LazyCache::GetSingleton()->GetKeywords(ref));
+            case MatchType::kKeyword: {
+                if (const auto base = ref->GetObjectReference()) {
+                    if (const auto keywords = base->As<RE::BGSKeywordForm>()) {
+                        recordMulti(keywords->GetKeywords());
+                    }
+                }
                 return;
+            }
 
             case MatchType::kMagicEffect:
                 recordMulti(*LazyCache::GetSingleton()->GetMagicEffects(ref));
