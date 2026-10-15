@@ -125,11 +125,6 @@ namespace Utils {
 
         void SwapObjects(RE::TESObjectREFR* a_from, RE::TESBoundObject* a_to, bool apply_havok = true);
 
-        std::unordered_map<RE::ObjectRefHandle, std::unordered_set<RE::TESForm*>, RE::BSCRC32<RE::ObjectRefHandle>>
-        CollectTempEffects(const std::unordered_set<RE::TESForm*>& forms);
-        std::unordered_set<RE::TESForm*> CollectTempEffects(RE::TESObjectREFR* owner);
-        std::unordered_set<RE::EffectSetting*> CollectMagicEffects(RE::TESObjectREFR* ref);
-
         bool IsPlacedObject(RE::TESObjectREFR* ref);
 
         RE::NiPoint3 GetPosition(const RE::TESObjectREFR* obj);
@@ -139,8 +134,9 @@ namespace Utils {
         struct Snapshot {
             InvMap items;
             mutable std::optional<std::unordered_set<RE::BGSKeyword*>> keywords;
-            mutable std::optional<std::unordered_set<RE::EffectSetting*>> magic_effects;
-            mutable std::optional<std::unordered_set<RE::TESForm*>> temp_effects;
+            mutable std::shared_ptr<const std::unordered_set<RE::EffectSetting*>> magic_effects;
+            mutable std::shared_ptr<const std::unordered_map<RE::ObjectRefHandle, std::unordered_set<RE::TESForm*>,
+                                                             RE::BSCRC32<RE::ObjectRefHandle>>> temp_effects;
 
             bool HasKeyword(RE::BGSKeyword* keyword) const;
             bool HasMagicEffect(RE::TESObjectREFR* owner, RE::EffectSetting* effect) const;

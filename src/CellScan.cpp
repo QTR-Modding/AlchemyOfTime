@@ -3,61 +3,107 @@
 #include "Triggers.h"
 
 
-const std::unordered_map<RE::ObjectRefHandle, std::unordered_set<RE::TESForm*>, RE::BSCRC32<RE::ObjectRefHandle>>&
-LazyCache::GetTempEffects() const {
-    if (!temp_effs) {
-        temp_effs = Utils::WorldObject::CollectTempEffects(requested_temp_effects);
-    }
-    return *temp_effs;
+void LazyCache::Flush() const {
+    std::scoped_lock lock(temp_mutex_, info_mutex_);
+    temp_effs_.reset();
+    mg_effs_.clear();
+    keywords_.clear();
+    locations_.clear();
 }
 
-const std::unordered_set<RE::EffectSetting*>& LazyCache::GetMagicEffects(RE::TESObjectREFR* a_ref) const {
-    const auto [it, inserted] = mg_effs.try_emplace(a_ref->GetFormID());
-    if (inserted) {
-        it->second = Utils::WorldObject::CollectMagicEffects(a_ref);
+std::shared_ptr<const std::unordered_map<RE::ObjectRefHandle, std::unordered_set<RE::TESForm*>,
+                                       RE::BSCRC32<RE::ObjectRefHandle>>> LazyCache::GetTempEffects() const {
+    std::lock_guard lock(temp_mutex_);
+    if (!temp_effs_) {
+        std::vector<std::pair<RE::ObjectRefHandle, RE::TESForm*>> targets;
+        if (const auto processLists = RE::ProcessLists::GetSingleton()) {
+            processLists->ForEachMagicTempEffect([&](RE::BSTempEffect* tempEffect) {
+                const auto effect = tempEffect->As<RE::ModelReferenceEffect>();
+                if (effect && !effect->finished && effect->artObject) {
+                    if (effect->target) targets.emplace_back(effect->target, effect->artObject);
+                } else if (const auto shader = tempEffect->As<RE::ShaderReferenceEffect>();
+                           shader && !shader->finished && shader->effectData) {
+                    if (shader->target) targets.emplace_back(shader->target, shader->effectData);
+                }
+                return RE::BSContainer::ForEachResult::kContinue;
+            });
+        }
+        auto collected = std::make_shared<std::unordered_map<RE::ObjectRefHandle, std::unordered_set<RE::TESForm*>,
+                                                              RE::BSCRC32<RE::ObjectRefHandle>>>();
+        for (const auto& [target, form] : targets) {
+            (*collected)[target].insert(form);
+        }
+        temp_effs_ = std::move(collected);
     }
-    return it->second;
+    return temp_effs_;
 }
 
-const std::unordered_set<RE::BGSKeyword*>& LazyCache::GetKeywords(const RE::TESObjectREFR* a_ref) const {
+std::shared_ptr<const std::unordered_set<RE::EffectSetting*>> LazyCache::GetMagicEffects(RE::TESObjectREFR* a_ref) const {
+    const auto handle = a_ref->GetHandle();
+    std::lock_guard lock(info_mutex_);
+    auto& effects = mg_effs_[handle];
+    if (!effects) {
+        auto collected = std::make_shared<std::unordered_set<RE::EffectSetting*>>();
+        if (const auto target = a_ref->GetMagicTarget()) {
+            if (const auto list = target->GetActiveEffectList()) {
+                for (const auto effect : *list) {
+                    if (!effect || effect->flags.any(RE::ActiveEffect::Flag::kInactive, RE::ActiveEffect::Flag::kDispelled) ||
+                        effect->conditionStatus == RE::ActiveEffect::ConditionStatus::kFalse) continue;
+                    if (const auto base = effect->GetBaseObject()) {
+                        collected->insert(base);
+                    }
+                }
+            }
+        }
+        effects = std::move(collected);
+    }
+    return effects;
+}
+
+std::shared_ptr<const std::unordered_set<RE::BGSKeyword*>> LazyCache::GetKeywords(const RE::TESObjectREFR* a_ref) const {
     // keywords map is from base form id to keywords, so we need to get the base form of the reference
     const auto base = a_ref->GetObjectReference();
     if (!base) {
-        static const std::unordered_set<RE::BGSKeyword*> empty;
+        static const auto empty = std::make_shared<const std::unordered_set<RE::BGSKeyword*>>();
         return empty;
     }
-    const auto [it, inserted] = keywords.try_emplace(base->GetFormID());
-    if (inserted) {
+    std::lock_guard lock(info_mutex_);
+    auto& keywords = keywords_[base->GetFormID()];
+    if (!keywords) {
+        auto collected = std::make_shared<std::unordered_set<RE::BGSKeyword*>>();
         if (const auto kw_form = base->As<RE::BGSKeywordForm>()) {
             for (const auto keyword : kw_form->GetKeywords()) {
-                it->second.insert(keyword);
+                collected->insert(keyword);
             }
         }
+        keywords = std::move(collected);
     }
-    return it->second;
+    return keywords;
 }
 
-RE::BGSLocation* LazyCache::GetLocation(const RE::TESObjectREFR* a_ref) const {
-    const auto [it, inserted] = locations.try_emplace(a_ref->GetFormID());
+RE::BGSLocation* LazyCache::GetLocation(RE::TESObjectREFR* a_ref) const {
+    const auto handle = a_ref->GetHandle();
+    std::lock_guard lock(info_mutex_);
+    const auto [it, inserted] = locations_.try_emplace(handle);
     if (inserted) it->second = a_ref->GetCurrentLocation();
     return it->second;
 }
 
 bool LazyCache::HasTempEff(RE::TESObjectREFR* a_ref, RE::TESForm* a_tempeff) const {
-    const auto& effects = GetTempEffects();
-    if (const auto it = effects.find(a_ref->GetHandle()); it != effects.end()) {
+    const auto effects = GetTempEffects();
+    if (const auto it = effects->find(a_ref->GetHandle()); it != effects->end()) {
         return it->second.contains(a_tempeff);
     }
     return false;
 }
 
 bool LazyCache::HasMgEff(RE::TESObjectREFR* a_ref, RE::EffectSetting* a_magiceff) const {
-    return GetMagicEffects(a_ref).contains(a_magiceff);
+    return GetMagicEffects(a_ref)->contains(a_magiceff);
 }
 
 
-bool LazyCache::HasKeyword(const RE::TESObjectREFR* a_ref, RE::BGSKeyword* a_magiceff) const {
-    return GetKeywords(a_ref).contains(a_magiceff);
+bool LazyCache::HasKeyword(const RE::TESObjectREFR* a_ref, RE::BGSKeyword* a_keyword) const {
+    return GetKeywords(a_ref)->contains(a_keyword);
 }
 
 MatchType GetMatchType_(const RE::FormType type) {
@@ -85,38 +131,38 @@ MatchType GetMatchType_(const RE::FormType type) {
 Matcher GetMatcher_(const MatchType type) {
     switch (type) {
         case MatchType::kBaseObject:
-            return [](RE::TESObjectREFR* ref, RE::TESForm* form, const LazyCache&) {
+            return [](RE::TESObjectREFR* ref, RE::TESForm* form) {
                 return ref->GetObjectReference() == form;
             };
 
         case MatchType::kLocation:
-            return [](RE::TESObjectREFR* ref, RE::TESForm* form, const LazyCache& global_cache) {
-                return Utils::IsInLocation(static_cast<RE::BGSLocation*>(form), global_cache.GetLocation(ref));
+            return [](RE::TESObjectREFR* ref, RE::TESForm* form) {
+                return Utils::IsInLocation(static_cast<RE::BGSLocation*>(form), LazyCache::GetSingleton()->GetLocation(ref));
             };
 
         case MatchType::kPerk:
-            return [](RE::TESObjectREFR* ref, RE::TESForm* form, const LazyCache&) {
+            return [](RE::TESObjectREFR* ref, RE::TESForm* form) {
                 return static_cast<RE::BGSPerk*>(form)->perkConditions.IsTrue(ref, ref);
             };
 
         case MatchType::kKeyword:
-            return [](RE::TESObjectREFR* ref, RE::TESForm* form, const LazyCache& global_cache) {
-                return global_cache.HasKeyword(ref, static_cast<RE::BGSKeyword*>(form));
+            return [](RE::TESObjectREFR* ref, RE::TESForm* form) {
+                return LazyCache::GetSingleton()->HasKeyword(ref, static_cast<RE::BGSKeyword*>(form));
             };
 
         case MatchType::kFaction:
-            return [](RE::TESObjectREFR* ref, RE::TESForm* form, const LazyCache&) {
+            return [](RE::TESObjectREFR* ref, RE::TESForm* form) {
                 return Utils::WorldObject::MatchesFaction(ref, static_cast<RE::TESFaction*>(form));
             };
 
         case MatchType::kMagicEffect:
-            return [](RE::TESObjectREFR* ref, RE::TESForm* form, const LazyCache& global_cache) {
-                return global_cache.HasMgEff(ref, static_cast<RE::EffectSetting*>(form));
+            return [](RE::TESObjectREFR* ref, RE::TESForm* form) {
+                return LazyCache::GetSingleton()->HasMgEff(ref, static_cast<RE::EffectSetting*>(form));
             };
 
         case MatchType::kTempEffect:
-            return [](RE::TESObjectREFR* ref, RE::TESForm* form, const LazyCache& global_cache) {
-                return global_cache.HasTempEff(ref, form);
+            return [](RE::TESObjectREFR* ref, RE::TESForm* form) {
+                return LazyCache::GetSingleton()->HasTempEff(ref, form);
             };
     }
 
@@ -126,18 +172,17 @@ Matcher GetMatcher_(const MatchType type) {
 
 
 // 1. `Matches`: **Does this ref have this property ? **Returns a bool.
-bool Matches(RE::TESObjectREFR* ref, RE::TESForm* property, const LazyCache& global_cache) {
+bool Matches(RE::TESObjectREFR* ref, RE::TESForm* property) {
     const auto type = GetMatchType_(property->GetFormType());
     const auto matcher = GetMatcher_(type);
-    return matcher && matcher(ref, property, global_cache);
+    return matcher && matcher(ref, property);
 }
 
 namespace {
     // 2. `ForEachMatch_`: **Which of these properties does this ref have? **Calls `record` for every match.
     template <class Record>
     void ForEachMatch_(RE::TESObjectREFR* ref, const MatchType type,
-                       const std::unordered_set<RE::TESForm*>& forms,
-                       const LazyCache& bank, Record&& record) {
+                       const std::unordered_set<RE::TESForm*>& forms, Record&& record) {
         const auto recordMulti = [&](const auto& effects) {
             for (const auto form : effects) {
                 if (forms.contains(form)) record(form);
@@ -154,16 +199,16 @@ namespace {
             }
 
             case MatchType::kKeyword:
-                recordMulti(bank.GetKeywords(ref));
+                recordMulti(*LazyCache::GetSingleton()->GetKeywords(ref));
                 return;
 
             case MatchType::kMagicEffect:
-                recordMulti(bank.GetMagicEffects(ref));
+                recordMulti(*LazyCache::GetSingleton()->GetMagicEffects(ref));
                 return;
 
             case MatchType::kTempEffect: {
-                const auto& effects = bank.GetTempEffects();
-                if (const auto it = effects.find(ref->GetHandle()); it != effects.end()) {
+                const auto effects = LazyCache::GetSingleton()->GetTempEffects();
+                if (const auto it = effects->find(ref->GetHandle()); it != effects->end()) {
                     recordMulti(it->second);
                 }
                 return;
@@ -186,7 +231,7 @@ namespace {
                 if (!matcher) return;
 
                 for (const auto form : forms) {
-                    if (matcher(ref, form, bank)) record(form);
+                    if (matcher(ref, form)) record(form);
                 }
             }
         }
@@ -195,25 +240,16 @@ namespace {
 
 void Scanner::RequestRefresh(std::vector<Request> requests) {
     const auto gen = requestedGeneration_.fetch_add(1, std::memory_order_acq_rel) + 1;
+    LazyCache::GetSingleton()->Flush();
 
     auto work = BuildWorkItem_(gen, std::move(requests));
     if (!work) {
         return;
     }
 
-    if (work->requests.empty()) {
-        Publish_(std::move(work->next));
-        return;
-    }
-
     QueueScanTask_(std::move(work));
 }
 
-
-std::optional<bool> Scanner::Cache::TryGetMatch(RE::TESObjectREFR* ref, RE::TESForm* property) const {
-    if (!global_cache.requested_temp_effects.contains(property) || !global_cache.temp_effs) return std::nullopt;
-    return global_cache.HasTempEff(ref, property);
-}
 
 Scanner::CachePtr Scanner::GetCache() const {
     std::shared_lock lock(cacheMutex_);
@@ -233,13 +269,6 @@ Scanner::WorkItemPtr Scanner::BuildWorkItem_(const std::uint64_t gen,
     work->next = std::make_shared<Cache>();
     work->next->generation = gen;
     work->requests = std::move(requests);
-    for (const auto& request : work->requests) {
-        for (const auto& entry : request.forms) {
-            if (GetMatchType_(entry.form->GetFormType()) == MatchType::kTempEffect) {
-                work->next->global_cache.requested_temp_effects.insert(entry.form);
-            }
-        }
-    }
 
     return work;
 }
@@ -247,12 +276,25 @@ Scanner::WorkItemPtr Scanner::BuildWorkItem_(const std::uint64_t gen,
 void Scanner::QueueScanTask_(const WorkItemPtr& work) {
     if (IsStale_(work->gen)) return;
 
-    if (!work->next->global_cache.requested_temp_effects.empty()) {
+    if (std::ranges::any_of(work->requests, [](const Request& request) {
+        return std::ranges::any_of(request.forms, [](const ScopedForm& entry) {
+            return GetMatchType_(entry.form->GetFormType()) == MatchType::kTempEffect;
+        });
+    })) {
         // ReSharper disable once CppExpressionWithoutSideEffects
-        work->next->global_cache.GetTempEffects();
+        LazyCache::GetSingleton()->GetTempEffects();
     }
 
+    for (auto& request : work->requests) {
+        std::erase_if(request.forms, [](const ScopedForm& entry) { return !entry.scope; });
+    }
+    std::erase_if(work->requests, [](const Request& request) { return request.forms.empty(); });
+
     if (IsStale_(work->gen)) return;
+    if (work->requests.empty()) {
+        Publish_(std::move(work->next));
+        return;
+    }
     SKSE::GetTaskInterface()->AddTask([this, work]() { RunScanTaskOnGameThread_(work); });
 }
 
@@ -323,7 +365,6 @@ void Scanner::CollectCellsToScan_(const std::vector<RE::TESObjectREFR*>& refs,
 
 void Scanner::CollectCellMatches_(RE::TESObjectREFR* ref,
                                       const std::unordered_map<MatchType, std::unordered_set<RE::TESForm*>>& triggers,
-                                      const LazyCache& global_cache,
                                       Cache& outCache) {
 
     std::optional<Entry> entry;
@@ -335,13 +376,12 @@ void Scanner::CollectCellMatches_(RE::TESObjectREFR* ref,
     };
 
     for (const auto& [type, forms] : triggers) {
-        ForEachMatch_(ref, type, forms, global_cache, addEntry);
+        ForEachMatch_(ref, type, forms, addEntry);
     }
 }
 
 void Scanner::ScanCells_(const std::unordered_set<RE::TESObjectCELL*>& cellsToScan,
                          const std::unordered_map<MatchType, std::unordered_set<RE::TESForm*>>& triggers,
-                         const LazyCache& global_cache,
                          Cache& outCache) {
     for (const auto cell : cellsToScan) {
         if (!cell) {
@@ -349,12 +389,12 @@ void Scanner::ScanCells_(const std::unordered_set<RE::TESObjectCELL*>& cellsToSc
         }
 
 
-        auto callback = [&outCache, &triggers, &global_cache](RE::TESObjectREFR* ref) -> RE::BSContainer::ForEachResult {
+        auto callback = [&outCache, &triggers](RE::TESObjectREFR* ref) -> RE::BSContainer::ForEachResult {
             if (!ref || !Utils::WorldObject::IsActive(ref)) {
                 return RE::BSContainer::ForEachResult::kContinue;
             }
 
-            CollectCellMatches_(ref, triggers, global_cache, outCache);
+            CollectCellMatches_(ref, triggers, outCache);
             return RE::BSContainer::ForEachResult::kContinue;
         };
 
@@ -364,10 +404,11 @@ void Scanner::ScanCells_(const std::unordered_set<RE::TESObjectCELL*>& cellsToSc
 
 void Scanner::ScanTempEffectTargets_(const std::unordered_set<RE::TESObjectCELL*>& cellsToScan,
                                      const std::unordered_set<RE::TESForm*>& forms,
-                                     const LazyCache& global_cache, Cache& outCache) {
+                                     Cache& outCache) {
     if (cellsToScan.empty()) return;
 
-    for (const auto& [handle, effects] : global_cache.GetTempEffects()) {
+    const auto collected = LazyCache::GetSingleton()->GetTempEffects();
+    for (const auto& [handle, effects] : *collected) {
         std::optional<Entry> entry;
         for (const auto form : effects) {
             if (!forms.contains(form)) continue;
@@ -395,7 +436,7 @@ void Scanner::RunScanTaskOnGameThread_(const WorkItemPtr& work) {
         std::optional<Entry> entry;
 
         for (auto& [a_form, a_scope] : forms) {
-            if (a_scope.any(Scope::kSelf) && Matches(a_ref, a_form, work->next->global_cache)) {
+            if (a_scope.any(Scope::kSelf) && Matches(a_ref, a_form)) {
                 if (!entry) {
                     entry.emplace(a_ref->GetFormID(), Utils::WorldObject::GetPosition(a_ref));
                 }
@@ -418,10 +459,10 @@ void Scanner::RunScanTaskOnGameThread_(const WorkItemPtr& work) {
     CollectCellsToScan_(cellrefs, cells);
     const auto temp_forms = proximity_forms.extract(MatchType::kTempEffect);
     if (!proximity_forms.empty()) {
-        ScanCells_(cells, proximity_forms, work->next->global_cache, *work->next);
+        ScanCells_(cells, proximity_forms, *work->next);
     }
     if (!temp_forms.empty()) {
-        ScanTempEffectTargets_(cells, temp_forms.mapped(), work->next->global_cache, *work->next);
+        ScanTempEffectTargets_(cells, temp_forms.mapped(), *work->next);
     }
     Publish_(std::move(work->next));
 }

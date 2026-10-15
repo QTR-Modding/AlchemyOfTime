@@ -2,15 +2,26 @@
 #include "CellScan.h"
 
 
-bool InventoryWatch::HasChanged(const RE::TESObjectREFR* owner) const {
-    const auto cache = Scanner::GetSingleton()->GetCache();
-    const auto ownerID = owner->GetFormID();
-    const auto matches = [&](const RE::TESForm* form) {
-        return cache->HasMatch(ownerID, form->GetFormID());
-    };
+bool InventoryWatch::HasChanged(RE::TESObjectREFR* owner) {
+    if (!locations.list.empty()) {
+        const auto current = LazyCache::GetSingleton()->GetLocation(owner);
+        if (current != last_location) {
+            if (locations.HasChanged([&](RE::BGSLocation* location) {
+                return Utils::IsInLocation(location, current);
+            })) return true;
+            last_location = current;
+        }
+    }
 
-    return locations.HasChanged(matches) || perks.HasChanged(matches) || magic_effects.HasChanged(matches) ||
-           factions.HasChanged(matches) || temp_effects.HasChanged(matches);
+    const auto matches = [&](RE::TESForm* form) {
+        return Matches(owner, form);
+    };
+    const Utils::Inventory::Snapshot inventory{};
+
+    return perks.HasChanged(matches) ||
+           magic_effects.HasChanged([&](RE::EffectSetting* effect) { return inventory.HasMagicEffect(owner, effect); }) ||
+           factions.HasChanged(matches) ||
+           temp_effects.HasChanged([&](RE::TESForm* effect) { return inventory.HasTempEffect(owner, effect); });
 }
 
 bool InventoryWatch::Eval(RE::TESForm* trigger, RE::TESObjectREFR* owner,

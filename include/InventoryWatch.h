@@ -32,7 +32,7 @@ struct InventoryWatch {
     InventoryWatchList<RE::TESFaction> factions;
     InventoryWatchList<RE::TESForm> temp_effects;
 
-    [[nodiscard]] bool HasChanged(const RE::TESObjectREFR* owner) const;
+    [[nodiscard]] bool HasChanged(RE::TESObjectREFR* owner);
     bool Eval(RE::TESForm* trigger, RE::TESObjectREFR* owner,
               const Utils::Inventory::Snapshot& inventory);
 

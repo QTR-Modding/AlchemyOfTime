@@ -89,7 +89,6 @@ FormID FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers) {
     if (!a_obj || triggers.ordered.empty()) return 0;
 
     const auto cache = Scanner::GetSingleton()->GetCache();
-    LazyCache live_cache;
     const auto originID = a_obj->GetFormID();
     const auto originPos = Utils::WorldObject::GetPosition(a_obj);
 
@@ -99,7 +98,7 @@ FormID FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers) {
     for (const auto& [form, scope] : triggers.ordered) {
         const auto triggerID = form->GetFormID();
         if (!scope.any(Scanner::Scope::kProximity)) {
-            if (scope.any(Scanner::Scope::kSelf) && Matches(a_obj, form, live_cache)) return triggerID;
+            if (scope.any(Scanner::Scope::kSelf) && Matches(a_obj, form)) return triggerID;
             continue;
         }
         if (scope.any(Scanner::Scope::kSelf) && cache->HasMatch(originID, triggerID)) return triggerID;
