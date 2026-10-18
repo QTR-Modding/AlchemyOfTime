@@ -99,7 +99,6 @@ void Manager::RefreshLocationIndex(const RefID location_id) {
 bool Manager::BuildScanRequests_(const std::vector<QueueInfo>& refStopsCopy,
                                 std::vector<Scanner::Request>* requests) {
     bool preload_temp_effects = false;
-    if (requests) requests->reserve(refStopsCopy.size());
 
     // Only touches plugin-owned data => guarded by sourceMutex_.
     SRC_SHARED_GUARD;
@@ -124,7 +123,10 @@ bool Manager::BuildScanRequests_(const std::vector<QueueInfo>& refStopsCopy,
             std::ranges::any_of(triggers_it->second.scan_forms, [](const Scanner::ScopedForm& entry) {
                 return GetMatchType_(entry.form->GetFormType()) == MatchType::kTempEffect;
             });
-        if (requests) requests->push_back({.ref = ref_info, .forms = triggers_it->second.scan_forms});
+        if (requests) {
+            if (requests->empty()) requests->reserve(refStopsCopy.size());
+            requests->push_back({.ref = ref_info, .forms = triggers_it->second.scan_forms});
+        }
     }
 
     return preload_temp_effects;
