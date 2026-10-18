@@ -119,10 +119,7 @@ bool Manager::BuildScanRequests_(const std::vector<QueueInfo>& refStopsCopy,
         const auto triggers_it = src->triggers.find(inst.no);
         if (triggers_it == src->triggers.end() || triggers_it->second.scan_forms.empty()) continue;
 
-        preload_temp_effects = preload_temp_effects ||
-            std::ranges::any_of(triggers_it->second.scan_forms, [](const Scanner::ScopedForm& entry) {
-                return GetMatchType_(entry.form->GetFormType()) == MatchType::kTempEffect;
-            });
+        preload_temp_effects = preload_temp_effects || triggers_it->second.preload_temp_effects;
         if (requests) {
             if (requests->empty()) requests->reserve(refStopsCopy.size());
             requests->push_back({.ref = ref_info, .forms = triggers_it->second.scan_forms});

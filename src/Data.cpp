@@ -143,6 +143,9 @@ void Source::RebuildTriggers() {
         auto& forms = prepared.scan_forms;
         std::ranges::sort(forms, {}, &Scanner::ScopedForm::form);
         forms.erase(std::ranges::unique(forms, {}, &Scanner::ScopedForm::form).begin(), forms.end());
+        prepared.preload_temp_effects = std::ranges::any_of(forms, [](const Scanner::ScopedForm& entry) {
+            return GetMatchType_(entry.form->GetFormType()) == MatchType::kTempEffect;
+        });
     }
 }
 
