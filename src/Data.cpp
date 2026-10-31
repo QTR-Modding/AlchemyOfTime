@@ -70,6 +70,8 @@ void Source::Init(const DefaultSettings* defaultsettings) {
     else if (qFormType == "BOOK") GatherStages<RE::TESObjectBOOK>();
     else if (qFormType == "SLGM") GatherStages<RE::TESSoulGem>();
     else if (qFormType == "MISC") GatherStages<RE::TESObjectMISC>();
+    else if (qFormType == "STAT") GatherStages<RE::TESObjectSTAT>();
+    else if (qFormType == "MSTT") GatherStages<RE::BGSMovableStatic>();
     //else if (qFormType == "NPC") GatherStages<RE::TESNPC>();
     else {
         logger::error("QFormType is not one of the predefined types.");
@@ -1080,7 +1082,9 @@ void Source::RegisterStage(const FormID stage_formid, const StageNo stage_no) {
         M->IndexStage(stage_formid, formid);
     }
 
-    Lorebox::AddKeyword(stage_form->As<RE::BGSKeywordForm>(), stage_formid);
+    if (const auto keywords = stage_form->As<RE::BGSKeywordForm>()) {
+        Lorebox::AddKeyword(keywords, stage_formid);
+    }
 }
 
 FormID Source::FetchFake(const StageNo st_no) {

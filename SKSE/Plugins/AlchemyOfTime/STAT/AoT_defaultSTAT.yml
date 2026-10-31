@@ -1,0 +1,9 @@
+# Allows addons without making statics evolve on their own.
+stages:
+  - no: 0
+    name: ""
+    duration: .inf
+    crafting_allowed: false
+
+# Gold is a required placeholder; the infinite stage never reaches it.
+finalFormEditorID: 0xF

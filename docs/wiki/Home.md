@@ -1,12 +1,14 @@
 # Alchemy of Time - Easy Guide
 
+**Use the [AoT Preset Editor](https://www.nexusmods.com/skyrimspecialedition/mods/195855) to create and edit presets without writing YAML.**
+
 ## What is Alchemy of Time?
 
 **Alchemy of Time** is a tool that lets items in your game change over time or interact with other items nearby. For example, food can spoil, items can turn into something else, and time can speed up or slow down for specific items. You can change how this works using simple files.
 
-To set it up, you'll use **INI**, **YAML**, and **TXT** files, which are easy to edit.
+This guide explains the settings and file formats for reference and manual editing.
 
-Supported item types are FOOD, INGR, MEDC, POSN, ARMO, WEAP, SCRL, BOOK, SLGM, MISC
+Supported form types are FOOD, INGR, MEDC, POSN, ARMO, WEAP, SCRL, BOOK, SLGM, MISC, STAT, MSTT.
 
 ---
 
@@ -67,7 +69,7 @@ Items go through different **stages** as time passes. For example, food might go
 Each stage changes what the item does or looks like and can have specific properties defined in YAML files under the `stages` section. Here's what you can set for each stage:
 
 - **no**: *(Required)* A unique number identifying the stage. It must start at `0` for the initial stage and increment by `1` for each subsequent stage.
-- **FormEditorID**: Stage `0` uses the original item and does not need this field. For later stages, only FOOD and MISC can omit it to create a dynamic derivative of the original item. INGR, MEDC, POSN, ARMO, WEAP, SCRL, BOOK, and SLGM require an explicit replacement form for every later stage.
+- **FormEditorID**: Stage `0` uses the original item and does not need this field. For later stages, only FOOD and MISC can omit it to create a dynamic derivative of the original item. INGR, MEDC, POSN, ARMO, WEAP, SCRL, BOOK, SLGM, STAT, and MSTT require an explicit replacement form for every later stage.
 - **name**: The name of the stage (e.g., Fresh, Stale). This name will appear next to the original item name in parentheses if the stage is a dynamic form.
 - **duration**: *(Required)* The time in in-game hours the item remains in this stage; it must be positive. `.inf` means an infinite duration.
 - **value**: Overrides the value of a dynamically generated stage form (FOOD or MISC). Ignored for stage `0` and stages with an explicit `FormEditorID`.
@@ -659,6 +661,8 @@ formsLists:
 
 ## Form identifiers
 
+In the [editor](https://www.nexusmods.com/skyrimspecialedition/mods/195855), **Choose forms** lets you search your MO2 profile and select forms directly.
+
 Despite the field name `FormEditorID`, AoT accepts these identifiers:
 
 1. An EditorID, such as `FoodBeef`.
@@ -730,6 +734,8 @@ If you use `$raw` again elsewhere in the template, it receives the same raw item
 Templates work in default, custom, and addon presets. See [QTR's template guide](https://github.com/QTR-Modding/CLibUtilsQTR/wiki/Configuration-and-Strings#parameterized-yaml-templates) for field overrides, argument types, quoting, and nested calls.
 
 ## Where to Put Files
+
+The [editor's](https://www.nexusmods.com/skyrimspecialedition/mods/195855) **Save to mod** writes presets into these folders for you.
 
 - **Default Settings**: `SKSE\Plugins\AlchemyOfTime\<ITEMTYPE>\AoT_default<ITEMTYPE>.yml`
 - **Custom Settings**: `SKSE\Plugins\AlchemyOfTime\<ITEMTYPE>\custom\`
