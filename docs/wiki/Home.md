@@ -8,8 +8,6 @@ To set it up, you'll use **INI**, **YAML**, and **TXT** files, which are easy to
 
 Supported form types are FOOD, INGR, MEDC, POSN, ARMO, WEAP, SCRL, BOOK, SLGM, MISC, STAT.
 
-STAT supports static world objects, such as placed lanterns, and requires [world-item evolution](#world-item-evolution). STAT support is pending release. Install the supplied [STAT default](https://github.com/QTR-Modding/AlchemyOfTime/blob/main/SKSE/Plugins/AlchemyOfTime/STAT/AoT_defaultSTAT.yml) at `SKSE/Plugins/AlchemyOfTime/STAT/AoT_defaultSTAT.yml` and enable `STAT=true` under `[Modules]`. Its infinite initial stage leaves statics unchanged until you add rules for them.
-
 ---
 
 ## Getting Started
