@@ -6,7 +6,7 @@
 
 To set it up, you'll use **INI**, **YAML**, and **TXT** files, which are easy to edit.
 
-Supported form types are FOOD, INGR, MEDC, POSN, ARMO, WEAP, SCRL, BOOK, SLGM, MISC, STAT.
+Supported form types are FOOD, INGR, MEDC, POSN, ARMO, WEAP, SCRL, BOOK, SLGM, MISC, STAT, MSTT.
 
 ---
 
@@ -67,7 +67,7 @@ Items go through different **stages** as time passes. For example, food might go
 Each stage changes what the item does or looks like and can have specific properties defined in YAML files under the `stages` section. Here's what you can set for each stage:
 
 - **no**: *(Required)* A unique number identifying the stage. It must start at `0` for the initial stage and increment by `1` for each subsequent stage.
-- **FormEditorID**: Stage `0` uses the original item and does not need this field. For later stages, only FOOD and MISC can omit it to create a dynamic derivative of the original item. INGR, MEDC, POSN, ARMO, WEAP, SCRL, BOOK, SLGM, and STAT require an explicit replacement form for every later stage.
+- **FormEditorID**: Stage `0` uses the original item and does not need this field. For later stages, only FOOD and MISC can omit it to create a dynamic derivative of the original item. INGR, MEDC, POSN, ARMO, WEAP, SCRL, BOOK, SLGM, STAT, and MSTT require an explicit replacement form for every later stage.
 - **name**: The name of the stage (e.g., Fresh, Stale). This name will appear next to the original item name in parentheses if the stage is a dynamic form.
 - **duration**: *(Required)* The time in in-game hours the item remains in this stage; it must be positive. `.inf` means an infinite duration.
 - **value**: Overrides the value of a dynamically generated stage form (FOOD or MISC). Ignored for stage `0` and stages with an explicit `FormEditorID`.

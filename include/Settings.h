@@ -24,6 +24,7 @@ namespace Settings {
                                                         {"SLGM", false},
                                                         {"MISC", false},
                                                         {"STAT", false},
+                                                        {"MSTT", false},
                                                         //{"NPC",false}
     };
     const std::map<const char*, bool> otherkeysvals = {{"PlacedObjectsEvolve", false}, {"UnOwnedObjectsEvolve", false},

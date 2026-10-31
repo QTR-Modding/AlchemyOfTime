@@ -71,6 +71,7 @@ void Source::Init(const DefaultSettings* defaultsettings) {
     else if (qFormType == "SLGM") GatherStages<RE::TESSoulGem>();
     else if (qFormType == "MISC") GatherStages<RE::TESObjectMISC>();
     else if (qFormType == "STAT") GatherStages<RE::TESObjectSTAT>();
+    else if (qFormType == "MSTT") GatherStages<RE::BGSMovableStatic>();
     //else if (qFormType == "NPC") GatherStages<RE::TESNPC>();
     else {
         logger::error("QFormType is not one of the predefined types.");
