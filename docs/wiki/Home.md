@@ -1,10 +1,12 @@
 # Alchemy of Time - Easy Guide
 
+**Use the [AoT Preset Editor](https://www.nexusmods.com/skyrimspecialedition/mods/195855) to create and edit presets without writing YAML.**
+
 ## What is Alchemy of Time?
 
 **Alchemy of Time** is a tool that lets items in your game change over time or interact with other items nearby. For example, food can spoil, items can turn into something else, and time can speed up or slow down for specific items. You can change how this works using simple files.
 
-To set it up, you'll use **INI**, **YAML**, and **TXT** files, which are easy to edit.
+This guide explains the settings and file formats for reference and manual editing.
 
 Supported form types are FOOD, INGR, MEDC, POSN, ARMO, WEAP, SCRL, BOOK, SLGM, MISC, STAT, MSTT.
 
@@ -659,6 +661,8 @@ formsLists:
 
 ## Form identifiers
 
+In the [editor](https://www.nexusmods.com/skyrimspecialedition/mods/195855), **Choose forms** lets you search your MO2 profile and select forms directly.
+
 Despite the field name `FormEditorID`, AoT accepts these identifiers:
 
 1. An EditorID, such as `FoodBeef`.
@@ -730,6 +734,8 @@ If you use `$raw` again elsewhere in the template, it receives the same raw item
 Templates work in default, custom, and addon presets. See [QTR's template guide](https://github.com/QTR-Modding/CLibUtilsQTR/wiki/Configuration-and-Strings#parameterized-yaml-templates) for field overrides, argument types, quoting, and nested calls.
 
 ## Where to Put Files
+
+The [editor's](https://www.nexusmods.com/skyrimspecialedition/mods/195855) **Save to mod** writes presets into these folders for you.
 
 - **Default Settings**: `SKSE\Plugins\AlchemyOfTime\<ITEMTYPE>\AoT_default<ITEMTYPE>.yml`
 - **Custom Settings**: `SKSE\Plugins\AlchemyOfTime\<ITEMTYPE>\custom\`
