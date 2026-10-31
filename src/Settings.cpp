@@ -32,6 +32,7 @@ static const std::unordered_map<std::string, QFormChecker> qformCheckers = {
     {"BOOK", [](const auto form) { return form->Is(RE::TESObjectBOOK::FORMTYPE); }},
     {"SLGM", [](const auto form) { return form->Is(RE::TESSoulGem::FORMTYPE); }},
     {"MISC", [](const auto form) { return form->Is(RE::TESObjectMISC::FORMTYPE); }},
+    {"STAT", [](const auto form) { return form->Is(RE::TESObjectSTAT::FORMTYPE); }},
     //{"NPC", [](const auto form) {return FormIsOfType(form, RE::TESNPC::FORMTYPE); } }
 };
 

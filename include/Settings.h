@@ -23,6 +23,7 @@ namespace Settings {
                                                         {"BOOK", false},
                                                         {"SLGM", false},
                                                         {"MISC", false},
+                                                        {"STAT", false},
                                                         //{"NPC",false}
     };
     const std::map<const char*, bool> otherkeysvals = {{"PlacedObjectsEvolve", false}, {"UnOwnedObjectsEvolve", false},
