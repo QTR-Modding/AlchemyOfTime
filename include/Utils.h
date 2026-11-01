@@ -25,10 +25,6 @@ namespace Utils {
 
     std::vector<FormID> ExpandFormLists(const std::vector<FormID>& forms);
 
-    void IndexExistingNumericKeywords();
-    RE::BGSKeyword* GetOrCreateNumericKeyword(float value);
-    bool SaveNumericKeywords(SKSE::SerializationInterface* serializationInterface);
-
     uint32_t ParseTint(const std::string& value);
 
     void hexToRGBA(uint32_t color_code, RE::NiColorA& nicolora);

@@ -1,4 +1,5 @@
 #include "Settings.h"
+#include "NumericKeywords.h"
 #include "SimpleIni.h"
 #include "Threading.h"
 #include "CLibUtilsQTR/PresetHelpers/PresetHelpersTXT.hpp"
@@ -665,7 +666,7 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
             auto containers = parse_formid_vec(modulator, "containers");
 
             const auto trigger_forms = numeric_magnitude
-                ? std::vector<FormID>{Utils::GetOrCreateNumericKeyword(delayer_magnitude)->GetFormID()}
+                ? std::vector<FormID>{NumericKeywords::GetOrCreate(delayer_magnitude)->GetFormID()}
                 : Utils::ExpandFormLists(parse_formid_vec(modulator, "FormEditorID"));
             for (auto a_formid : trigger_forms) {
                 settings.delayer_allowed_stages[a_formid] = std::unordered_set(a_asv.begin(), a_asv.end());
@@ -743,7 +744,7 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
 
             const auto trigger_forms = transformer["duration"]
                 ? Utils::ExpandFormLists(parse_formid_vec(transformer, "FormEditorID"))
-                : std::vector<FormID>{Utils::GetOrCreateNumericKeyword(a_duration)->GetFormID()};
+                : std::vector<FormID>{NumericKeywords::GetOrCreate(a_duration)->GetFormID()};
             for (auto a_formid : trigger_forms) {
                 settings.transformers[a_formid] = {a_formid2, a_duration};
                 settings.transformer_allowed_stages[a_formid] = std::unordered_set(a_asv.begin(), a_asv.end());
@@ -1143,7 +1144,7 @@ void PresetParse::LoadSettingsParallel() {
 
     logger::info("Loading form groups");
     LoadFormGroups();
-    Utils::IndexExistingNumericKeywords();
+    NumericKeywords::IndexExisting();
 
     for (const auto& _qftype : Settings::QFORMS) {
         typeFutures.push_back(typePool.enqueue(

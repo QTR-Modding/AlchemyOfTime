@@ -1,4 +1,5 @@
 #include "Serialization.h"
+#include "NumericKeywords.h"
 #include "CLibUtilsQTR/DynamicFormTracker.hpp"
 #include "Manager.h"
 
@@ -113,7 +114,7 @@ bool SaveLoadData::Load(SKSE::SerializationInterface* serializationInterface) {
 
 void SaveCallback(SKSE::SerializationInterface* serializationInterface) {
     DISABLE_IF_UNINSTALLED
-    if (!Utils::SaveNumericKeywords(serializationInterface)) {
+    if (!NumericKeywords::Save(serializationInterface)) {
         logger::critical("Failed to save numeric keywords");
     }
     M->SendData();
