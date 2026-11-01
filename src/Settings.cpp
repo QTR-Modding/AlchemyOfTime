@@ -698,7 +698,14 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
 
             // duration
             float a_duration;
-            if (auto temp_duration = parse_type<float>(transformer, "duration"); !temp_duration) {
+            auto temp_duration = parse_type<float>(transformer, "duration");
+            if (!transformer["duration"]) {
+                float numeric_trigger;
+                if (YAML::convert<float>::decode(transformer["FormEditorID"], numeric_trigger)) {
+                    temp_duration = numeric_trigger;
+                }
+            }
+            if (!temp_duration) {
                 if (n_warnings < warnings_limit) {
                     logger::warn("transformers: Duration is missing");
                     n_warnings++;
@@ -723,7 +730,10 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
             // containers
             auto containers = parse_formid_vec(transformer, "containers");
 
-            for (auto a_formid : Utils::ExpandFormLists(parse_formid_vec(transformer, "FormEditorID"))) {
+            const auto trigger_forms = transformer["duration"]
+                ? Utils::ExpandFormLists(parse_formid_vec(transformer, "FormEditorID"))
+                : std::vector<FormID>{Utils::GetOrCreateNumericKeyword(a_duration)->GetFormID()};
+            for (auto a_formid : trigger_forms) {
                 settings.transformers[a_formid] = {a_formid2, a_duration};
                 settings.transformer_allowed_stages[a_formid] = std::unordered_set(a_asv.begin(), a_asv.end());
                 if (a_color) settings.transformer_colors[a_formid] = *a_color;
@@ -1122,6 +1132,7 @@ void PresetParse::LoadSettingsParallel() {
 
     logger::info("Loading form groups");
     LoadFormGroups();
+    Utils::IndexExistingNumericKeywords();
 
     for (const auto& _qftype : Settings::QFORMS) {
         typeFutures.push_back(typePool.enqueue(
