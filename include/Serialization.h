@@ -12,7 +12,8 @@ public:
     [[nodiscard]] bool Save(SKSE::SerializationInterface* serializationInterface, std::uint32_t type,
                             std::uint32_t version) override;
 
-    [[nodiscard]] bool Load(SKSE::SerializationInterface* serializationInterface) override;
+    [[nodiscard]] bool Load(SKSE::SerializationInterface* serializationInterface,
+                            const std::unordered_map<RE::FormID, RE::FormID>& remapped_formids);
 };
 
 void SaveCallback(SKSE::SerializationInterface* serializationInterface);

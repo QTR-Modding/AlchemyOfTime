@@ -57,7 +57,8 @@ bool SaveLoadData::Save(SKSE::SerializationInterface* serializationInterface, co
     return Save(serializationInterface);
 }
 
-bool SaveLoadData::Load(SKSE::SerializationInterface* serializationInterface) {
+bool SaveLoadData::Load(SKSE::SerializationInterface* serializationInterface,
+                        const std::unordered_map<RE::FormID, RE::FormID>& remapped_formids) {
     assert(serializationInterface);
 
     Locker locker(m_Lock);
@@ -88,7 +89,9 @@ bool SaveLoadData::Load(SKSE::SerializationInterface* serializationInterface) {
         for (std::size_t j = 0; j < rhsSize; j++) {
             StageInstancePlain rhs_;
             if (serializationInterface->ReadRecordData(rhs_) != sizeof(rhs_)) return false;
-            if (rhs_._delay_formid > 0 && !serializationInterface->
+            if (const auto remapped = remapped_formids.find(rhs_._delay_formid); remapped != remapped_formids.end()) {
+                rhs_._delay_formid = remapped->second;
+            } else if (rhs_._delay_formid > 0 && !serializationInterface->
                 ResolveFormID(rhs_._delay_formid, rhs_._delay_formid)) {
                 logger::error("Failed to resolve delay form ID 0x{:X} (parent form ID 0x{:X}).", rhs_._delay_formid,
                               formid);
@@ -169,7 +172,7 @@ void LoadCallback(SKSE::SerializationInterface* serializationInterface) {
             case Settings::kDataKey: {
                 logger::info("Manager: Loading Data.");
                 logger::trace("Loading Record: {} - Version: {} - Length: {}", temp, version, length);
-                if (!M->Load(serializationInterface))
+                if (!M->Load(serializationInterface, remapped_formids))
                     logger::critical("Failed to Load Data for Manager");
                 else
                     cosave_found++;
