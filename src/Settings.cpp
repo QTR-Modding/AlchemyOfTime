@@ -644,7 +644,15 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
                 a_asv = PresetHelpers::YAML_Helpers::CollectFrom<StageNo>(modulator, "allowed_stages");
             }
             // delayer magnitude
-            const auto delayer_magnitude = !modulator["magnitude"].IsNull() ? modulator["magnitude"].as<float>() : 1.f;
+            std::optional<float> numeric_magnitude;
+            if (!modulator["magnitude"]) {
+                float numeric_trigger;
+                if (YAML::convert<float>::decode(modulator["FormEditorID"], numeric_trigger)) {
+                    numeric_magnitude = numeric_trigger;
+                }
+            }
+            const auto delayer_magnitude = numeric_magnitude ? *numeric_magnitude
+                : !modulator["magnitude"].IsNull() ? modulator["magnitude"].as<float>() : 1.f;
             // colors
             auto a_color = parse_color(modulator, "color");
             // sounds
@@ -656,7 +664,10 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
             // containers
             auto containers = parse_formid_vec(modulator, "containers");
 
-            for (auto a_formid : Utils::ExpandFormLists(parse_formid_vec(modulator, "FormEditorID"))) {
+            const auto trigger_forms = numeric_magnitude
+                ? std::vector<FormID>{Utils::GetOrCreateNumericKeyword(delayer_magnitude)->GetFormID()}
+                : Utils::ExpandFormLists(parse_formid_vec(modulator, "FormEditorID"));
+            for (auto a_formid : trigger_forms) {
                 settings.delayer_allowed_stages[a_formid] = std::unordered_set(a_asv.begin(), a_asv.end());
                 settings.delayers[a_formid] = delayer_magnitude;
                 if (a_color) settings.delayer_colors[a_formid] = *a_color;
