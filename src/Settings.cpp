@@ -1,4 +1,5 @@
 #include "Settings.h"
+#include "NumericKeywords.h"
 #include "SimpleIni.h"
 #include "Threading.h"
 #include "CLibUtilsQTR/PresetHelpers/PresetHelpersTXT.hpp"
@@ -644,7 +645,15 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
                 a_asv = PresetHelpers::YAML_Helpers::CollectFrom<StageNo>(modulator, "allowed_stages");
             }
             // delayer magnitude
-            const auto delayer_magnitude = !modulator["magnitude"].IsNull() ? modulator["magnitude"].as<float>() : 1.f;
+            std::optional<float> numeric_magnitude;
+            if (!modulator["magnitude"]) {
+                float numeric_trigger;
+                if (YAML::convert<float>::decode(modulator["FormEditorID"], numeric_trigger)) {
+                    numeric_magnitude = numeric_trigger;
+                }
+            }
+            const auto delayer_magnitude = numeric_magnitude ? *numeric_magnitude
+                : !modulator["magnitude"].IsNull() ? modulator["magnitude"].as<float>() : 1.f;
             // colors
             auto a_color = parse_color(modulator, "color");
             // sounds
@@ -656,7 +665,10 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
             // containers
             auto containers = parse_formid_vec(modulator, "containers");
 
-            for (auto a_formid : Utils::ExpandFormLists(parse_formid_vec(modulator, "FormEditorID"))) {
+            const auto trigger_forms = numeric_magnitude
+                ? std::vector<FormID>{NumericKeywords::GetOrCreate(delayer_magnitude)->GetFormID()}
+                : Utils::ExpandFormLists(parse_formid_vec(modulator, "FormEditorID"));
+            for (auto a_formid : trigger_forms) {
                 settings.delayer_allowed_stages[a_formid] = std::unordered_set(a_asv.begin(), a_asv.end());
                 settings.delayers[a_formid] = delayer_magnitude;
                 if (a_color) settings.delayer_colors[a_formid] = *a_color;
@@ -698,7 +710,14 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
 
             // duration
             float a_duration;
-            if (auto temp_duration = parse_type<float>(transformer, "duration"); !temp_duration) {
+            auto temp_duration = parse_type<float>(transformer, "duration");
+            if (!transformer["duration"]) {
+                float numeric_trigger;
+                if (YAML::convert<float>::decode(transformer["FormEditorID"], numeric_trigger)) {
+                    temp_duration = numeric_trigger;
+                }
+            }
+            if (!temp_duration) {
                 if (n_warnings < warnings_limit) {
                     logger::warn("transformers: Duration is missing");
                     n_warnings++;
@@ -723,7 +742,10 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
             // containers
             auto containers = parse_formid_vec(transformer, "containers");
 
-            for (auto a_formid : Utils::ExpandFormLists(parse_formid_vec(transformer, "FormEditorID"))) {
+            const auto trigger_forms = transformer["duration"]
+                ? Utils::ExpandFormLists(parse_formid_vec(transformer, "FormEditorID"))
+                : std::vector<FormID>{NumericKeywords::GetOrCreate(a_duration)->GetFormID()};
+            for (auto a_formid : trigger_forms) {
                 settings.transformers[a_formid] = {a_formid2, a_duration};
                 settings.transformer_allowed_stages[a_formid] = std::unordered_set(a_asv.begin(), a_asv.end());
                 if (a_color) settings.transformer_colors[a_formid] = *a_color;
@@ -1122,6 +1144,7 @@ void PresetParse::LoadSettingsParallel() {
 
     logger::info("Loading form groups");
     LoadFormGroups();
+    NumericKeywords::IndexExisting();
 
     for (const auto& _qftype : Settings::QFORMS) {
         typeFutures.push_back(typePool.enqueue(

@@ -1,5 +1,6 @@
 set(headers ${headers}
 	include/Utils.h
+	include/NumericKeywords.h
 	include/PCH.h
 	include/Settings.h
 	include/Manager.h

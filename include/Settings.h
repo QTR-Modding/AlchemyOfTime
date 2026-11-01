@@ -8,6 +8,7 @@ namespace Settings {
     constexpr std::uint32_t kSerializationVersion = 627;
     constexpr std::uint32_t kDataKey = 'QAOT';
     constexpr std::uint32_t kDFDataKey = 'DAOT';
+    constexpr std::uint32_t kNumericKeywordsKey = 'KAOT';
 
     inline bool failed_to_load = false;
     constexpr auto INI_path = L"Data/SKSE/Plugins/AlchemyOfTime.ini";

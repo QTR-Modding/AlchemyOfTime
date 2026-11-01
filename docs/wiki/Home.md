@@ -211,7 +211,7 @@ To make a location/perk trigger apply only to world items, put its own location/
 Time modulators change how quickly items progress through their stages and can even reverse time progression. Their trigger can be a nearby object, an item in the same inventory, a location, a perk condition list, an [applied art object](#art-object-triggers), or an [applied effect shader](#effect-shader-triggers). They include the following properties:
 
 - **FormEditorID**: *(Required)* The trigger form: an object base form, location, perk, art object, or effect shader. This field also accepts a list or form group.
-- **magnitude**: *(Required)* A multiplier for stage progression: `1` is normal, `0.5` is half speed, `0` pauses, and negative values reverse progression. This does not set a transformer's duration.
+- **magnitude**: *(Required unless using a [numeric keyword trigger](#numeric-keyword-triggers))* A multiplier for stage progression: `1` is normal, `0.5` is half speed, `0` pauses, and negative values reverse progression. This does not set a transformer's duration.
 - **color**: The [tint color](#tint-colors) while this trigger is active.
 - **sound**: The Sound Descriptor form to be attached to the stage item.
 - **art_object**: The Art Object form to be attached to the stage item.
@@ -225,7 +225,7 @@ Transformers allow items to **bypass the stage cycle** and transform into anothe
 
 - **FormEditorID**: *(Required)* The **trigger** ID, not the item being transformed. The affected item is selected by the rule's `owners` or `forms`. This field also accepts a list or form group.
 - **finalFormEditorID**: *(Required)* The ID of the new item after transformation.
-- **duration**: *(Required)* Positive duration in **in-game hours** for the transformation to occur.
+- **duration**: *(Required unless using a [numeric keyword trigger](#numeric-keyword-triggers))* Positive duration in **in-game hours** for the transformation to occur.
 - **allowed_stages**: Specifies the stages where the transformation can happen. If omitted or empty, all stages are allowed; `[0]` selects only the initial stage.
 - **color**: The [tint color](#tint-colors) while this trigger is active.
 - **sound**: The Sound Descriptor form to be attached during transformation.
@@ -246,6 +246,22 @@ formsLists:
 `FoodBeef` selects the affected item, and `MyColdKeyword` is the EditorID of a Keyword (KYWD) record in your plugin. In an inventory, this addon pauses beef's stage progression while any item in that inventory, including the beef itself, has that keyword on its base object. For beef lying in the world, the keyword can be on the beef's own base object or a nearby reference's base object. Replace the keyword with your own EditorID or FormID and change `magnitude` to the multiplier you need. The item needs stages from a default or custom rule.
 
 Inventory Keyword triggers use the current inventory contents when AoT updates that inventory; the inventory owner's keywords do not count. World-item Keyword triggers use the existing distance and proximity checks, and keyword changes are recognized on the next scan. Use the keyword in a transformer's `FormEditorID` to transform the item instead; individual keywords can also be mixed with other triggers, form groups, and Skyrim form lists.
+
+### Numeric keyword triggers
+
+```yaml
+formsLists:
+- forms: 0x65C99 # Raw Beef
+  transformers:
+  - FormEditorID: 0.06
+    finalFormEditorID: 0x721E8 # Cooked Beef
+  timeModulators:
+  - FormEditorID: 0.5
+```
+
+AoT uses `AoT_NKW_0_06` for the transformation and `AoT_NKW_0_5` for the time modulator. Assign these keywords to the base objects that should activate them. Matching follows the [keyword trigger rules](#keyword-triggers).
+
+While the `AoT_NKW_0_06` trigger matches, beef transforms into cooked beef over `0.06` game hours. While the `AoT_NKW_0_5` trigger matches and no transformer takes priority, its stages progress at half speed. Omit `duration` or `magnitude` to use the number in `FormEditorID`.
 
 ### Faction triggers
 
