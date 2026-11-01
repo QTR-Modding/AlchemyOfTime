@@ -3,7 +3,7 @@
 #include "Settings.h"
 
 namespace {
-    constexpr std::string_view numeric_keyword_prefix = "AoT_Value_";
+    constexpr std::string_view numeric_keyword_prefix = "AoT_NKW_";
     std::map<float, RE::FormID> numeric_keywords;
 }
 
