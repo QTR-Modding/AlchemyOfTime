@@ -27,6 +27,7 @@ namespace Utils {
 
     void IndexExistingNumericKeywords();
     RE::BGSKeyword* GetOrCreateNumericKeyword(float value);
+    bool SaveNumericKeywords(SKSE::SerializationInterface* serializationInterface);
 
     uint32_t ParseTint(const std::string& value);
 

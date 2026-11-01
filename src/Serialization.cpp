@@ -113,6 +113,9 @@ bool SaveLoadData::Load(SKSE::SerializationInterface* serializationInterface) {
 
 void SaveCallback(SKSE::SerializationInterface* serializationInterface) {
     DISABLE_IF_UNINSTALLED
+    if (!Utils::SaveNumericKeywords(serializationInterface)) {
+        logger::critical("Failed to save numeric keywords");
+    }
     M->SendData();
     if (!M->Save(serializationInterface, Settings::kDataKey, Settings::kSerializationVersion)) {
         logger::critical("Failed to save Data");

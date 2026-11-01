@@ -8,6 +8,7 @@
 
 namespace {
     constexpr std::string_view numeric_keyword_prefix = "AoT_Value_";
+    std::map<float, RE::FormID> numeric_keywords;
 
     void AppendExpandedForm(RE::TESForm* form, std::vector<FormID>& expanded,
                             std::unordered_set<RE::BGSListForm*>& visited) {
@@ -79,7 +80,10 @@ RE::BGSKeyword* Utils::GetOrCreateNumericKeyword(const float value) {
     std::ranges::replace(name, '.', '_');
     clib_util::string::replace_all(name, "-", "minus_");
     clib_util::string::replace_all(name, "+", "plus_");
-    if (const auto keyword = RE::TESForm::LookupByEditorID<RE::BGSKeyword>(name)) return keyword;
+    if (const auto keyword = RE::TESForm::LookupByEditorID<RE::BGSKeyword>(name)) {
+        numeric_keywords[value] = keyword->GetFormID();
+        return keyword;
+    }
 
     const RE::BSFixedString editor_id(name);
     const auto keyword = RE::BGSKeyword::CreateKeyword(editor_id);
@@ -89,7 +93,18 @@ RE::BGSKeyword* Utils::GetOrCreateNumericKeyword(const float value) {
         RE::BSWriteLockGuard map_guard{lock};
         if (forms) forms->insert({editor_id, keyword});
     }
+    numeric_keywords[value] = keyword->GetFormID();
     return keyword;
+}
+
+bool Utils::SaveNumericKeywords(SKSE::SerializationInterface* serializationInterface) {
+    if (!serializationInterface->OpenRecord(Settings::kNumericKeywordsKey, Settings::kSerializationVersion)) return false;
+    const auto count = numeric_keywords.size();
+    if (!serializationInterface->WriteRecordData(count)) return false;
+    for (const auto& [value, formid] : numeric_keywords) {
+        if (!serializationInterface->WriteRecordData(value) || !serializationInterface->WriteRecordData(formid)) return false;
+    }
+    return true;
 }
 
 uint32_t Utils::ParseTint(const std::string& value) {
