@@ -54,3 +54,18 @@ bool NumericKeywords::Save(SKSE::SerializationInterface* serializationInterface)
     return true;
 }
 
+bool NumericKeywords::Load(SKSE::SerializationInterface* serializationInterface,
+                           std::unordered_map<RE::FormID, RE::FormID>& remapped_formids) {
+    std::size_t count;
+    if (serializationInterface->ReadRecordData(count) != sizeof(count)) return false;
+    for (std::size_t i = 0; i < count; i++) {
+        float value;
+        RE::FormID old_formid;
+        if (serializationInterface->ReadRecordData(value) != sizeof(value) ||
+            serializationInterface->ReadRecordData(old_formid) != sizeof(old_formid)) return false;
+        if (const auto current = numeric_keywords.find(value); current != numeric_keywords.end()) {
+            remapped_formids[old_formid] = current->second;
+        }
+    }
+    return true;
+}

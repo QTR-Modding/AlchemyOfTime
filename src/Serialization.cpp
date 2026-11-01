@@ -142,6 +142,7 @@ void LoadCallback(SKSE::SerializationInterface* serializationInterface) {
     std::uint32_t version;
     std::uint32_t length;
 
+    std::unordered_map<RE::FormID, RE::FormID> remapped_formids;
     unsigned int cosave_found = 0;
     while (serializationInterface->GetNextRecordInfo(type, version, length)) {
         auto temp = Utils::DecodeTypeCode(type);
@@ -159,6 +160,12 @@ void LoadCallback(SKSE::SerializationInterface* serializationInterface) {
             continue;
         }
         switch (type) {
+            case Settings::kNumericKeywordsKey: {
+                if (!NumericKeywords::Load(serializationInterface, remapped_formids)) {
+                    logger::critical("Failed to load numeric keywords");
+                }
+            }
+            break;
             case Settings::kDataKey: {
                 logger::info("Manager: Loading Data.");
                 logger::trace("Loading Record: {} - Version: {} - Length: {}", temp, version, length);
