@@ -2056,6 +2056,37 @@ std::vector<Source> Manager::GetSourcesByStageAndOwner(const FormID stage_formid
     return out;
 }
 
+std::vector<AoTAPI::InstanceInfo> Manager::GetInstanceInfo(const FormID stage_formid, const RefID location_id) {
+    std::vector<AoTAPI::InstanceInfo> result;
+    SRC_SHARED_GUARD;
+    const auto sources_at_location = loc_to_sources.find(location_id);
+    if (sources_at_location == loc_to_sources.end()) return result;
+    const float now = RE::Calendar::GetSingleton()->GetHoursPassed();
+    for (const auto source_id : sources_at_location->second) {
+        const auto found = sources.find(source_id);
+        if (found == sources.end() || !found->second->IsHealthy()) continue;
+        const auto& source = *found->second;
+        const auto instances = source.data.find(location_id);
+        if (instances == source.data.end()) continue;
+        for (const auto& instance : instances->second) {
+            if (instance.count <= 0 || instance.xtra.is_decayed || instance.xtra.form_id != stage_formid) continue;
+            const float multiplier = instance.GetDelaySlope();
+            const float next_time = source.GetNextUpdateTime(&instance);
+            const bool paused = std::abs(multiplier) < EPSILON;
+            const float remaining = !paused && std::isfinite(next_time) && next_time > 0.f
+                                        ? std::max(0.f, next_time - now) : -1.f;
+            std::uint32_t state = 0;
+            if (instance.xtra.is_transforming) state |= AoTAPI::Transforming;
+            if (paused) state |= AoTAPI::Paused;
+            if (multiplier < 0.f) state |= AoTAPI::Reversing;
+            result.push_back({source.formid, instance.xtra.form_id, source.GetNextFormID(instance),
+                              instance.count, instance.no, remaining,
+                              source.GetProgressPercentage(instance, now), multiplier, state});
+        }
+    }
+    return result;
+}
+
 std::unordered_map<RefID, std::optional<float>> Manager::GetUpdateQueue() {
     std::unordered_map<RefID, std::optional<float>> _ref_stops_copy;
     QUE_SHARED_GUARD;

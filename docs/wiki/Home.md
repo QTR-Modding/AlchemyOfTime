@@ -233,6 +233,50 @@ Transformers allow items to **bypass the stage cycle** and transform into anothe
 - **effect_shader**: The Effect Shader form attached to the transforming item.
 - **containers**: Specifies the containers (form IDs, editor IDs, or local IDs) where the transformer is allowed to take effect. Can be a scalar or array type.
 
+### Numeric keyword triggers
+
+This custom rule turns `MyTimer` into `MyReadyToken` after `0.06` game hours while
+an item with keyword `AoT_Value_0_06` is in the same inventory:
+
+```yaml
+ownerLists:
+- owners: MyTimer
+  stages:
+  - no: 0
+    duration: .inf
+  finalFormEditorID: MyReadyToken
+  transformers:
+  - FormEditorID: 0.06
+    finalFormEditorID: MyReadyToken
+```
+
+`MyTimer` and `MyReadyToken` are existing item forms from your plugin. Enable their
+AoT module and put this file in its `custom` folder. The infinite stage waits for a
+trigger instead of finishing on its own. Assign `AoT_Value_0_06` to the item that
+should activate the transformation, using KID or another plugin. AoT creates or
+reuses the keyword; it does not distribute it to items.
+
+When `duration` is omitted, a numeric `FormEditorID` supplies the duration. For a
+time modifier, omit `magnitude` to use the number as its multiplier instead:
+
+```yaml
+timeModulators:
+- FormEditorID: 0.5
+```
+
+That modifier uses keyword `AoT_Value_0_5` and runs ordinary stage progression at
+half speed. Zero pauses progression; negative values reverse it. A negative
+value such as `-0.5` uses keyword `AoT_Value_minus_0_5`. Transformation durations
+must be positive. Values must be finite; equivalent numbers such as `0.06` and
+`0.060` share one keyword. Lists can contain numeric triggers with different values.
+An explicit `duration` or `magnitude` retains normal form-trigger parsing.
+Use `0x` notation or a plugin-qualified ID for numeric FormIDs when omitting those fields.
+
+With KID installed, AoT initializes after KID finishes distribution and reuses
+its keywords. Without KID, AoT initializes at its normal data-loaded point.
+Generated trigger identities are saved separately so active timers keep their
+progress when keyword FormIDs change after restarting Skyrim.
+
 ### Keyword triggers
 
 ```yaml

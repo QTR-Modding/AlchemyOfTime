@@ -27,6 +27,9 @@ namespace Utils {
 
     uint32_t ParseTint(const std::string& value);
 
+    std::optional<float> ParseFiniteNumber(std::string_view value);
+    std::string FormatDecimal(float value);
+
     void hexToRGBA(uint32_t color_code, RE::NiColorA& nicolora);
 
     bool IsFoodItem(const RE::TESForm* form);

@@ -1,4 +1,5 @@
 #include "Serialization.h"
+#include "NumericKeywords.h"
 #include "CLibUtilsQTR/DynamicFormTracker.hpp"
 #include "Manager.h"
 
@@ -87,12 +88,6 @@ bool SaveLoadData::Load(SKSE::SerializationInterface* serializationInterface) {
         for (std::size_t j = 0; j < rhsSize; j++) {
             StageInstancePlain rhs_;
             if (serializationInterface->ReadRecordData(rhs_) != sizeof(rhs_)) return false;
-            if (rhs_._delay_formid > 0 && !serializationInterface->
-                ResolveFormID(rhs_._delay_formid, rhs_._delay_formid)) {
-                logger::error("Failed to resolve delay form ID 0x{:X} (parent form ID 0x{:X}).", rhs_._delay_formid,
-                              formid);
-                continue;
-            }
             rhs.push_back(rhs_);
         }
 
@@ -108,11 +103,29 @@ bool SaveLoadData::Load(SKSE::SerializationInterface* serializationInterface) {
     return true;
 }
 
+void SaveLoadData::ResolveTriggers(SKSE::SerializationInterface* serializationInterface) {
+    Locker locker(m_Lock);
+    for (auto& [source, instances] : m_Data) {
+        std::erase_if(instances, [&](StageInstancePlain& instance) {
+            if (!instance._delay_formid) return false;
+            if (const auto remapped = NumericKeywords::RemapSaved(instance._delay_formid)) {
+                instance._delay_formid = *remapped;
+                if (*remapped) return false;
+            } else if (serializationInterface->ResolveFormID(instance._delay_formid, instance._delay_formid)) {
+                return false;
+            }
+            logger::warn("Could not restore trigger for source {:X}; skipping its saved instance.", source.first.form_id);
+            return true;
+        });
+    }
+}
+
 #define DISABLE_IF_UNINSTALLED \
     if (!M || M->isUninstalled.load()) return;
 
 void SaveCallback(SKSE::SerializationInterface* serializationInterface) {
     DISABLE_IF_UNINSTALLED
+    if (!NumericKeywords::Save(serializationInterface)) logger::error("Failed to save numeric keywords.");
     M->SendData();
     if (!M->Save(serializationInterface, Settings::kDataKey, Settings::kSerializationVersion)) {
         logger::critical("Failed to save Data");
@@ -130,6 +143,7 @@ void LoadCallback(SKSE::SerializationInterface* serializationInterface) {
     M->isLoading.store(true);
     logger::info("Loading Data from skse co-save.");
 
+    NumericKeywords::BeginLoad();
     M->Reset();
     auto* DFT = clib_utilsQTR::DynamicFormTracker::GetSingleton();
     DFT->Reset();
@@ -141,6 +155,13 @@ void LoadCallback(SKSE::SerializationInterface* serializationInterface) {
     unsigned int cosave_found = 0;
     while (serializationInterface->GetNextRecordInfo(type, version, length)) {
         auto temp = Utils::DecodeTypeCode(type);
+
+        if (type == NumericKeywords::record_type) {
+            if (version != NumericKeywords::record_version || !NumericKeywords::Load(serializationInterface, length)) {
+                logger::error("Failed to load numeric keywords.");
+            }
+            continue;
+        }
 
         if (version == Settings::kSerializationVersion - 1) {
             logger::info("Older version of Alchemy of Time detected.");
@@ -180,6 +201,7 @@ void LoadCallback(SKSE::SerializationInterface* serializationInterface) {
     }
 
     if (cosave_found == 2) {
+        M->ResolveTriggers(serializationInterface);
         DFT->ReceiveData();
         M->ReceiveData();
         logger::info("Data loaded from skse co-save.");

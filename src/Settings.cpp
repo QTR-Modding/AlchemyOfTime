@@ -1,4 +1,5 @@
 #include "Settings.h"
+#include "NumericKeywords.h"
 #include "SimpleIni.h"
 #include "Threading.h"
 #include "CLibUtilsQTR/PresetHelpers/PresetHelpersTXT.hpp"
@@ -395,6 +396,104 @@ std::vector<std::string> PresetParse::LoadExcludeList(const std::string& postfix
 
 namespace {
     constexpr int warnings_limit = 5;
+    std::map<std::filesystem::path, YAML::Node> prepared_presets;
+
+    YAML::Node PreparedPreset(const std::filesystem::path& filename) {
+        return prepared_presets.at(filename.lexically_normal());
+    }
+
+    void PrepareRuleKeywords(const YAML::Node& rule) {
+        if (!rule.IsMap()) return;
+        for (const auto field : {"timeModulators", "transformers"}) {
+            const auto entries = rule[field];
+            if (!entries || entries.IsNull()) continue;
+            const bool transformation = std::string_view(field) == "transformers";
+            const auto value_key = transformation ? "duration" : "magnitude";
+            for (const auto& entry : entries) {
+                if ((entry[value_key] && !entry[value_key].IsNull()) ||
+                    !entry["FormEditorID"] || entry["FormEditorID"].IsNull()) continue;
+                for (const auto& name : PresetHelpers::YAML_Helpers::CollectFrom<std::string>(entry, "FormEditorID")) {
+                    if (const auto value = Utils::ParseFiniteNumber(name); value && (!transformation || *value > 0.f)) {
+                        NumericKeywords::Create(*value);
+                    }
+                }
+            }
+        }
+    }
+
+    YAML::Node ReadPreparedPreset(const std::filesystem::path& filename) {
+        if (!std::filesystem::exists(filename) || Utils::FileIsEmpty(filename)) return {};
+        std::ifstream file(filename);
+        const auto display_name = SKSE::stl::utf16_to_utf8(filename.native()).value_or("<invalid filename>");
+        if (!file) throw YAML::BadFile(display_name);
+        auto config = YAML::Load(file);
+        PresetHelpers::YAML_Helpers::ResolveTemplates(config, display_name);
+        return config;
+    }
+
+    void PreparePresets() {
+        std::vector<std::filesystem::path> filenames;
+        for (const auto& type : Settings::QFORMS) {
+            const auto folder = std::filesystem::path("Data/SKSE/Plugins/AlchemyOfTime") / type;
+            filenames.push_back(folder / ("AoT_default" + type + ".yml"));
+            for (const auto category : {"custom", "addon"}) {
+                const auto directory = folder / category;
+                if (!std::filesystem::exists(directory)) continue;
+                for (const auto& entry : std::filesystem::directory_iterator(directory)) {
+                    if (entry.is_regular_file() && entry.path().extension() == ".yml") filenames.push_back(entry.path());
+                }
+            }
+        }
+        ThreadPool pool(numThreads);
+        std::vector<std::future<YAML::Node>> futures;
+        futures.reserve(filenames.size());
+        for (const auto& filename : filenames) {
+            futures.push_back(pool.enqueue([filename] { return ReadPreparedPreset(filename); }));
+        }
+        for (size_t i = 0; i < filenames.size(); ++i) {
+            prepared_presets.emplace(filenames[i].lexically_normal(), futures[i].get());
+        }
+        // Keyword factories run on the startup thread, after parallel YAML work finishes.
+        for (const auto& [filename, config] : prepared_presets) {
+            if (!config.IsMap()) continue;
+            PrepareRuleKeywords(config);
+            for (const auto field : {"ownerLists", "formsLists"}) {
+                if (const auto rules = config[field]; rules && rules.IsSequence()) {
+                    for (const auto& rule : rules) PrepareRuleKeywords(rule);
+                }
+            }
+        }
+    }
+
+    std::vector<std::pair<FormID, float>> ParseTriggerValues(const YAML::Node& entry,
+                                                           const char* value_key, const float default_value) {
+        std::vector<std::pair<FormID, float>> result;
+        const auto explicit_value = entry[value_key];
+        const bool has_value = explicit_value && !explicit_value.IsNull();
+        const bool transformation = std::string_view(value_key) == "duration";
+        for (const auto& name : PresetHelpers::YAML_Helpers::CollectFrom<std::string>(entry, "FormEditorID")) {
+            if (!has_value) {
+                if (const auto value = Utils::ParseFiniteNumber(name)) {
+                    if (transformation && *value <= 0.f) {
+                        logger::warn("{}: numeric trigger must be positive: {}", value_key, name);
+                    } else if (const auto keyword = NumericKeywords::Find(*value)) {
+                        result.emplace_back(keyword->GetFormID(), *value);
+                    }
+                    continue;
+                }
+                if (transformation) {
+                    logger::warn("transformers: Duration is missing for {}", name);
+                    continue;
+                }
+            }
+            const auto value = has_value ? explicit_value.as<float>() : default_value;
+            for (const auto formid : Utils::ExpandFormLists(PresetHelpers::YAML_Helpers::StringToFormIDs(name))) {
+                result.emplace_back(formid, value);
+            }
+        }
+        return result;
+    }
+
 
     bool PresetFilenameLess(const std::filesystem::path& lhs, const std::filesystem::path& rhs) {
         const auto order = CompareStringOrdinal(lhs.c_str(), -1, rhs.c_str(), -1, TRUE);
@@ -410,8 +509,7 @@ namespace {
             return {};
         }
 
-        YAML::Node config = YAML::LoadFile(filename);
-        PresetHelpers::YAML_Helpers::ResolveTemplates(config, filename);
+        const YAML::Node config = PreparedPreset(filename);
 
         if (!config["ownerLists"]) {
             logger::warn("OwnerLists not found in {}", filename);
@@ -502,10 +600,7 @@ namespace {
             return {};
         }
 
-        std::ifstream file(filename);
-        if (!file.is_open()) throw YAML::BadFile(displayName);
-        YAML::Node config = YAML::Load(file);
-        PresetHelpers::YAML_Helpers::ResolveTemplates(config, displayName);
+        const YAML::Node config = PreparedPreset(filename);
 
         if (!config["formsLists"] || config["formsLists"].IsNull()) {
             logger::warn("formsLists not found in {}", displayName);
@@ -643,8 +738,6 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
             if (modulator["allowed_stages"] && !modulator["allowed_stages"].IsNull()) {
                 a_asv = PresetHelpers::YAML_Helpers::CollectFrom<StageNo>(modulator, "allowed_stages");
             }
-            // delayer magnitude
-            const auto delayer_magnitude = !modulator["magnitude"].IsNull() ? modulator["magnitude"].as<float>() : 1.f;
             // colors
             auto a_color = parse_color(modulator, "color");
             // sounds
@@ -656,7 +749,7 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
             // containers
             auto containers = parse_formid_vec(modulator, "containers");
 
-            for (auto a_formid : Utils::ExpandFormLists(parse_formid_vec(modulator, "FormEditorID"))) {
+            for (const auto& [a_formid, delayer_magnitude] : ParseTriggerValues(modulator, "magnitude", 1.f)) {
                 settings.delayer_allowed_stages[a_formid] = std::unordered_set(a_asv.begin(), a_asv.end());
                 settings.delayers[a_formid] = delayer_magnitude;
                 if (a_color) settings.delayer_colors[a_formid] = *a_color;
@@ -696,17 +789,6 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
                 continue;
             }
 
-            // duration
-            float a_duration;
-            if (auto temp_duration = parse_type<float>(transformer, "duration"); !temp_duration) {
-                if (n_warnings < warnings_limit) {
-                    logger::warn("transformers: Duration is missing");
-                    n_warnings++;
-                }
-                continue;
-            } else {
-                a_duration = *temp_duration;
-            }
             // allowed_stages
             std::vector<StageNo> a_asv;
             if (transformer["allowed_stages"] && !transformer["allowed_stages"].IsNull()) {
@@ -723,7 +805,7 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
             // containers
             auto containers = parse_formid_vec(transformer, "containers");
 
-            for (auto a_formid : Utils::ExpandFormLists(parse_formid_vec(transformer, "FormEditorID"))) {
+            for (const auto& [a_formid, a_duration] : ParseTriggerValues(transformer, "duration", 0.f)) {
                 settings.transformers[a_formid] = {a_formid2, a_duration};
                 settings.transformer_allowed_stages[a_formid] = std::unordered_set(a_asv.begin(), a_asv.end());
                 if (a_color) settings.transformer_colors[a_formid] = *a_color;
@@ -913,8 +995,7 @@ DefaultSettings PresetParse::parseDefaults(const std::string& _type) {
     }
 
     logger::info("Filename: {}", filename);
-    const YAML::Node config = YAML::LoadFile(filename);
-    PresetHelpers::YAML_Helpers::ResolveTemplates(config, filename);
+    const YAML::Node config = PreparedPreset(filename);
     auto temp_settings = parseDefaults_(config);
     if (!temp_settings.CheckIntegrity()) {
         logger::warn("parseDefaults: Settings integrity check failed for {}", _type);
@@ -1122,6 +1203,14 @@ void PresetParse::LoadSettingsParallel() {
 
     logger::info("Loading form groups");
     LoadFormGroups();
+    try {
+        PreparePresets();
+    } catch (const std::exception& ex) {
+        logger::error("Failed to prepare presets: {}", ex.what());
+        Settings::failed_to_load = true;
+        prepared_presets.clear();
+        return;
+    }
 
     for (const auto& _qftype : Settings::QFORMS) {
         typeFutures.push_back(typePool.enqueue(
@@ -1174,6 +1263,7 @@ void PresetParse::LoadSettingsParallel() {
     for (auto& fut : typeFutures) {
         fut.get();
     }
+    prepared_presets.clear();
 
     try {
         LoadJSONSettings();

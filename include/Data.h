@@ -79,6 +79,8 @@ struct Source {
 
     float GetNextUpdateTime(const StageInstance* st_inst);
     float GetNextUpdateTime(const StageInstance* st_inst) const;
+    [[nodiscard]] FormID GetNextFormID(const StageInstance& instance) const;
+    [[nodiscard]] float GetProgressPercentage(const StageInstance& instance, float now) const;
 
     void CleanUpData();
     void CleanUpData(RefID a_loc);

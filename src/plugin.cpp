@@ -1,81 +1,8 @@
-#include "Events.h"
-#include "Hooks.h"
-#include "Lorebox.h"
-#include "MCP.h"
-#include "Manager.h"
-#include "Queue.h"
+#include "Startup.h"
+#include "Serialization.h"
+#include "Logger.h"
 #include "Threading.h"
 
-namespace {
-    // ReSharper disable once CppParameterMayBeConstPtrOrRef
-    void OnMessage(SKSE::MessagingInterface::Message* message) {
-        if (message->type == SKSE::MessagingInterface::kDataLoaded) {
-            // 0) Check Po3's Tweaks
-            if (!Utils::IsPo3Installed()) {
-                logger::error("Po3 is not installed.");
-                Utils::MsgBoxesNotifs::Windows::Po3ErrMsg();
-                return;
-            }
-
-            // 1) Keyword
-            if (!Lorebox::Load_KW_AoT()) {
-                logger::error("Failed to load keyword.");
-                Utils::MsgBoxesNotifs::InGame::CustomMsg("Failed to load settings. Check log for details.");
-                return;
-            }
-
-            // 2) Load settings
-            {
-                SpeedProfiler prof("LoadSettings");
-                PresetParse::LoadSettingsParallel();
-            }
-            if (Settings::failed_to_load) {
-                logger::critical("Failed to load settings.");
-                Utils::MsgBoxesNotifs::InGame::CustomMsg("Failed to load settings. Check log for details.");
-                return;
-            }
-
-            // 3) Initialize Managers
-            M = Manager::GetSingleton();
-            if (!M) return;
-            QueueManager::GetSingleton()->Start();
-
-            // 4) Register event sinks
-            const auto eventSink = EventSink::GetSingleton();
-            auto* eventSourceHolder = RE::ScriptEventSourceHolder::GetSingleton();
-            eventSourceHolder->AddEventSink<RE::TESActivateEvent>(eventSink);
-            eventSourceHolder->AddEventSink<RE::TESCellAttachDetachEvent>(eventSink);
-            eventSourceHolder->AddEventSink<RE::TESObjectLoadedEvent>(eventSink);
-            eventSourceHolder->AddEventSink<RE::TESInitScriptEvent>(eventSink);
-            eventSourceHolder->AddEventSink<RE::TESMoveAttachDetachEvent>(eventSink);
-            eventSourceHolder->AddEventSink<RE::TESResetEvent>(eventSink);
-            eventSourceHolder->AddEventSink<RE::TESFurnitureEvent>(eventSink);
-            eventSourceHolder->AddEventSink<RE::TESFormDeleteEvent>(eventSink);
-            SKSE::GetCrosshairRefEventSource()->AddEventSink(eventSink);
-            logger::info("Event sinks added.");
-
-            // 5) Start MCP
-            UI::Register();
-            logger::info("MCP registered.");
-
-            // 6) install hooks
-            Hooks::Install();
-            logger::info("Hooks installed.");
-        }
-        if (message->type == SKSE::MessagingInterface::kPostLoadGame) {
-            logger::info("PostLoadGame.");
-            if (const auto ui = RE::UI::GetSingleton();
-                ui->IsMenuOpen(RE::MainMenu::MENU_NAME) ||
-                ui->IsMenuOpen(RE::JournalMenu::MENU_NAME)) {
-                logger::warn("Missing esps?");
-                return;
-            }
-            if (!M || M->isUninstalled.load()) return;
-            M->Update(RE::PlayerCharacter::GetSingleton());
-            EventSink::HandleRefsInCell();
-        }
-    }
-}
 
 
 SKSEPluginLoad(const SKSE::LoadInterface *skse) {
@@ -83,11 +10,7 @@ SKSEPluginLoad(const SKSE::LoadInterface *skse) {
     logger::info("Plugin loaded");
     SKSE::Init(skse, false);
     InitializeSerialization();
-    if (!SKSE::GetMessagingInterface()->RegisterListener(OnMessage)) {
-        SKSE::stl::report_and_fail("Failed to register message listener");
-        // ReSharper disable once CppUnreachableCode
-        return false;
-    }
+    Startup::Install(skse);
     logger::info("Number of threads: {}", numThreads);
     return true;
 }

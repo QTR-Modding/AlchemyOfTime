@@ -525,37 +525,7 @@ void Source::UpdateWorldItemTrigger(RE::TESObjectREFR* wo, StageInstance& wo_ins
 }
 
 float Source::GetNextUpdateTime(const StageInstance* st_inst) {
-    if (!st_inst) {
-        logger::error("Stage instance is null.");
-        return 0;
-    }
-    if (!IsHealthy()) {
-        logger::critical("GetNextUpdateTime: Source is not healthy.");
-        logger::critical("GetNextUpdateTime: Source formid: {}, qformtype: {}", formid, qFormType);
-        return 0;
-    }
-    if (st_inst->xtra.is_decayed) return 0;
-    if (!IsStageNo(st_inst->no)) {
-        logger::error("Stage {} does not exist.", st_inst->no);
-        return 0;
-    }
-
-    const auto delay_slope = st_inst->GetDelaySlope();
-    if (std::abs(delay_slope) < EPSILON) {
-        //logger::warn("Delay slope is 0.");
-        return st_inst->GetDelayerFormID() ? std::numeric_limits<float>::infinity() : 0.f;
-    }
-
-    if (st_inst->xtra.is_transforming) {
-        const auto transformer_form_id = st_inst->GetDelayerFormID();
-        if (!settings.transformers.contains(transformer_form_id)) return 0.0f;
-        const auto trnsfrm_duration = std::get<1>(settings.transformers.at(transformer_form_id));
-        return st_inst->GetTransformHittingTime(trnsfrm_duration);
-    }
-
-    const auto schranke = delay_slope > 0 ? GetStageDuration(st_inst->no) : 0.f;
-
-    return st_inst->GetHittingTime(schranke);
+    return std::as_const(*this).GetNextUpdateTime(st_inst);
 }
 
 void Source::UpdateInventoryItemTriggers(QueueInfo& queue_info, const UpdateTime time, const Utils::Inventory::Snapshot& inv) {
@@ -599,6 +569,40 @@ float Source::GetNextUpdateTime(const StageInstance* st_inst) const {
     const auto schranke = delay_slope > 0 ? GetStageDuration(st_inst->no) : 0.f;
 
     return st_inst->GetHittingTime(schranke);
+}
+
+FormID Source::GetNextFormID(const StageInstance& instance) const {
+    if (instance.xtra.is_transforming) {
+        const auto transformer = settings.transformers.find(instance.GetDelayerFormID());
+        return transformer == settings.transformers.end() ? 0 : transformer->second.first;
+    }
+    const auto slope = instance.GetDelaySlope();
+    if (std::abs(slope) < EPSILON) return 0;
+    if (slope > 0.f) {
+        if (IsStageNo(instance.no + 1)) {
+            const auto stage = TryGetStage(instance.no + 1);
+            return stage ? stage->formid : 0;
+        }
+        return settings.decayed_id;
+    }
+    if (instance.no > 0) {
+        if (const auto stage = TryGetStage(instance.no - 1)) return stage->formid;
+    }
+    return 0;
+}
+
+float Source::GetProgressPercentage(const StageInstance& instance, const float now) const {
+    if (instance.xtra.is_transforming) {
+        const auto transformer = settings.transformers.find(instance.GetDelayerFormID());
+        if (transformer != settings.transformers.end() && transformer->second.second > 0.f) {
+            return std::clamp(instance.GetTransformElapsed(now) / transformer->second.second * 100.f, 0.f, 100.f);
+        }
+    } else if (IsStageNo(instance.no)) {
+        if (const float duration = GetStageDuration(instance.no); duration > 0.f) {
+            return std::clamp(instance.GetElapsed(now) / duration * 100.f, 0.f, 100.f);
+        }
+    }
+    return -1.f;
 }
 
 void Source::CleanUpData() {

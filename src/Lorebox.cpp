@@ -60,13 +60,12 @@ namespace {
     };
 
     Transition ComputeNext(const Source& src, const StageInstance& st) {
-        Transition t{};
+        Transition t{.nextFormId = src.GetNextFormID(st)};
+        t.hasNext = t.nextFormId != 0;
         if (st.xtra.is_transforming) {
             t.transforming = true;
             const auto tr = st.GetDelayerFormID();
             if (tr && src.settings.transformers.contains(tr)) {
-                t.nextFormId = src.settings.transformers.at(tr).first;
-                t.hasNext = t.nextFormId != 0;
                 t.label = std::format(L"{} {}", Lorebox::arrow_right, FormNameW(t.nextFormId));
             } else {
                 t.label = std::format(L"{} (transform)", Lorebox::arrow_right);
@@ -83,15 +82,10 @@ namespace {
         if (slope > 0.f) {
             // Forward
             if (src.IsStageNo(st.no + 1)) {
-                const auto ns = src.TryGetStage(st.no + 1);
-                t.nextFormId = ns->formid;
-                t.hasNext = true;
                 t.label = std::format(L"{} {}",
                                       Lorebox::arrow_right,
                                       StageNameOrW(src, st.no + 1, std::format(L"Stage {}", st.no + 1)));
             } else {
-                t.nextFormId = src.settings.decayed_id;
-                t.hasNext = t.nextFormId != 0;
                 const auto decayed_form = RE::TESForm::LookupByID(t.nextFormId);
                 t.label = std::format(L"{} {}", Lorebox::arrow_right,
                                       decayed_form ? Widen(decayed_form->GetName()) : L"");
@@ -100,9 +94,6 @@ namespace {
             // Backwards
             t.backwards = true;
             if (st.no > 0 && src.IsStageNo(st.no - 1)) {
-                const auto ps = src.TryGetStage(st.no - 1);
-                t.nextFormId = ps->formid;
-                t.hasNext = true;
                 t.label = std::format(L"{} {}",
                                       Lorebox::arrow_left,
                                       StageNameOrW(src, st.no - 1, std::format(L"Stage {}", st.no - 1)));
@@ -142,22 +133,7 @@ namespace {
     }
 
     int ComputePercentage(const Source& src, const StageInstance& st, const float now) {
-        float pct = -1.f;
-        if (st.xtra.is_transforming) {
-            const auto tr = st.GetDelayerFormID();
-            if (tr && src.settings.transformers.contains(tr)) {
-                const float elapsed = st.GetTransformElapsed(now);
-                const float total = std::get<1>(src.settings.transformers.at(tr));
-                if (total > 0.f) pct = std::clamp(elapsed / total * 100.f, 0.f, 100.f);
-            }
-        } else {
-            if (src.IsStageNo(st.no)) {
-                const float elapsed = st.GetElapsed(now);
-                const float total = src.GetStageDuration(st.no);
-                if (total > 0.f) pct = std::clamp(elapsed / total * 100.f, 0.f, 100.f);
-            }
-        }
-
+        const float pct = src.GetProgressPercentage(st, now);
         if (pct < 0.f) return -1;
         return static_cast<int>(std::round(pct));
     }

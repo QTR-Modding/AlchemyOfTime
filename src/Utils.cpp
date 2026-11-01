@@ -1,4 +1,5 @@
 #include "Utils.h"
+#include <charconv>
 #include "CellScan.h"
 #include "CLibUtilsQTR/FormReader.hpp"
 #include "Settings.h"
@@ -608,4 +609,37 @@ RE::TESObjectREFR* Utils::Menu::GetOwnerOfItem(const RE::StandardItemData* a_ite
         return owner_actor->AsReference();
     }
     return nullptr;
+}
+std::optional<float> Utils::ParseFiniteNumber(std::string_view value) {
+    if (value.starts_with('+')) value.remove_prefix(1);
+    float result;
+    const auto parsed = std::from_chars(value.data(), value.data() + value.size(), result);
+    if (parsed.ec != std::errc{} || parsed.ptr != value.data() + value.size() || !std::isfinite(result)) {
+        return std::nullopt;
+    }
+    return result == 0.f ? 0.f : result;
+}
+
+std::string Utils::FormatDecimal(const float value) {
+    std::string text = std::format("{}", value == 0.f ? 0.f : value);
+    const auto exponent_pos = text.find('e');
+    if (exponent_pos == std::string::npos) return text;
+    const int exponent = std::stoi(text.substr(exponent_pos + 1));
+    text.resize(exponent_pos);
+    const bool negative = text.front() == '-';
+    if (negative) text.erase(0, 1);
+    const auto point = text.find('.');
+    const int original_point = static_cast<int>(point == std::string::npos ? text.size() : point);
+    if (point != std::string::npos) text.erase(point, 1);
+    const int decimal_point = original_point + exponent;
+    if (decimal_point <= 0) {
+        text.insert(0, static_cast<size_t>(-decimal_point), '0');
+        text.insert(0, "0.");
+    } else if (decimal_point >= static_cast<int>(text.size())) {
+        text.append(static_cast<size_t>(decimal_point) - text.size(), '0');
+    } else {
+        text.insert(static_cast<size_t>(decimal_point), ".");
+    }
+    if (negative) text.insert(0, "-");
+    return text;
 }

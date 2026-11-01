@@ -17,4 +17,7 @@ set(sources ${sources}
 	src/WorldUpdates.cpp
 	src/Stages.cpp
 	src/Presets.cpp
+	src/NumericKeywords.cpp
+	src/Startup.cpp
+	src/API.cpp
 )

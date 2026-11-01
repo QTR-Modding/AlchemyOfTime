@@ -29,6 +29,10 @@ See the [AoT wiki](https://github.com/QTR-Modding/AlchemyOfTime/wiki) for config
 
 The wiki source is [docs/wiki/Home.md](docs/wiki/Home.md). Documentation changes are reviewed in pull requests and published to the same wiki page after merging to `main`.
 
+### Native API
+
+See the [native API](docs/API.md) to obtain numeric keywords and read tracked item quantities and progress from another SKSE plugin.
+
 ### Shared YAML fields
 
 See [Shared YAML fields in the guide](https://github.com/QTR-Modding/AlchemyOfTime/wiki#shared-yaml-fields) for anchors, aliases, and merge examples.
