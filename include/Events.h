@@ -10,14 +10,29 @@ class EventSink final : public REX::Singleton<EventSink>,
                         public RE::BSTEventSink<RE::TESMoveAttachDetachEvent>,
                         public RE::BSTEventSink<RE::TESResetEvent>,
                         public RE::BSTEventSink<RE::TESFurnitureEvent>,
-                        public RE::BSTEventSink<RE::TESFormDeleteEvent> {
+                        public RE::BSTEventSink<RE::TESFormDeleteEvent>,
+                        public RE::BSTEventSink<SKSE::ModCallbackEvent> {
+    struct Startup {
+        enum class Phase { DataLoaded, KeywordDistribution, Initialized };
+        Phase phase = Phase::DataLoaded;
+        const SKSE::LoadInterface* skse = nullptr;
+    } startup;
+
     bool furniture_entered = false;
     RE::NiPointer<RE::TESObjectREFR> furniture = nullptr;
+
+    void Initialize();
+    static void OnMessage(SKSE::MessagingInterface::Message* message);
 
     static void HandleRef(RE::TESObjectREFR* ref, bool skip_if_queued = false);
 
 public:
+    bool Register(const SKSE::LoadInterface* skse);
+
     static void HandleRefsInCell(const RE::TESObjectCELL* a_cell = nullptr);
+
+    RE::BSEventNotifyControl ProcessEvent(const SKSE::ModCallbackEvent* event,
+                                          RE::BSTEventSource<SKSE::ModCallbackEvent>*) override;
 
     RE::BSEventNotifyControl ProcessEvent(const RE::TESActivateEvent* event,
                                           RE::BSTEventSource<RE::TESActivateEvent>*) override;

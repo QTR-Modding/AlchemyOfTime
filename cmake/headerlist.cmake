@@ -19,4 +19,5 @@ set(headers ${headers}
 	include/WorldUpdates.h
 	include/Stages.h
 	include/Presets.h
+	include/NumericKeywords.h
 )

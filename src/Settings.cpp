@@ -1,4 +1,5 @@
 #include "Settings.h"
+#include "NumericKeywords.h"
 #include "SimpleIni.h"
 #include "Threading.h"
 #include "CLibUtilsQTR/PresetHelpers/PresetHelpersTXT.hpp"
@@ -396,6 +397,36 @@ std::vector<std::string> PresetParse::LoadExcludeList(const std::string& postfix
 namespace {
     constexpr int warnings_limit = 5;
 
+    std::vector<std::pair<FormID, float>> ParseTriggerValues(const YAML::Node& entry,
+                                                           const char* value_key, const float default_value) {
+        std::vector<std::pair<FormID, float>> result;
+        const auto explicit_value = entry[value_key];
+        const bool has_value = explicit_value && !explicit_value.IsNull();
+        const bool transformation = std::string_view(value_key) == "duration";
+        for (const auto& name : PresetHelpers::YAML_Helpers::CollectFrom<std::string>(entry, "FormEditorID")) {
+            if (!has_value) {
+                if (const auto value = Utils::ParseFiniteNumber(name)) {
+                    if (transformation && *value <= 0.f) {
+                        logger::warn("{}: numeric trigger must be positive: {}", value_key, name);
+                    } else {
+                        const auto keyword = NumericKeywords::Create(*value);
+                        result.emplace_back(keyword->GetFormID(), *value);
+                    }
+                    continue;
+                }
+                if (transformation) {
+                    logger::warn("transformers: Duration is missing for {}", name);
+                    continue;
+                }
+            }
+            const auto value = has_value ? explicit_value.as<float>() : default_value;
+            for (const auto formid : Utils::ExpandFormLists(PresetHelpers::YAML_Helpers::StringToFormIDs(name))) {
+                result.emplace_back(formid, value);
+            }
+        }
+        return result;
+    }
+
     bool PresetFilenameLess(const std::filesystem::path& lhs, const std::filesystem::path& rhs) {
         const auto order = CompareStringOrdinal(lhs.c_str(), -1, rhs.c_str(), -1, TRUE);
         return order == CSTR_EQUAL ? lhs.native() < rhs.native() : order == CSTR_LESS_THAN;
@@ -643,8 +674,6 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
             if (modulator["allowed_stages"] && !modulator["allowed_stages"].IsNull()) {
                 a_asv = PresetHelpers::YAML_Helpers::CollectFrom<StageNo>(modulator, "allowed_stages");
             }
-            // delayer magnitude
-            const auto delayer_magnitude = !modulator["magnitude"].IsNull() ? modulator["magnitude"].as<float>() : 1.f;
             // colors
             auto a_color = parse_color(modulator, "color");
             // sounds
@@ -656,7 +685,7 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
             // containers
             auto containers = parse_formid_vec(modulator, "containers");
 
-            for (auto a_formid : Utils::ExpandFormLists(parse_formid_vec(modulator, "FormEditorID"))) {
+            for (const auto& [a_formid, delayer_magnitude] : ParseTriggerValues(modulator, "magnitude", 1.f)) {
                 settings.delayer_allowed_stages[a_formid] = std::unordered_set(a_asv.begin(), a_asv.end());
                 settings.delayers[a_formid] = delayer_magnitude;
                 if (a_color) settings.delayer_colors[a_formid] = *a_color;
@@ -696,17 +725,6 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
                 continue;
             }
 
-            // duration
-            float a_duration;
-            if (auto temp_duration = parse_type<float>(transformer, "duration"); !temp_duration) {
-                if (n_warnings < warnings_limit) {
-                    logger::warn("transformers: Duration is missing");
-                    n_warnings++;
-                }
-                continue;
-            } else {
-                a_duration = *temp_duration;
-            }
             // allowed_stages
             std::vector<StageNo> a_asv;
             if (transformer["allowed_stages"] && !transformer["allowed_stages"].IsNull()) {
@@ -723,7 +741,7 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
             // containers
             auto containers = parse_formid_vec(transformer, "containers");
 
-            for (auto a_formid : Utils::ExpandFormLists(parse_formid_vec(transformer, "FormEditorID"))) {
+            for (const auto& [a_formid, a_duration] : ParseTriggerValues(transformer, "duration", 0.f)) {
                 settings.transformers[a_formid] = {a_formid2, a_duration};
                 settings.transformer_allowed_stages[a_formid] = std::unordered_set(a_asv.begin(), a_asv.end());
                 if (a_color) settings.transformer_colors[a_formid] = *a_color;
