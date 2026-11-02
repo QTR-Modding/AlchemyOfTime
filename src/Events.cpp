@@ -5,6 +5,12 @@
 
 void EventSink::HandleRef(RE::TESObjectREFR* ref, const bool skip_if_queued) {
     if (!ref) return;
+    if (Utils::containerize) {
+        if (const auto chest = RE::TESForm::LookupByID<RE::TESObjectREFR>(
+                Utils::containerize->GetChest(ref->GetFormID()))) {
+            HandleRef(chest, skip_if_queued);
+        }
+    }
     if (!ref->HasContainer()) {
         if (!Settings::IsItem(ref)) return;
         if (!Settings::placed_objects_evolve.load() && Utils::WorldObject::IsPlacedObject(ref)) return;

@@ -1,7 +1,9 @@
 #pragma once
+#include "ContainerizeAPI.h"
 #include <unordered_set>
 
 namespace Utils {
+    inline const ContainerizeAPI::Interface* containerize = nullptr;
     const auto mod_name = std::string(SKSE::PluginDeclaration::GetSingleton()->GetName());
     const auto plugin_version = SKSE::PluginDeclaration::GetSingleton()->GetVersion();
     constexpr auto po3path = "Data/SKSE/Plugins/po3_Tweaks.dll";

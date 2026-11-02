@@ -1075,6 +1075,12 @@ void Manager::SyncWithInventory(const RefInfo& a_info, Utils::Inventory::Snapsho
         const FormID fid = bound->GetFormID();
         const Count invCount = entry.first;
 
+        if (Utils::containerize && invCount > 0) {
+            if (const auto chest = RE::TESForm::LookupByID<RE::TESObjectREFR>(Utils::containerize->GetChest(fid))) {
+                UpdateRef(chest);
+            }
+        }
+
         auto rt = reg_total.find(fid);
         if (rt == reg_total.end()) {
             if (invCount > 0) Register(fid, invCount, a_info, {.hours = now, .phase = UpdatePhase::kCurrent}, inventory);

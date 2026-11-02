@@ -10,6 +10,7 @@ namespace {
     // ReSharper disable once CppParameterMayBeConstPtrOrRef
     void OnMessage(SKSE::MessagingInterface::Message* message) {
         if (message->type == SKSE::MessagingInterface::kDataLoaded) {
+            Utils::containerize = ContainerizeAPI::RequestAPI();
             // 0) Check Po3's Tweaks
             if (!Utils::IsPo3Installed()) {
                 logger::error("Po3 is not installed.");
