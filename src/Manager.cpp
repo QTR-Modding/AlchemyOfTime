@@ -2005,6 +2005,42 @@ std::vector<Source> Manager::GetSources() {
     return sources_copy;
 }
 
+std::uint32_t Manager::GetProgress(const RefID owner, const FormID item, std::span<AoT_API::Progress> output) {
+    SRC_SHARED_GUARD;
+    const auto loc = loc_to_sources.find(owner);
+    if (loc == loc_to_sources.end()) return 0;
+
+    std::uint32_t count = 0;
+    for (const auto sourceID : loc->second) {
+        const auto source = sources.find(sourceID);
+        if (source == sources.end() || !source->second || !source->second->IsHealthy()) continue;
+        const auto& src = *source->second;
+        const auto instances = src.data.find(owner);
+        if (instances == src.data.end()) continue;
+
+        for (const auto& instance : instances->second) {
+            if (instance.count <= 0 || instance.xtra.is_decayed || instance.xtra.form_id != item ||
+                !src.IsStageNo(instance.no)) continue;
+
+            const auto trigger = instance.GetDelayerFormID();
+            float duration = src.GetStageDuration(instance.no);
+            if (instance.xtra.is_transforming) {
+                const auto transformer = src.settings.transformers.find(trigger);
+                if (transformer == src.settings.transformers.end()) continue;
+                duration = transformer->second.second;
+            }
+
+            if (count < output.size()) {
+                const auto state = instance.GetPlain();
+                output[count] = {state._delay_start, instance.xtra.is_transforming ? 0.f : state._elapsed,
+                                 instance.GetDelaySlope(), duration, trigger};
+            }
+            ++count;
+        }
+    }
+    return count;
+}
+
 std::vector<Source> Manager::GetSourcesByStageAndOwner(const FormID stage_formid, const RefID location_id) {
     std::vector<Source> out;
     if (!stage_formid || !location_id) {
