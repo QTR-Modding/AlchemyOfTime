@@ -1,4 +1,5 @@
 set(sources ${sources}
+	src/API.cpp
 	src/Events.cpp
 	src/plugin.cpp
 	src/Utils.cpp

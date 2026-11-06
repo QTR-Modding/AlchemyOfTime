@@ -1,4 +1,5 @@
 #pragma once
+#include "API.h"
 #include "CellScan.h"
 #include "Data.h"
 #include "InventoryWatch.h"
@@ -276,6 +277,9 @@ public:
 
     // Snapshot copy of sources matching a stage form and location. [locks: sourceMutex_] (shared)
     std::vector<Source> GetSourcesByStageAndOwner(FormID stage_formid, RefID location_id);
+
+    // [locks: sourceMutex_] (shared)
+    std::uint32_t GetProgress(RefID owner, FormID item, std::span<AoTAPI::Progress> output);
 
     // Snapshot of the update queue. [locks: queueMutex_] (shared)
     std::unordered_map<RefID, std::optional<float>> GetUpdateQueue();
