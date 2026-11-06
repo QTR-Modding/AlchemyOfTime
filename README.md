@@ -36,3 +36,5 @@ See [Shared YAML fields in the guide](https://github.com/QTR-Modding/AlchemyOfTi
 #### ADDON ORDER
 
 See [Addon order in the guide](https://github.com/QTR-Modding/AlchemyOfTime/wiki#addon-order) for filename priority and repeated-trigger behavior.
+
+Read-only C++ interface: [API](docs/API.md).

@@ -79,6 +79,7 @@ struct Source {
 
     float GetNextUpdateTime(const StageInstance* st_inst);
     float GetNextUpdateTime(const StageInstance* st_inst) const;
+    [[nodiscard]] float GetProgressPercentage(const StageInstance& instance, float time) const;
 
     void CleanUpData();
     void CleanUpData(RefID a_loc);
