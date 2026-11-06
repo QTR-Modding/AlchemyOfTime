@@ -5,7 +5,7 @@
 #include <RE/B/BSCoreTypes.h>
 #include <Windows.h>
 
-namespace AoTAPI {
+namespace AoT_API {
     constexpr std::uint32_t interface_version = 1;
 
     struct Progress {

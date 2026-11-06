@@ -2005,7 +2005,7 @@ std::vector<Source> Manager::GetSources() {
     return sources_copy;
 }
 
-std::uint32_t Manager::GetProgress(const RefID owner, const FormID item, std::span<AoTAPI::Progress> output) {
+std::uint32_t Manager::GetProgress(const RefID owner, const FormID item, std::span<AoT_API::Progress> output) {
     SRC_SHARED_GUARD;
     const auto loc = loc_to_sources.find(owner);
     if (loc == loc_to_sources.end()) return 0;

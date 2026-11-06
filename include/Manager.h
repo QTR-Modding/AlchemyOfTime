@@ -279,7 +279,7 @@ public:
     std::vector<Source> GetSourcesByStageAndOwner(FormID stage_formid, RefID location_id);
 
     // [locks: sourceMutex_] (shared)
-    std::uint32_t GetProgress(RefID owner, FormID item, std::span<AoTAPI::Progress> output);
+    std::uint32_t GetProgress(RefID owner, FormID item, std::span<AoT_API::Progress> output);
 
     // Snapshot of the update queue. [locks: queueMutex_] (shared)
     std::unordered_map<RefID, std::optional<float>> GetUpdateQueue();
