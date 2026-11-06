@@ -196,7 +196,7 @@ class Manager final : public Ticker, public SaveLoadData {
     // best-effort disambiguation: owner-ref first, then stage-only
     Source* UpdateGetSource(FormID stage_formid, RefID owner_refid);
 
-    std::optional<float> GetNextUpdateTime(const RefInfo& a_info);
+    std::optional<float> GetNextUpdateTime(RefID location, FormID item = 0);
 
 protected:
     void UpdateImpl(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const RE::TESForm* what, Count count,
@@ -271,10 +271,12 @@ public:
 
     void Print();
 
-    // Snapshot copy of sources (read-only). [locks: sourceMutex_] (shared)
-    std::vector<Source> GetSources(FormID source_formid = 0);
+    [[nodiscard]] std::optional<float> GetRemainingTime(RefID location, FormID item);
 
-    // Snapshot copy of sources matching a location and optionally a stage form (zero means all). [locks: sourceMutex_] (shared)
+    // Snapshot copy of sources (read-only). [locks: sourceMutex_] (shared)
+    std::vector<Source> GetSources();
+
+    // Snapshot copy of sources matching a stage form and location. [locks: sourceMutex_] (shared)
     std::vector<Source> GetSourcesByStageAndOwner(FormID stage_formid, RefID location_id);
 
     // Snapshot of the update queue. [locks: queueMutex_] (shared)

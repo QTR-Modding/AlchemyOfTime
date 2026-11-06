@@ -567,26 +567,6 @@ void Source::UpdateInventoryItemTriggers(QueueInfo& queue_info, const UpdateTime
     }
 }
 
-
-float Source::GetProgressPercentage(const StageInstance& instance, const float time) const {
-    float pct = -1.f;
-    if (instance.xtra.is_transforming) {
-        const auto tr = instance.GetDelayerFormID();
-        if (tr && settings.transformers.contains(tr)) {
-            const float elapsed = instance.GetTransformElapsed(time);
-            const float total = std::get<1>(settings.transformers.at(tr));
-            if (total > 0.f) pct = std::clamp(elapsed / total * 100.f, 0.f, 100.f);
-        }
-    } else {
-        if (IsStageNo(instance.no)) {
-            const float elapsed = instance.GetElapsed(time);
-            const float total = GetStageDuration(instance.no);
-            if (total > 0.f) pct = std::clamp(elapsed / total * 100.f, 0.f, 100.f);
-        }
-    }
-    return pct;
-}
-
 float Source::GetNextUpdateTime(const StageInstance* st_inst) const {
     if (!st_inst) {
         logger::error("Stage instance is null.");

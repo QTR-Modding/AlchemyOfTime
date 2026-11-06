@@ -190,8 +190,7 @@ Source* Manager::UpdateGetSource(const FormID stage_formid, const RefID owner_re
     return GetSource(stage_formid);
 }
 
-std::optional<float> Manager::GetNextUpdateTime(const RefInfo& a_info) {
-    const auto refid = a_info.ref_id;
+std::optional<float> Manager::GetNextUpdateTime(const RefID refid, const FormID item) {
     const auto lit = loc_to_sources.find(refid);
     if (lit == loc_to_sources.end()) return std::nullopt;
 
@@ -202,14 +201,16 @@ std::optional<float> Manager::GetNextUpdateTime(const RefInfo& a_info) {
         const auto sit = sources.find(src_formid);
         if (sit == sources.end()) continue;
 
-        auto& src = *sit->second;
+        const auto& src = *sit->second;
         if (!src.IsHealthy()) continue;
 
         const auto dit = src.data.find(refid);
         if (dit == src.data.end()) continue;
 
-        for (auto& inst : dit->second) {
+        for (const auto& inst : dit->second) {
             if (inst.xtra.is_decayed || !src.IsStageNo(inst.no)) continue;
+            if (item && (inst.count <= 0 || inst.xtra.form_id != item)) continue;
+            if (item) found = true;
             const float t = src.GetNextUpdateTime(&inst);
             if (t > 0.0f && t < best) {
                 best = t;
@@ -1001,7 +1002,7 @@ void Manager::UpdateInventory(const RefInfo& a_info, Utils::Inventory::Snapshot&
     const auto curr = RE::Calendar::GetSingleton()->GetHoursPassed();
     QueueInfo pending{.ref_info = a_info}; // doesnt change during catchup
     for (;;) {
-        auto next = GetNextUpdateTime(a_info);
+        auto next = GetNextUpdateTime(a_info.ref_id);
         if (!next) break;
         const float base = *next;
         if (!std::isfinite(base)) break;
@@ -1995,14 +1996,17 @@ void Manager::Print() {
     }*/
 }
 
-std::vector<Source> Manager::GetSources(const FormID source_formid) {
+std::optional<float> Manager::GetRemainingTime(const RefID location, const FormID item) {
+    if (!location || !item) return std::nullopt;
+    SRC_SHARED_GUARD;
+    const auto next = GetNextUpdateTime(location, item);
+    if (!next) return std::nullopt;
+    return std::max(0.f, *next - RE::Calendar::GetSingleton()->GetHoursPassed());
+}
+
+std::vector<Source> Manager::GetSources() {
     SRC_SHARED_GUARD;
     std::vector<Source> sources_copy;
-    if (source_formid) {
-        if (const auto found = sources.find(source_formid); found != sources.end())
-            sources_copy.push_back(*found->second);
-        return sources_copy;
-    }
     sources_copy.reserve(sources.size());
     for (const auto& src : sources | std::views::values) {
         sources_copy.push_back(*src);
@@ -2012,7 +2016,7 @@ std::vector<Source> Manager::GetSources(const FormID source_formid) {
 
 std::vector<Source> Manager::GetSourcesByStageAndOwner(const FormID stage_formid, const RefID location_id) {
     std::vector<Source> out;
-    if (!location_id) {
+    if (!stage_formid || !location_id) {
         return out;
     }
 
@@ -2041,7 +2045,7 @@ std::vector<Source> Manager::GetSourcesByStageAndOwner(const FormID stage_formid
         if (dit == src->data.end() || dit->second.empty()) return;
 
         for (const auto& inst : dit->second) {
-            if (inst.count > 0 && (!stage_formid || inst.xtra.form_id == stage_formid)) {
+            if (inst.count > 0 && inst.xtra.form_id == stage_formid) {
                 out.push_back(*src);
                 return;
             }

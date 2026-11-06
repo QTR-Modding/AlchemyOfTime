@@ -142,8 +142,24 @@ namespace {
     }
 
     int ComputePercentage(const Source& src, const StageInstance& st, const float now) {
-        const auto pct = src.GetProgressPercentage(st, now);
-        return pct < 0.f ? -1 : static_cast<int>(std::round(pct));
+        float pct = -1.f;
+        if (st.xtra.is_transforming) {
+            const auto tr = st.GetDelayerFormID();
+            if (tr && src.settings.transformers.contains(tr)) {
+                const float elapsed = st.GetTransformElapsed(now);
+                const float total = std::get<1>(src.settings.transformers.at(tr));
+                if (total > 0.f) pct = std::clamp(elapsed / total * 100.f, 0.f, 100.f);
+            }
+        } else {
+            if (src.IsStageNo(st.no)) {
+                const float elapsed = st.GetElapsed(now);
+                const float total = src.GetStageDuration(st.no);
+                if (total > 0.f) pct = std::clamp(elapsed / total * 100.f, 0.f, 100.f);
+            }
+        }
+
+        if (pct < 0.f) return -1;
+        return static_cast<int>(std::round(pct));
     }
 
     std::wstring BuildModulatorTag(const Source& src, const Row& r) {
