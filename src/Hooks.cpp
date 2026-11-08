@@ -56,6 +56,7 @@ void Hooks::Install() {
 
     UpdateHook::Install();
     ArtObjectHook::Install();
+    ExtraDataHook::Install();
 
     MoveItemHooks<RE::PlayerCharacter>::install();
     MoveItemHooks<RE::TESObjectREFR>::install(false);
@@ -68,6 +69,20 @@ void Hooks::Install() {
 
     const REL::Relocation<std::uintptr_t> add_item_functor_hook{REL::VariantID(55946, 56490, 0x9DEDD0)};
     add_item_functor_ = trampoline.write_call<5>(add_item_functor_hook.address() + 0x15D, add_item_functor);
+}
+
+void Hooks::ExtraDataHook::DeleteExtraDataLists(RE::InventoryEntryData* entry) {
+    Utils::ExtraDataTransfer::Capture(entry);
+    DeleteExtraDataLists_(entry);
+}
+
+void Hooks::ExtraDataHook::Install() {
+    const REL::Relocation<std::uintptr_t> cleanup{RE::InventoryEntryData::DELETE_EXTRA_DATA_LISTS};
+    const auto original = clib_utilsQTR::write_prologue_hook(cleanup.address(), DeleteExtraDataLists);
+    if (!original) {
+        SKSE::stl::report_and_fail("Failed to install the extra-data transfer hook.");
+    }
+    DeleteExtraDataLists_ = original;
 }
 
 bool Hooks::ArtObjectHook::Attach(RE::ModelReferenceEffect* a_this) {

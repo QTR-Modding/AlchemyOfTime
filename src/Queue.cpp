@@ -25,37 +25,6 @@ void QueueManager::ProcessAddItemTask(RE::TESObjectREFR* owner, const AddItemTas
     owner->AddObjectToContainer(item, nullptr, task.count, nullptr);
 }
 
-void QueueManager::ProcessReplacementTask(RE::TESObjectREFR* inventory, RE::TESBoundObject* from,
-                                          RE::TESBoundObject* to, Count count) {
-    const auto items = inventory->GetInventory([from](RE::TESBoundObject& item) { return &item == from; });
-    const auto entry = items.find(from);
-    if (entry != items.end() && entry->second.second->extraLists) {
-        for (const auto instance : *entry->second.second->extraLists) {
-            if (!instance) {
-                continue;
-            }
-            const auto amount = std::min<Count>(count, instance->GetCount());
-            if (amount <= 0) {
-                continue;
-            }
-            const auto replacement = Utils::CopyExtraData(instance);
-            if (replacement) {
-                replacement->SetCount(static_cast<std::uint16_t>(amount));
-            }
-            inventory->RemoveItem(from, amount, RE::ITEM_REMOVE_REASON::kRemove, instance, nullptr);
-            inventory->AddObjectToContainer(to, replacement, amount, nullptr);
-            count -= amount;
-            if (count == 0) {
-                return;
-            }
-        }
-    }
-    if (count > 0) {
-        inventory->RemoveItem(from, count, RE::ITEM_REMOVE_REASON::kRemove, nullptr, nullptr);
-        inventory->AddObjectToContainer(to, nullptr, count, nullptr);
-    }
-}
-
 Count QueueManager::ProcessRemoveItemTask(RE::TESObjectREFR* owner, const RemoveItemTask& task,
                                           RE::TESObjectREFR::InventoryItemMap& inventory) {
     const auto item = RE::TESForm::LookupByID<RE::TESBoundObject>(task.item_id);
@@ -128,7 +97,6 @@ bool QueueManager::ProcessPendingMoves(const int n_tasks) {
 
             std::unordered_set<FormID> questLocked;
             questLocked.reserve(inv.size());
-            std::unordered_set<FormID> withExtraData;
 
             for (const auto& [obj, entry] : inv) {
                 if (!obj) continue;
@@ -137,33 +105,26 @@ bool QueueManager::ProcessPendingMoves(const int n_tasks) {
                 available[fid] = static_cast<Count>(entry.first);
 
                 // IMPORTANT: deref entry.second only here, before any RemoveItem()
-                if (entry.second) {
-                    if (entry.second->IsQuestObject()) {
-                        questLocked.insert(fid);
-                    }
-                    if (entry.second->extraLists && !entry.second->extraLists->empty()) {
-                        withExtraData.insert(fid);
-                    }
+                if (entry.second && entry.second->IsQuestObject()) {
+                    questLocked.insert(fid);
                 }
             }
 
-            // Earlier removals can invalidate cached extra lists; read fresh data for replacements.
+            // 2) Execute tasks without touching InventoryEntryData pointers again
             for (const auto& [add, remove] : tasks) {
                 Count removed_count = 0;
+                const auto replacement = RE::TESForm::LookupByID<RE::TESBoundObject>(add.item_id);
+                Utils::ExtraDataTransfer transfer;
 
                 if (remove.count > 0) {
                     if (const FormID rid = remove.item_id; rid != 0 && !questLocked.contains(rid)) {
                         if (const auto item = RE::TESForm::LookupByID<RE::TESBoundObject>(rid)) {
                             if (const Count canRemove = std::min(available[rid], remove.count); canRemove > 0) {
-                                if (withExtraData.contains(rid)) {
-                                    if (const auto replacement = RE::TESForm::LookupByID<RE::TESBoundObject>(add.item_id)) {
-                                        ProcessReplacementTask(owner, item, replacement, canRemove);
-                                        withExtraData.insert(add.item_id);
-                                        available[rid] -= canRemove;
-                                        continue;
-                                    }
+                                if (replacement) {
+                                    transfer.Remove(owner, item, canRemove);
+                                } else {
+                                    owner->RemoveItem(item, canRemove, RE::ITEM_REMOVE_REASON::kRemove, nullptr, nullptr);
                                 }
-                                owner->RemoveItem(item, canRemove, RE::ITEM_REMOVE_REASON::kRemove, nullptr, nullptr);
                                 available[rid] -= canRemove;
                                 removed_count = canRemove;
                             }
@@ -171,10 +132,9 @@ bool QueueManager::ProcessPendingMoves(const int n_tasks) {
                     }
                 }
 
-                if (const Count add_count = (remove.count > 0) ? removed_count : add.count; add_count > 0) {
-                    if (const auto item = RE::TESForm::LookupByID<RE::TESBoundObject>(add.item_id)) {
-                        owner->AddObjectToContainer(item, nullptr, add_count, nullptr);
-                    }
+                if (const Count add_count = (remove.count > 0) ? removed_count : add.count;
+                    replacement && add_count > 0) {
+                    transfer.Add(owner, replacement, add_count);
                 }
             }
         }

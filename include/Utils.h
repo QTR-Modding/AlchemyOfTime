@@ -44,6 +44,18 @@ namespace Utils {
 
     RE::ExtraDataList* CopyExtraData(RE::ExtraDataList* source);
 
+    class ExtraDataTransfer {
+    public:
+        void Remove(RE::TESObjectREFR* inventory, RE::TESBoundObject* item, Count count);
+        void Add(RE::TESObjectREFR* inventory, RE::TESBoundObject* item, Count count);
+        static void Capture(RE::InventoryEntryData* entry);
+
+    private:
+        RE::TESBoundObject* source{};
+        std::vector<RE::ExtraDataList*> extraLists;
+        static inline thread_local ExtraDataTransfer* current{};
+    };
+
     void FavoriteItem(const RE::TESBoundObject* item, RE::TESObjectREFR* inventory_owner);
 
     [[nodiscard]] bool IsFavorited(RE::TESBoundObject* item, const InvMap& inventory);
