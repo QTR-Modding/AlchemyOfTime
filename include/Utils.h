@@ -42,6 +42,8 @@ namespace Utils {
 
     inline bool IsDynamicFormID(const FormID a_formID) { return a_formID >= 0xFF000000; }
 
+    RE::ExtraDataList* CopyExtraData(RE::ExtraDataList* source);
+
     void FavoriteItem(const RE::TESBoundObject* item, RE::TESObjectREFR* inventory_owner);
 
     [[nodiscard]] bool IsFavorited(RE::TESBoundObject* item, const InvMap& inventory);

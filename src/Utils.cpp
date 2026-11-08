@@ -20,6 +20,25 @@ namespace {
     }
 }
 
+RE::ExtraDataList* Utils::CopyExtraData(RE::ExtraDataList* source) {
+    RE::ExtraDataList* copy = nullptr;
+    for (const auto& extra : *source) {
+        RE::BSExtraData* copied = nullptr;
+        switch (extra.GetType()) {
+            case RE::ExtraDataType::kOwnership:
+                copied = new RE::ExtraOwnership(static_cast<const RE::ExtraOwnership&>(extra).owner);
+                break;
+            default:
+                continue;
+        }
+        if (!copy) {
+            copy = RE::ExtraDataList::Create();
+        }
+        copy->Add(copied);
+    }
+    return copy;
+}
+
 std::string Utils::DecodeTypeCode(const std::uint32_t typeCode) {
     char buf[4];
     buf[3] = static_cast<char>(typeCode);

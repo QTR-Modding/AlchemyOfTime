@@ -53,6 +53,8 @@ class QueueManager : public REX::Singleton<QueueManager>, public RE::BSTEventSin
     std::unordered_map<RefID, std::deque<AddRemoveItemTask>> pending_moveitem_;
 
     static void ProcessAddItemTask(RE::TESObjectREFR* owner, const AddItemTask& task);
+    static void ProcessReplacementTask(RE::TESObjectREFR* inventory, RE::TESBoundObject* from,
+                                       RE::TESBoundObject* to, Count count);
     static Count ProcessRemoveItemTask(RE::TESObjectREFR* owner, const RemoveItemTask& task,
                                        RE::TESObjectREFR::InventoryItemMap& inventory);
 
