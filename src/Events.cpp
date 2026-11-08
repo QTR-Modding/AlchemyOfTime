@@ -125,7 +125,12 @@ RE::BSEventNotifyControl EventSink::ProcessEvent(const RE::TESFurnitureEvent* ev
                                                  RE::BSTEventSource<RE::TESFurnitureEvent>*) {
     if (M->isLoading.load()) return RE::BSEventNotifyControl::kContinue;
     if (!event) return RE::BSEventNotifyControl::kContinue;
-    if (!event->actor->IsPlayerRef()) return RE::BSEventNotifyControl::kContinue;
+    if (!event->actor->IsPlayerRef()) {
+        if (event->type == RE::TESFurnitureEvent::FurnitureEventType::kEnter) {
+            HandleRef(event->targetFurniture.get());
+        }
+        return RE::BSEventNotifyControl::kContinue;
+    }
     if (furniture_entered && event->type == RE::TESFurnitureEvent::FurnitureEventType::kEnter)
         return RE::BSEventNotifyControl::kContinue;
     if (!furniture_entered && event->type == RE::TESFurnitureEvent::FurnitureEventType::kExit)
