@@ -93,6 +93,8 @@ struct Source {
 
     [[nodiscard]] const Stage& GetDecayedStage() const { return decayed_stage; }
 
+    [[nodiscard]] bool ShouldFreezeEvolution(RE::TESObjectREFR* ref) const;
+
     [[nodiscard]] bool ShouldFreezeEvolution(const FormID loc_formid) const {
         return !settings.containers.empty() && !settings.containers.contains(loc_formid);
     }
