@@ -32,16 +32,22 @@ void __stdcall UI::RenderSettings() {
                         bool temp = Settings::world_objects_evolve.load();
                         IniSettingToggle(temp, setting_name, section_name,
                                          "Allows items out in the world to transform.");
-                        Settings::world_objects_evolve.store(temp);
+                        if (!Settings::world_objects_evolve.exchange(temp) && temp) {
+                            M->RequestWorldUpdate();
+                        }
                     } else if (setting_name == "PlacedObjectsEvolve") {
                         bool temp = Settings::placed_objects_evolve.load();
                         IniSettingToggle(temp, setting_name, section_name,
                                          "Allows hand-placed objects (vanilla or by mods) to transform.");
-                        Settings::placed_objects_evolve.store(temp);
+                        if (!Settings::placed_objects_evolve.exchange(temp) && temp) {
+                            M->RequestWorldUpdate();
+                        }
                     } else if (setting_name == "UnOwnedObjectsEvolve") {
                         bool temp = Settings::unowned_objects_evolve.load();
                         IniSettingToggle(temp, setting_name, section_name, "Allows unowned objects to transform.");
-                        Settings::unowned_objects_evolve.store(temp);
+                        if (!Settings::unowned_objects_evolve.exchange(temp) && temp) {
+                            M->RequestWorldUpdate();
+                        }
                     } else {
                         // we just want to display the settings in read only mode
                         ImGuiMCP::Text(setting_name.c_str());

@@ -266,6 +266,17 @@ void Manager::RequestRefUpdate(RE::TESObjectREFR* ref, const bool skip_if_queued
     MarkDirty_(ref);
 }
 
+void Manager::RequestWorldUpdate() {
+    SKSE::GetTaskInterface()->AddTask([this] {
+        SRC_SHARED_GUARD;
+        for (const auto refid : loc_to_sources | std::views::keys) {
+            if (const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(refid); ref && !ref->HasContainer()) {
+                RequestRefUpdate(ref);
+            }
+        }
+    });
+}
+
 void Manager::QueueRefNotification(const RefID refid) {
     if (pending_notifications_.insert(refid).second && pending_notifications_.size() == 1) {
         SKSE::GetTaskInterface()->AddTask([this]() { SendRefNotifications(); });
@@ -1304,7 +1315,7 @@ void Manager::UpdateQueuedWO(const RefInfo& ref_info, const float curr_time) {
         RefStop a_ref_stop(refid, QueueInfo::UpdateType::kWorldObject);
         UpdateRefStop(*source, wo_inst, a_ref_stop, next_update);
         QueueRefUpdate(a_ref_stop);
-    } else {
+    } else if (!wo_inst.xtra.is_decayed) {
         QueueRefDelete(refid);
     }
 
@@ -1374,7 +1385,7 @@ void Manager::UpdateWO(RE::TESObjectREFR* ref) {
         RefStop a_ref_stop(refid, QueueInfo::UpdateType::kWorldObject);
         UpdateRefStop(*source, wo_inst, a_ref_stop, next_update);
         QueueRefUpdate(a_ref_stop);
-    } else {
+    } else if (!wo_inst.xtra.is_decayed) {
         QueueRefDelete(refid);
     }
 
