@@ -1304,6 +1304,8 @@ void Manager::UpdateQueuedWO(const RefInfo& ref_info, const float curr_time) {
         RefStop a_ref_stop(refid, QueueInfo::UpdateType::kWorldObject);
         UpdateRefStop(*source, wo_inst, a_ref_stop, next_update);
         QueueRefUpdate(a_ref_stop);
+    } else {
+        QueueRefDelete(refid);
     }
 
     CleanUpSourceData(source, refid);
@@ -1372,6 +1374,8 @@ void Manager::UpdateWO(RE::TESObjectREFR* ref) {
         RefStop a_ref_stop(refid, QueueInfo::UpdateType::kWorldObject);
         UpdateRefStop(*source, wo_inst, a_ref_stop, next_update);
         QueueRefUpdate(a_ref_stop);
+    } else {
+        QueueRefDelete(refid);
     }
 
     CleanUpSourceData(source, refid);
@@ -1478,10 +1482,11 @@ void Manager::Register(const FormID some_formid, const Count count, const RefID 
         ApplyStageInWorld(ref, src->GetStage(stage_no), bound);
         src->UpdateWorldItemTrigger(ref, *inserted_instance, register_time);
         // add to the queue
-        const auto hitting_time = src->GetNextUpdateTime(inserted_instance);
-        RefStop a_ref_stop(location_refid, QueueInfo::UpdateType::kWorldObject);
-        UpdateRefStop(*src, *inserted_instance, a_ref_stop, hitting_time);
-        QueueRefUpdate(a_ref_stop);
+        if (const auto hitting_time = src->GetNextUpdateTime(inserted_instance); hitting_time > 0.f) {
+            RefStop a_ref_stop(location_refid, QueueInfo::UpdateType::kWorldObject);
+            UpdateRefStop(*src, *inserted_instance, a_ref_stop, hitting_time);
+            QueueRefUpdate(a_ref_stop);
+        }
         UpdateLocationIndexForSource(*src, location_refid);
     }
 }

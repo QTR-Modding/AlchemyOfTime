@@ -558,7 +558,7 @@ float Source::GetNextUpdateTime(const StageInstance* st_inst) {
     const auto delay_slope = st_inst->GetDelaySlope();
     if (std::abs(delay_slope) < EPSILON) {
         //logger::warn("Delay slope is 0.");
-        return std::numeric_limits<float>::infinity();
+        return triggers.contains(st_inst->no) ? std::numeric_limits<float>::infinity() : 0.f;
     }
 
     if (st_inst->xtra.is_transforming) {
@@ -601,7 +601,7 @@ float Source::GetNextUpdateTime(const StageInstance* st_inst) const {
     const auto delay_slope = st_inst->GetDelaySlope();
     if (std::abs(delay_slope) < EPSILON) {
         //logger::warn("Delay slope is 0.");
-        return std::numeric_limits<float>::infinity();
+        return triggers.contains(st_inst->no) ? std::numeric_limits<float>::infinity() : 0.f;
     }
 
     if (st_inst->xtra.is_transforming) {
