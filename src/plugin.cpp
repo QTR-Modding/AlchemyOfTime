@@ -4,7 +4,7 @@
 #include "MCP.h"
 #include "Manager.h"
 #include "Queue.h"
-#include "Threading.h"
+#include "CLibUtilsQTR/SpeedProfiler.hpp"
 
 namespace {
     // ReSharper disable once CppParameterMayBeConstPtrOrRef
@@ -27,7 +27,7 @@ namespace {
 
             // 2) Load settings
             {
-                SpeedProfiler prof("LoadSettings");
+                clib_utilsQTR::SpeedProfiler prof("LoadSettings");
                 PresetParse::LoadSettingsParallel();
             }
             if (Settings::failed_to_load) {
@@ -89,6 +89,6 @@ SKSEPluginLoad(const SKSE::LoadInterface *skse) {
         // ReSharper disable once CppUnreachableCode
         return false;
     }
-    logger::info("Number of threads: {}", numThreads);
+    logger::info("Number of threads: {}", std::max(1u, std::thread::hardware_concurrency()));
     return true;
 }
