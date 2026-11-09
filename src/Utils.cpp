@@ -20,6 +20,63 @@ namespace {
     }
 }
 
+RE::ExtraDataList* Utils::CopyExtraData(RE::ExtraDataList* source) {
+    RE::ExtraDataList* copy = nullptr;
+    for (const auto& extra : *source) {
+        RE::BSExtraData* copied = nullptr;
+        switch (extra.GetType()) {
+            case RE::ExtraDataType::kOwnership:
+                copied = new RE::ExtraOwnership(static_cast<const RE::ExtraOwnership&>(extra).owner);
+                break;
+            default:
+                continue;
+        }
+        if (!copy) {
+            copy = RE::ExtraDataList::Create();
+        }
+        copy->Add(copied);
+    }
+    return copy;
+}
+
+void Utils::ExtraDataTransfer::Remove(RE::TESObjectREFR* inventory, RE::TESBoundObject* item, const Count count) {
+    source = item;
+    const auto previous = std::exchange(current, this);
+    const SKSE::stl::scope_exit restore{[previous] { current = previous; }};
+    inventory->RemoveItem(item, count, RE::ITEM_REMOVE_REASON::kRemove, nullptr, nullptr);
+}
+
+void Utils::ExtraDataTransfer::Add(RE::TESObjectREFR* inventory, RE::TESBoundObject* item, Count count) {
+    for (const auto extra : extraLists) {
+        const auto amount = extra->GetCount();
+        inventory->AddObjectToContainer(item, extra, amount, nullptr);
+        count -= amount;
+    }
+    if (count > 0) {
+        inventory->AddObjectToContainer(item, nullptr, count, nullptr);
+    }
+}
+
+void Utils::ExtraDataTransfer::Capture(RE::InventoryEntryData* entry) {
+    if (!current || entry->object != current->source || !entry->extraLists) {
+        return;
+    }
+    // Split-stack entries can have countDelta == 0; use each extra list's count.
+    for (const auto instance : *entry->extraLists) {
+        if (!instance) {
+            continue;
+        }
+        const auto count = instance->GetCount();
+        if (count <= 0) {
+            continue;
+        }
+        if (const auto copy = CopyExtraData(instance)) {
+            copy->SetCount(static_cast<std::uint16_t>(count));
+            current->extraLists.push_back(copy);
+        }
+    }
+}
+
 std::string Utils::DecodeTypeCode(const std::uint32_t typeCode) {
     char buf[4];
     buf[3] = static_cast<char>(typeCode);

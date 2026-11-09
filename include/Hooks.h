@@ -32,6 +32,12 @@ namespace Hooks {
         static void Install();
     };
 
+    struct ExtraDataHook {
+        static void DeleteExtraDataLists(RE::InventoryEntryData* entry);
+        static inline REL::Relocation<decltype(DeleteExtraDataLists)> DeleteExtraDataLists_;
+        static void Install();
+    };
+
     struct ArtObjectHook {
         static bool Attach(RE::ModelReferenceEffect* a_this);
         static inline REL::Relocation<decltype(Attach)> Attach_;

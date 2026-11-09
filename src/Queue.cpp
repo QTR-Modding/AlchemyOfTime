@@ -113,12 +113,18 @@ bool QueueManager::ProcessPendingMoves(const int n_tasks) {
             // 2) Execute tasks without touching InventoryEntryData pointers again
             for (const auto& [add, remove] : tasks) {
                 Count removed_count = 0;
+                const auto replacement = RE::TESForm::LookupByID<RE::TESBoundObject>(add.item_id);
+                Utils::ExtraDataTransfer transfer;
 
                 if (remove.count > 0) {
                     if (const FormID rid = remove.item_id; rid != 0 && !questLocked.contains(rid)) {
                         if (const auto item = RE::TESForm::LookupByID<RE::TESBoundObject>(rid)) {
                             if (const Count canRemove = std::min(available[rid], remove.count); canRemove > 0) {
-                                owner->RemoveItem(item, canRemove, RE::ITEM_REMOVE_REASON::kRemove, nullptr, nullptr);
+                                if (replacement) {
+                                    transfer.Remove(owner, item, canRemove);
+                                } else {
+                                    owner->RemoveItem(item, canRemove, RE::ITEM_REMOVE_REASON::kRemove, nullptr, nullptr);
+                                }
                                 available[rid] -= canRemove;
                                 removed_count = canRemove;
                             }
@@ -126,10 +132,9 @@ bool QueueManager::ProcessPendingMoves(const int n_tasks) {
                     }
                 }
 
-                if (const Count add_count = (remove.count > 0) ? removed_count : add.count; add_count > 0) {
-                    if (const auto item = RE::TESForm::LookupByID<RE::TESBoundObject>(add.item_id)) {
-                        owner->AddObjectToContainer(item, nullptr, add_count, nullptr);
-                    }
+                if (const Count add_count = (remove.count > 0) ? removed_count : add.count;
+                    replacement && add_count > 0) {
+                    transfer.Add(owner, replacement, add_count);
                 }
             }
         }
