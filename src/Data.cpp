@@ -528,6 +528,7 @@ void Source::UpdateWorldItemTrigger(RE::TESObjectREFR* wo, StageInstance& wo_ins
     if (ShouldFreezeEvolution(wo)) {
         wo_inst.RemoveTimeMod(_time);
         wo_inst.SetDelay(_time, 0, trigger);
+        wo_inst.xtra.is_transforming = settings.transformers.contains(trigger);
         return;
     }
 
