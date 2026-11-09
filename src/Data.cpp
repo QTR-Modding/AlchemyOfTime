@@ -190,6 +190,7 @@ std::vector<StageUpdate> Source::UpdateAllStages(RefID a_refID, const float time
             auto is_fake_ = IsFakeStage(instance.no);
             updated_instances.emplace_back(old_stage, new_stage ? new_stage : &GetStage(instance.no),
                                            instance.count, instance.start_time, is_fake_);
+            M->QueueRefNotification(a_refID);
         }
     }
     return updated_instances;
@@ -507,17 +508,31 @@ bool Source::IsDecayedItem(const FormID _form_id) const {
                                });
 }
 
+bool Source::ShouldFreezeEvolution(RE::TESObjectREFR* ref) const {
+    return !Settings::world_objects_evolve.load() ||
+           (!Settings::placed_objects_evolve.load() && Utils::WorldObject::IsPlacedObject(ref)) ||
+           (!Settings::unowned_objects_evolve.load() && RE::PlayerCharacter::GetSingleton()->WouldBeStealing(ref)) ||
+           ShouldFreezeEvolution(ref->GetBaseObject()->GetFormID());
+}
+
 void Source::UpdateWorldItemTrigger(RE::TESObjectREFR* wo, StageInstance& wo_inst, const float _time) const {
     if (wo_inst.count <= 0) return;
-    const auto a_loc_base = wo->GetBaseObject()->GetFormID();
-    if (ShouldFreezeEvolution(a_loc_base)) {
+    const auto previous_trigger = wo_inst.GetDelayerFormID();
+    const SKSE::stl::scope_exit notify{[&]() {
+        if (wo_inst.GetDelayerFormID() != previous_trigger) {
+            M->QueueRefNotification(wo->GetFormID());
+        }
+    }};
+    const auto it = triggers.find(wo_inst.no);
+    const auto trigger = it != triggers.end() ? FindWorldTrigger(wo, it->second) : 0;
+    if (ShouldFreezeEvolution(wo)) {
         wo_inst.RemoveTimeMod(_time);
-        wo_inst.SetDelay(_time, 0, 0);  // freeze
+        wo_inst.SetDelay(_time, 0, trigger);
+        wo_inst.xtra.is_transforming = settings.transformers.contains(trigger);
         return;
     }
 
-    const auto it = triggers.find(wo_inst.no);
-    if (const auto trigger = it != triggers.end() ? FindWorldTrigger(wo, it->second) : 0) {
+    if (trigger) {
         SetDelayOfInstance(wo_inst, _time, trigger);
     } else {
         wo_inst.RemoveTimeMod(_time);
@@ -543,7 +558,7 @@ float Source::GetNextUpdateTime(const StageInstance* st_inst) {
     const auto delay_slope = st_inst->GetDelaySlope();
     if (std::abs(delay_slope) < EPSILON) {
         //logger::warn("Delay slope is 0.");
-        return st_inst->GetDelayerFormID() ? std::numeric_limits<float>::infinity() : 0.f;
+        return std::numeric_limits<float>::infinity();
     }
 
     if (st_inst->xtra.is_transforming) {
@@ -586,7 +601,7 @@ float Source::GetNextUpdateTime(const StageInstance* st_inst) const {
     const auto delay_slope = st_inst->GetDelaySlope();
     if (std::abs(delay_slope) < EPSILON) {
         //logger::warn("Delay slope is 0.");
-        return st_inst->GetDelayerFormID() ? std::numeric_limits<float>::infinity() : 0.f;
+        return std::numeric_limits<float>::infinity();
     }
 
     if (st_inst->xtra.is_transforming) {
@@ -824,6 +839,9 @@ bool Source::UpdateStageInstanceHelper(StageInstance& st_inst, const float curr_
 
 bool Source::UpdateStageInstance(StageInstance& st_inst, const float curr_time) {
     if (st_inst.xtra.is_decayed) return false; // decayed
+    if (std::abs(st_inst.GetDelaySlope()) < EPSILON) {
+        return false;
+    }
 
     const auto curr_delayer = st_inst.GetDelayerFormID(); // curr transformer or delayer
 
@@ -908,6 +926,12 @@ Stage Source::GetTransformedStage(const FormID key_formid) const {
 void Source::SetDelayOfInstance(StageInstance& instance, const UpdateTime time, QueueInfo& queue_info,
                                 const Utils::Inventory::Snapshot& a_inv) const {
     if (instance.count <= 0 || instance.xtra.is_decayed) return;
+    const auto previous_trigger = instance.GetDelayerFormID();
+    const SKSE::stl::scope_exit notify{[&]() {
+        if (instance.GetDelayerFormID() != previous_trigger) {
+            M->QueueRefNotification(queue_info.ref_info.ref_id);
+        }
+    }};
 
     if (ShouldFreezeEvolution(queue_info.ref_info.base_id)) {
         instance.RemoveTimeMod(time.hours);

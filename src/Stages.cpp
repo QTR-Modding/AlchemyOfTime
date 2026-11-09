@@ -75,7 +75,7 @@ void StageInstance::SetDelay(const float time, const float delay, const FormID f
 
 void StageInstance::SetTransform(const float time, const FormID formid) {
     if (xtra.is_transforming) {
-        if (_delay_formid != formid) {
+        if (_delay_formid != formid || fabs(_delay_mag) < EPSILON) {
             RemoveTransform(time);
             return SetTransform(time, formid);
         }

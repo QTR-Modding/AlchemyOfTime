@@ -19,6 +19,7 @@
       "features": [ "hooks", "skyrim", "yaml-skyrim" ]
     },
     "skse-mcp",
+    "containerize-api",
     "tsl-ordered-map",
     "yaml-cpp"
   ],

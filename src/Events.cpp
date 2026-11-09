@@ -12,7 +12,6 @@ void EventSink::HandleRef(RE::TESObjectREFR* ref, const bool skip_if_queued) {
     }
     if (!ref->HasContainer()) {
         if (!Settings::IsItem(ref)) return;
-        if (!Settings::placed_objects_evolve.load() && Utils::WorldObject::IsPlacedObject(ref)) return;
     }
 
     M->RequestRefUpdate(ref, skip_if_queued);

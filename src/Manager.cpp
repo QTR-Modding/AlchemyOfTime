@@ -266,6 +266,29 @@ void Manager::RequestRefUpdate(RE::TESObjectREFR* ref, const bool skip_if_queued
     MarkDirty_(ref);
 }
 
+void Manager::QueueRefNotification(const RefID refid) {
+    if (pending_notifications_.insert(refid).second && pending_notifications_.size() == 1) {
+        SKSE::GetTaskInterface()->AddTask([this]() { SendRefNotifications(); });
+    }
+}
+
+void Manager::SendRefNotifications() {
+    std::unordered_set<RefID> changed;
+    {
+        SRC_UNIQUE_GUARD;
+        changed.swap(pending_notifications_);
+    }
+    if (isLoading.load() || isUninstalled.load()) {
+        return;
+    }
+    for (const auto refid : changed) {
+        if (const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(refid)) {
+            const SKSE::ModCallbackEvent event{AoT_API::kReferenceUpdated, {}, 0.f, ref};
+            SKSE::GetModCallbackEventSource()->SendEvent(&event);
+        }
+    }
+}
+
 bool Manager::IsRefQueued(const RefID refid) {
     QUE_SHARED_GUARD;
     return _ref_stops_.contains(refid) && !queue_delete_.contains(refid);
@@ -457,18 +480,9 @@ void Manager::PreDeleteRefStop(RefStop& a_ref_stop) {
 void Manager::UpdateLoop() {
     if (isLoading.load() || isUninstalled.load()) return;
 
-    if (QUE_UNIQUE_GUARD;
-        !queue_delete_.empty() || !Settings::world_objects_evolve.load() || !Settings::placed_objects_evolve.load()) {
+    if (QUE_UNIQUE_GUARD; !queue_delete_.empty()) {
         for (auto it = _ref_stops_.begin(); it != _ref_stops_.end();) {
-            bool remove = queue_delete_.contains(it->first);
-            if (!remove && it->second.update_type == QueueInfo::UpdateType::kWorldObject) {
-                remove = !Settings::world_objects_evolve.load();
-                if (!remove && !Settings::placed_objects_evolve.load()) {
-                    const auto ref = it->second.GetRef();
-                    remove = ref && Utils::WorldObject::IsPlacedObject(ref);
-                }
-            }
-            if (remove) {
+            if (queue_delete_.contains(it->first)) {
                 PreDeleteRefStop(it->second);
                 it = _ref_stops_.erase(it);
             } else ++it;
@@ -527,10 +541,6 @@ void Manager::UpdateLoop() {
 
 void Manager::QueueRefUpdate(const RefStop& a_refstop) {
     if (a_refstop.update_type == QueueInfo::UpdateType::kNone) return;
-    if (a_refstop.update_type == QueueInfo::UpdateType::kWorldObject &&
-        !Settings::world_objects_evolve.load()) {
-        return;
-    }
 
     bool needStart;
     {
@@ -1256,16 +1266,18 @@ void Manager::UpdateQueuedWO(const RefInfo& ref_info, const float curr_time) {
         }
     }
 
-    if (const auto updated_stages = source->UpdateAllStages(refid, curr_time);
-        !updated_stages.empty()) {
-        if (updated_stages.size() > 1) {
-            logger::error("UpdateQueuedWO: Multiple updates for the same ref.");
-        }
-        const auto& update = updated_stages.front();
-        const auto src_bound = source->IsFakeStage(update.newstage->no) ? source->GetBoundObject() : nullptr;
-        ApplyStageInWorld(ref, *update.newstage, src_bound);
-        if (source->IsDecayedItem(update.newstage->formid)) {
-            Register(update.newstage->formid, update.count, refid, update.update_time);
+    if (!source->ShouldFreezeEvolution(ref)) {
+        if (const auto updated_stages = source->UpdateAllStages(refid, curr_time);
+            !updated_stages.empty()) {
+            if (updated_stages.size() > 1) {
+                logger::error("UpdateQueuedWO: Multiple updates for the same ref.");
+            }
+            const auto& update = updated_stages.front();
+            const auto src_bound = source->IsFakeStage(update.newstage->no) ? source->GetBoundObject() : nullptr;
+            ApplyStageInWorld(ref, *update.newstage, src_bound);
+            if (source->IsDecayedItem(update.newstage->formid)) {
+                Register(update.newstage->formid, update.count, refid, update.update_time);
+            }
         }
     }
 
@@ -1332,16 +1344,18 @@ void Manager::UpdateWO(RE::TESObjectREFR* ref) {
         return;
     }
 
-    if (const auto updated_stages = source->UpdateAllStages(refid, curr_time);
-        !updated_stages.empty()) {
-        if (updated_stages.size() > 1) {
-            logger::error("UpdateWO: Multiple updates for the same ref.");
-        }
-        const auto& update = updated_stages.front();
-        const auto bound = source->IsFakeStage(update.newstage->no) ? source->GetBoundObject() : nullptr;
-        ApplyStageInWorld(ref, *update.newstage, bound);
-        if (source->IsDecayedItem(update.newstage->formid)) {
-            Register(update.newstage->formid, update.count, refid, update.update_time);
+    if (!source->ShouldFreezeEvolution(ref)) {
+        if (const auto updated_stages = source->UpdateAllStages(refid, curr_time);
+            !updated_stages.empty()) {
+            if (updated_stages.size() > 1) {
+                logger::error("UpdateWO: Multiple updates for the same ref.");
+            }
+            const auto& update = updated_stages.front();
+            const auto bound = source->IsFakeStage(update.newstage->no) ? source->GetBoundObject() : nullptr;
+            ApplyStageInWorld(ref, *update.newstage, bound);
+            if (source->IsDecayedItem(update.newstage->formid)) {
+                Register(update.newstage->formid, update.count, refid, update.update_time);
+            }
         }
     }
 
@@ -1380,12 +1394,8 @@ RefStop* Manager::GetRefStop(const RefID refid) {
 }
 
 bool Manager::RefIsUpdatable(const RE::TESObjectREFR* ref) {
-    if (!Settings::world_objects_evolve.load()) return false;
     if (!Utils::WorldObject::IsActive(ref)) return false;
     if (ref->IsActivationBlocked()) return false;
-    if (!Settings::unowned_objects_evolve.load() && RE::PlayerCharacter::GetSingleton()->WouldBeStealing(ref)) {
-        return false;
-    }
     if (!ref->GetObjectReference()) return false;
     return true;
 }
@@ -1709,6 +1719,7 @@ void Manager::Reset() {
         sources.clear();
         stage_to_sources.clear();
         loc_to_sources.clear();
+        pending_notifications_.clear();
     }
 
     // external_favs.clear();         // we will update this in ReceiveData
