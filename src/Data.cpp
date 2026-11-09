@@ -172,7 +172,7 @@ std::vector<StageUpdate> Source::UpdateAllStages(RefID a_refID, const float time
     }
     for (auto& instances = data.at(a_refID); auto& instance : instances) {
         const Stage* old_stage = IsStageNo(instance.no) ? &GetStage(instance.no) : nullptr;
-        if (UpdateStageInstance(instance, time, a_refID)) {
+        if (UpdateStageInstance(instance, time)) {
             const Stage* new_stage = nullptr;
             if (instance.xtra.is_transforming) {
                 instance.xtra.is_decayed = true;
@@ -510,18 +510,24 @@ bool Source::IsDecayedItem(const FormID _form_id) const {
 
 void Source::UpdateWorldItemTrigger(RE::TESObjectREFR* wo, StageInstance& wo_inst, const float _time) const {
     if (wo_inst.count <= 0) return;
+    const auto previous_trigger = wo_inst.GetDelayerFormID();
+    const SKSE::stl::scope_exit notify{[&]() {
+        if (wo_inst.GetDelayerFormID() != previous_trigger) {
+            M->QueueRefNotification(wo->GetFormID());
+        }
+    }};
     const auto a_loc_base = wo->GetBaseObject()->GetFormID();
     if (ShouldFreezeEvolution(a_loc_base)) {
-        wo_inst.RemoveTimeMod(_time, wo->GetFormID());
-        wo_inst.SetDelay(_time, 0, 0, wo->GetFormID());  // freeze
+        wo_inst.RemoveTimeMod(_time);
+        wo_inst.SetDelay(_time, 0, 0);  // freeze
         return;
     }
 
     const auto it = triggers.find(wo_inst.no);
     if (const auto trigger = it != triggers.end() ? FindWorldTrigger(wo, it->second) : 0) {
-        SetDelayOfInstance(wo_inst, _time, trigger, wo->GetFormID());
+        SetDelayOfInstance(wo_inst, _time, trigger);
     } else {
-        wo_inst.RemoveTimeMod(_time, wo->GetFormID());
+        wo_inst.RemoveTimeMod(_time);
     }
 }
 
@@ -620,7 +626,7 @@ void Source::CleanUpData() {
     uint32_t removed = 0;
 
     const auto curr_time = RE::Calendar::GetSingleton()->GetHoursPassed();
-    for (auto& [owner, instances] : data) {
+    for (auto& instances : data | std::views::values) {
         if (instances.empty()) continue;
         if (instances.size() > 1) {
             for (auto it = instances.begin(); it + 1 != instances.end(); ++it) {
@@ -648,11 +654,11 @@ void Source::CleanUpData() {
             if (it->xtra.is_transforming) {
                 if (!settings.transformers.contains(curr_delayer)) {
                     logger::warn("Transformer FormID {:x} not found in default settings.", curr_delayer);
-                    it->RemoveTimeMod(curr_time, owner);
+                    it->RemoveTimeMod(curr_time);
                 }
             } else if (curr_delayer != 0 && !settings.delayers.contains(curr_delayer)) {
                 logger::warn("Delayer FormID {:x} not found in default settings.", curr_delayer);
-                it->RemoveTimeMod(curr_time, owner);
+                it->RemoveTimeMod(curr_time);
             }
 
             if (curr_time - GetDecayTime(*it) > static_cast<float>(Settings::nForgettingTime)) {
@@ -725,11 +731,11 @@ void Source::CleanUpData(const RefID a_loc) {
         if (it->xtra.is_transforming) {
             if (!settings.transformers.contains(curr_delayer)) {
                 logger::warn("Transformer FormID {:x} not found in default settings.", curr_delayer);
-                it->RemoveTimeMod(curr_time, a_loc);
+                it->RemoveTimeMod(curr_time);
             }
         } else if (curr_delayer != 0 && !settings.delayers.contains(curr_delayer)) {
             logger::warn("Delayer FormID {:x} not found in default settings.", curr_delayer);
-            it->RemoveTimeMod(curr_time, a_loc);
+            it->RemoveTimeMod(curr_time);
         }
 
         if (curr_time - GetDecayTime(*it) > static_cast<float>(Settings::nForgettingTime)) {
@@ -788,7 +794,7 @@ void Source::Reset() {
 }
 
 bool Source::UpdateStageInstanceHelper(StageInstance& st_inst, const float curr_time,
-                                       const std::unordered_set<StageNo>& a_allowed_delayer_stages, const RefID owner) {
+                                       const std::unordered_set<StageNo>& a_allowed_delayer_stages) {
     if (st_inst.xtra.is_decayed) return false;
 
     const bool is_backwards = st_inst.GetDelaySlope() < 0;
@@ -814,7 +820,7 @@ bool Source::UpdateStageInstanceHelper(StageInstance& st_inst, const float curr_
         st_inst.SetNewStart(hit_t);
 
         if (!a_allowed_delayer_stages.contains(st_inst.no)) {
-            st_inst.RemoveTimeMod(hit_t, owner);
+            st_inst.RemoveTimeMod(hit_t);
         }
 
         return true;
@@ -823,7 +829,7 @@ bool Source::UpdateStageInstanceHelper(StageInstance& st_inst, const float curr_
     return false;
 }
 
-bool Source::UpdateStageInstance(StageInstance& st_inst, const float curr_time, const RefID owner) {
+bool Source::UpdateStageInstance(StageInstance& st_inst, const float curr_time) {
     if (st_inst.xtra.is_decayed) return false; // decayed
 
     const auto curr_delayer = st_inst.GetDelayerFormID(); // curr transformer or delayer
@@ -831,7 +837,7 @@ bool Source::UpdateStageInstance(StageInstance& st_inst, const float curr_time, 
     if (st_inst.xtra.is_transforming) {
         if (!settings.transformers.contains(curr_delayer)) {
             logger::error("Transformer Formid {:x} not found in default settings.", curr_delayer);
-            st_inst.RemoveTimeMod(curr_time, owner);
+            st_inst.RemoveTimeMod(curr_time);
             return false;
         }
         if (const auto hit_t = st_inst.GetTransformHittingTime(settings.transformers.at(curr_delayer).second);
@@ -860,7 +866,7 @@ bool Source::UpdateStageInstance(StageInstance& st_inst, const float curr_time, 
 
     if (curr_delayer != 0 && !settings.delayers.contains(curr_delayer)) {
         logger::error("Delayer Formid {:x} not found in default settings.", curr_delayer);
-        st_inst.RemoveTimeMod(curr_time, owner);
+        st_inst.RemoveTimeMod(curr_time);
         return false;
     }
 
@@ -868,7 +874,7 @@ bool Source::UpdateStageInstance(StageInstance& st_inst, const float curr_time, 
     const std::unordered_set<StageNo> allowed_delayer_stages = curr_delayer != 0
                                                                    ? settings.delayer_allowed_stages.at(curr_delayer)
                                                                    : std::unordered_set<StageNo>{};
-    while (UpdateStageInstanceHelper(st_inst, curr_time, allowed_delayer_stages, owner)) {
+    while (UpdateStageInstanceHelper(st_inst, curr_time, allowed_delayer_stages)) {
         updated = true;
     }
 
@@ -909,39 +915,44 @@ Stage Source::GetTransformedStage(const FormID key_formid) const {
 void Source::SetDelayOfInstance(StageInstance& instance, const UpdateTime time, QueueInfo& queue_info,
                                 const Utils::Inventory::Snapshot& a_inv) const {
     if (instance.count <= 0 || instance.xtra.is_decayed) return;
+    const auto previous_trigger = instance.GetDelayerFormID();
+    const SKSE::stl::scope_exit notify{[&]() {
+        if (instance.GetDelayerFormID() != previous_trigger) {
+            M->QueueRefNotification(queue_info.ref_info.ref_id);
+        }
+    }};
 
     if (ShouldFreezeEvolution(queue_info.ref_info.base_id)) {
-        instance.RemoveTimeMod(time.hours, queue_info.ref_info.ref_id);
-        instance.SetDelay(time.hours, 0, 0, queue_info.ref_info.ref_id); // freeze
+        instance.RemoveTimeMod(time.hours);
+        instance.SetDelay(time.hours, 0, 0); // freeze
         return;
     }
 
     if (const auto transformer_best =
             GetTriggerInInventory(settings.transformers | std::views::keys, settings.transformer_allowed_stages,
                               settings.transformer_containers, a_inv, queue_info, instance, time.phase)) {
-        SetDelayOfInstance(instance, time.hours, transformer_best, queue_info.ref_info.ref_id);
+        SetDelayOfInstance(instance, time.hours, transformer_best);
     } else if (const auto delayer_best =
                    GetTriggerInInventory(settings.delayers | std::views::keys, settings.delayer_allowed_stages,
                               settings.delayer_containers, a_inv, queue_info, instance, time.phase)) {
-        SetDelayOfInstance(instance, time.hours, delayer_best, queue_info.ref_info.ref_id);
+        SetDelayOfInstance(instance, time.hours, delayer_best);
     } else {
-        instance.RemoveTimeMod(time.hours, queue_info.ref_info.ref_id);
+        instance.RemoveTimeMod(time.hours);
     }
 }
 
-void Source::SetDelayOfInstance(StageInstance& instance, const float a_time, const FormID a_modulator,
-                                const RefID owner) const {
+void Source::SetDelayOfInstance(StageInstance& instance, const float a_time, const FormID a_modulator) const {
     if (settings.transformers.contains(a_modulator)) {
-        instance.SetTransform(a_time, a_modulator, owner);
+        instance.SetTransform(a_time, a_modulator);
         return;
     }
-    instance.RemoveTransform(a_time, owner);
+    instance.RemoveTransform(a_time);
     const float delay_ = !a_modulator
                              ? 1
                              : settings.delayers.contains(a_modulator)
                              ? settings.delayers.at(a_modulator)
                              : 1;
-    instance.SetDelay(a_time, delay_, a_modulator, owner);
+    instance.SetDelay(a_time, delay_, a_modulator);
 }
 
 bool Source::CheckIntegrity() {

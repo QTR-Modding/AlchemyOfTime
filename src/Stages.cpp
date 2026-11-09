@@ -1,5 +1,4 @@
 #include "Stages.h"
-#include "Manager.h"
 #include "Settings.h"
 #include "CLibUtilsQTR/FormReader.hpp"
 
@@ -62,15 +61,7 @@ void StageInstance::SetNewStart(const float curr_time, const float overshot) {
     _elapsed = 0;
 }
 
-void StageInstance::SetDelayer(const FormID formid, const RefID owner) {
-    if (_delay_formid == formid) {
-        return;
-    }
-    _delay_formid = formid;
-    M->QueueRefNotification(owner);
-}
-
-void StageInstance::SetDelay(const float time, const float delay, const FormID formid, const RefID owner) {
+void StageInstance::SetDelay(const float time, const float delay, const FormID formid) {
     // yeni steigungla yeni ausgangspunkt yapiyoruz
     // call only from UpdateInventoryItemTriggers
     if (xtra.is_transforming) return;
@@ -79,32 +70,32 @@ void StageInstance::SetDelay(const float time, const float delay, const FormID f
     _elapsed = GetElapsed(time);
     _delay_start = time;
     _delay_mag = delay;
-    SetDelayer(formid, owner);
+    _delay_formid = formid;
 }
 
-void StageInstance::SetTransform(const float time, const FormID formid, const RefID owner) {
+void StageInstance::SetTransform(const float time, const FormID formid) {
     if (xtra.is_transforming) {
         if (_delay_formid != formid) {
-            RemoveTransform(time, owner);
-            return SetTransform(time, formid, owner);
+            RemoveTransform(time);
+            return SetTransform(time, formid);
         }
         return;
     }
-    SetDelay(time, 1, formid, owner);
+    SetDelay(time, 1, formid);
     xtra.is_transforming = true;
 }
 
-void StageInstance::RemoveTransform(const float curr_time, const RefID owner) {
+void StageInstance::RemoveTransform(const float curr_time) {
     if (!xtra.is_transforming) return;
     xtra.is_transforming = false;
     _delay_start = curr_time;
     _delay_mag = 1;
-    SetDelayer(0, owner);
+    _delay_formid = 0;
 }
 
-void StageInstance::RemoveTimeMod(const float time, const RefID owner) {
-    RemoveTransform(time, owner);
-    SetDelay(time, 1, 0, owner);
+void StageInstance::RemoveTimeMod(const float time) {
+    RemoveTransform(time);
+    SetDelay(time, 1, 0);
 }
 
 StageInstancePlain StageInstance::GetPlain() const {

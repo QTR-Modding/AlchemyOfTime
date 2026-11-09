@@ -125,15 +125,15 @@ struct StageInstance {
     void SetNewStart(float start_t);
     void SetNewStart(float curr_time, float overshot);
 
-    void SetDelay(float time, float delay, FormID formid, RefID owner);
+    void SetDelay(float time, float delay, FormID formid);
 
-    void SetTransform(float time, FormID formid, RefID owner);
+    void SetTransform(float time, FormID formid);
 
     [[nodiscard]] float GetTransformElapsed(const float curr_time) const { return GetElapsed(curr_time) - _elapsed; }
 
-    void RemoveTransform(float curr_time, RefID owner);
+    void RemoveTransform(float curr_time);
 
-    void RemoveTimeMod(float time, RefID owner);
+    void RemoveTimeMod(float time);
 
     [[nodiscard]] float GetDelayMagnitude() const { return GetDelaySlope(); }
 
@@ -154,8 +154,6 @@ struct StageInstance {
     void SetDelay(const StageInstancePlain& plain);
 
 private:
-    void SetDelayer(FormID formid, RefID owner);
-
     float _elapsed; // y coord of the ausgangspunkt/elapsed time since the stage started
     float _delay_start; // x coord of the ausgangspunkt
     float _delay_mag; // slope
