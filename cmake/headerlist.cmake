@@ -11,7 +11,6 @@ set(headers ${headers}
 	include/Serialization.h
 	include/CustomObjects.h
 	include/Data.h
-	include/Threading.h
 	include/Logger.h
 	include/Lorebox.h
 	include/CellScan.h
