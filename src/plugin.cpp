@@ -27,7 +27,7 @@ namespace {
 
             // 2) Load settings
             {
-                SpeedProfiler prof("LoadSettings");
+                clib_utilsQTR::SpeedProfiler prof("LoadSettings");
                 PresetParse::LoadSettingsParallel();
             }
             if (Settings::failed_to_load) {

@@ -454,7 +454,7 @@ namespace {
         futures.reserve(filenames.size());
 
         // Create a thread pool with available hardware threads
-        ThreadPool pool(numThreads);
+        clib_utilsQTR::ThreadPool pool(numThreads);
 
         // Parse files in parallel, then combine them in filename order.
         for (const auto& filename : filenames) {
@@ -570,7 +570,7 @@ namespace {
         std::ranges::sort(filenames, PresetFilenameLess);
         std::vector<std::future<std::unordered_map<FormID, AddOnSettings>>> futures;
         futures.reserve(filenames.size());
-        ThreadPool pool(numThreads);
+        clib_utilsQTR::ThreadPool pool(numThreads);
         for (const auto& filename : filenames) {
             futures.emplace_back(
                 pool.enqueue([filename, _type]() {
@@ -1135,7 +1135,7 @@ void PresetParse::LoadSettingsParallel() {
 
     std::vector<std::future<void>> typeFutures;
     typeFutures.reserve(Settings::QFORMS.size());
-    ThreadPool typePool(numThreads);
+    clib_utilsQTR::ThreadPool typePool(numThreads);
 
     std::mutex defaultsettingsMutex;
     std::mutex customsettingsMutex;

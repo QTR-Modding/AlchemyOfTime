@@ -1,7 +1,6 @@
 #include "Events.h"
 #include "Manager.h"
 #include "Settings.h"
-#include "Threading.h"
 
 void EventSink::HandleRef(RE::TESObjectREFR* ref, const bool skip_if_queued) {
     if (!ref) return;
