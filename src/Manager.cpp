@@ -266,6 +266,29 @@ void Manager::RequestRefUpdate(RE::TESObjectREFR* ref, const bool skip_if_queued
     MarkDirty_(ref);
 }
 
+void Manager::QueueRefNotification(const RefID refid) {
+    if (pending_notifications_.insert(refid).second && pending_notifications_.size() == 1) {
+        SKSE::GetTaskInterface()->AddTask([this]() { SendRefNotifications(); });
+    }
+}
+
+void Manager::SendRefNotifications() {
+    std::unordered_set<RefID> changed;
+    {
+        SRC_UNIQUE_GUARD;
+        changed.swap(pending_notifications_);
+    }
+    if (isLoading.load() || isUninstalled.load()) {
+        return;
+    }
+    for (const auto refid : changed) {
+        if (const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(refid)) {
+            const SKSE::ModCallbackEvent event{AoT_API::kReferenceUpdated, {}, 0.f, ref};
+            SKSE::GetModCallbackEventSource()->SendEvent(&event);
+        }
+    }
+}
+
 bool Manager::IsRefQueued(const RefID refid) {
     QUE_SHARED_GUARD;
     return _ref_stops_.contains(refid) && !queue_delete_.contains(refid);
@@ -1709,6 +1732,7 @@ void Manager::Reset() {
         sources.clear();
         stage_to_sources.clear();
         loc_to_sources.clear();
+        pending_notifications_.clear();
     }
 
     // external_favs.clear();         // we will update this in ReceiveData

@@ -116,8 +116,8 @@ private:
 
     // counta karismiyor
     [[nodiscard]] bool UpdateStageInstanceHelper(StageInstance& st_inst, float curr_time,
-                                                 const std::unordered_set<StageNo>& a_allowed_delayer_stages);
-    [[nodiscard]] bool UpdateStageInstance(StageInstance& st_inst, float curr_time);
+                                                 const std::unordered_set<StageNo>& a_allowed_delayer_stages, RefID owner);
+    [[nodiscard]] bool UpdateStageInstance(StageInstance& st_inst, float curr_time, RefID owner);
 
     template <typename T>
     void ApplyMGEFFSettings(T* stage_form, std::vector<StageEffect>& settings_effs) {
@@ -177,7 +177,7 @@ private:
 
     void SetDelayOfInstance(StageInstance& instance, UpdateTime time, QueueInfo& queue_info,
                             const Utils::Inventory::Snapshot& a_inv) const;
-    void SetDelayOfInstance(StageInstance& instance, float a_time, FormID a_modulator) const;
+    void SetDelayOfInstance(StageInstance& instance, float a_time, FormID a_modulator, RefID owner) const;
 
     [[nodiscard]] bool CheckIntegrity();
 

@@ -15,6 +15,9 @@ class Manager final : public Ticker, public SaveLoadData {
     std::shared_mutex dirty_mtx_;
     std::unordered_map<RefID, RE::ObjectRefHandle> dirty_refs_;
     std::atomic<int32_t> n_instances_{0};
+    std::unordered_set<RefID> pending_notifications_; // sourceMutex_
+
+    void SendRefNotifications();
 
     void MarkDirty_(RE::TESObjectREFR* r);
 
@@ -242,6 +245,9 @@ public:
 
     // Defer a reference check; discovery can skip references already being watched.
     void RequestRefUpdate(RE::TESObjectREFR* ref, bool skip_if_queued = false);
+
+    // [expects: sourceMutex_] (unique)
+    void QueueRefNotification(RefID refid);
 
     [[nodiscard]] bool IsRefQueued(RefID refid);
     [[nodiscard]] bool HasAppliedArtObject(RefID refid, FormID artid);

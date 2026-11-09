@@ -8,6 +8,10 @@
 namespace AoT_API {
     constexpr std::uint32_t interface_version = 1;
 
+    // SKSE mod event after stage or trigger changes.
+    // sender is the updated world reference or inventory owner.
+    constexpr auto kReferenceUpdated = "AoT_ReferenceUpdated";
+
     struct Progress {
         float startTime;      // Game hour when the current slope started.
         float elapsed;        // Progress accumulated before startTime, in game hours.
