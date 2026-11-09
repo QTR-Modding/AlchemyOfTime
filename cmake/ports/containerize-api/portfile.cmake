@@ -1,0 +1,10 @@
+vcpkg_from_github(
+    OUT_SOURCE_PATH SOURCE_PATH
+    REPO QTR-Modding/Containerize
+    REF c285646980ca1bbdeb28a0f2fb74725960dc2b8b
+    SHA512 2d8794fbe30f09f611d2282fc437cd868b4990b9de50ec30a5b67a748dc02e77e83b8d52b236fe58219410453c1b1a6e69e95b2e02405fc9c0b947b90345600d
+    HEAD_REF main
+)
+
+file(INSTALL "${SOURCE_PATH}/include/API.h" DESTINATION "${CURRENT_PACKAGES_DIR}/include/Containerize")
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE")
