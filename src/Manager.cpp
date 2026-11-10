@@ -1727,6 +1727,7 @@ void Manager::SwapWithStage(RE::TESObjectREFR* wo_ref) {
 void Manager::Reset() {
     logger::info("Resetting manager...");
     Stop();
+    ActivationQueue::GetSingleton()->Reset();
     ClearWOUpdateQueue();
     Scanner::GetSingleton()->Reset();
     {
