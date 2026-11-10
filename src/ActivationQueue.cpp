@@ -30,6 +30,41 @@ void ActivationQueue::Reset() {
     pending_.clear();
 }
 
+std::vector<std::pair<FormID, FormID>> ActivationQueue::GetQueuedTriggers(const RefID refid) {
+    std::lock_guard lock(mutex_);
+    std::vector<std::pair<FormID, FormID>> result;
+    if (const auto ref = pending_.find(refid); ref != pending_.end()) {
+        for (const auto& [base_id, triggers] : ref->second) {
+            for (const auto trigger_id : triggers | std::views::keys) {
+                result.emplace_back(base_id, trigger_id);
+            }
+        }
+    }
+    return result;
+}
+
+void ActivationQueue::RemoveTrigger(const RefID refid, const FormID base_id, const FormID trigger_id) {
+    std::lock_guard lock(mutex_);
+    const auto ref = pending_.find(refid);
+    if (ref == pending_.end()) {
+        return;
+    }
+    const auto form = ref->second.find(base_id);
+    if (form == ref->second.end()) {
+        return;
+    }
+    form->second.erase(trigger_id);
+    if (form->second.empty()) {
+        ref->second.erase(form);
+    }
+    if (ref->second.empty()) {
+        pending_.erase(ref);
+    }
+    if (pending_.empty()) {
+        Stop();
+    }
+}
+
 void ActivationQueue::UpdateLoop() {
     std::vector<RefID> activated;
     {

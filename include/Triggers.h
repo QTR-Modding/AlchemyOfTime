@@ -18,6 +18,7 @@ struct Triggers {
     bool preload_temp_effects{false};
 };
 
+bool IsValidWorldTrigger(RE::TESObjectREFR* a_obj, const Scanner::ScopedForm& trigger);
 FormID FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers, FormID active_trigger);
 
 FormID GetTriggerInInventory(std::ranges::input_range auto&& trigger_ids,

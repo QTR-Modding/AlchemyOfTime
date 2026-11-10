@@ -524,6 +524,18 @@ bool Source::ShouldFreezeEvolution(RE::TESObjectREFR* ref) const {
            ShouldFreezeEvolution(ref->GetBaseObject()->GetFormID());
 }
 
+bool Source::IsValidTrigger(RE::TESObjectREFR* wo, const StageNo stage_no, const FormID trigger_id) const {
+    const auto prepared = triggers.find(stage_no);
+    if (prepared == triggers.end()) {
+        return false;
+    }
+    const auto& ordered = prepared->second.ordered;
+    const auto candidate = std::ranges::find(ordered, trigger_id, [](const Scanner::ScopedForm& trigger) {
+        return trigger.form->GetFormID();
+    });
+    return candidate != ordered.end() && IsValidWorldTrigger(wo, *candidate);
+}
+
 void Source::UpdateWorldItemTrigger(RE::TESObjectREFR* wo, StageInstance& wo_inst, const float _time) const {
     if (wo_inst.count <= 0) return;
     const auto previous_trigger = wo_inst.GetDelayerFormID();
@@ -532,6 +544,14 @@ void Source::UpdateWorldItemTrigger(RE::TESObjectREFR* wo, StageInstance& wo_ins
             M->QueueRefNotification(wo->GetFormID());
         }
     }};
+    const auto originID = wo->GetFormID();
+    const auto ref_baseID = wo->GetBaseObject()->GetFormID();
+    for (const auto& [base_id, trigger_id] : ActivationQueue::GetSingleton()->GetQueuedTriggers(originID)) {
+        if (base_id != ref_baseID || !IsValidTrigger(wo, wo_inst.no, trigger_id)) {
+            ActivationQueue::GetSingleton()->RemoveTrigger(originID, base_id, trigger_id);
+        }
+    }
+
     const auto it = triggers.find(wo_inst.no);
     const auto trigger = it != triggers.end() ? FindWorldTrigger(wo, it->second, previous_trigger) : 0;
     if (ShouldFreezeEvolution(wo)) {

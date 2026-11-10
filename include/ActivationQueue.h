@@ -9,6 +9,8 @@ public:
     ~ActivationQueue();
 
     void Reset();
+    std::vector<std::pair<FormID, FormID>> GetQueuedTriggers(RefID refid);
+    void RemoveTrigger(RefID refid, FormID base_id, FormID trigger_id);
     [[nodiscard]] bool CanActivate(RefID refid, FormID base_id, FormID trigger_id, float activation_delay);
 
 private:

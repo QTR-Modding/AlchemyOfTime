@@ -89,6 +89,49 @@ REX::EnumSet<Scanner::Scope> GetWorldTriggerScope(RE::TESForm* form) {
 }
 
 
+bool IsValidWorldTrigger(RE::TESObjectREFR* a_obj, const Scanner::ScopedForm& trigger) {
+    const auto& [form, scope] = trigger;
+    if (!scope.any(Scanner::Scope::kProximity)) {
+        if (!scope.any(Scanner::Scope::kSelf)) {
+            return false;
+        }
+        if (const auto location = form->As<RE::BGSLocation>()) {
+            return Utils::IsInLocation(location, LazyCache::GetSingleton()->GetLocation(a_obj));
+        }
+        return Matches(a_obj, form);
+    }
+
+    const auto cache = Scanner::GetSingleton()->GetCache();
+    const auto it = cache->byTrigger.find(form->GetFormID());
+    if (it == cache->byTrigger.end()) {
+        return false;
+    }
+    if (scope.any(Scanner::Scope::kSelf) && it->second.contains(a_obj->GetFormID())) {
+        return true;
+    }
+
+    std::optional<RE::NiPoint3> originPos;
+    std::optional<DirectX::BoundingOrientedBox> originOBB;
+    const float r = Settings::search_radius;
+    const float r2 = (r > 0.0f) ? (r * r) : std::numeric_limits<float>::infinity();
+    for (const auto& [refid, pos] : it->second) {
+        if (!originPos) {
+            originPos = Utils::WorldObject::GetPosition(a_obj);
+        }
+        if (originPos->GetSquaredDistance(pos) > r2) {
+            continue;
+        }
+        const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(refid);
+        if (!ref || !Utils::WorldObject::IsActive(ref)) {
+            continue;
+        }
+        if (SearchModulatorInCell_Sub(a_obj, ref, originOBB)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 FormID FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers, const FormID active_trigger) {
     if (!a_obj || triggers.ordered.empty()) return 0;
 

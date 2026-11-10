@@ -103,6 +103,7 @@ private:
     void Init(const DefaultSettings* defaultsettings);
     void RebuildTriggers();
     bool NeedsWorldUpdate(StageNo no) const;
+    bool IsValidTrigger(RE::TESObjectREFR* wo, StageNo stage_no, FormID trigger_id) const;
     template <class T>
     void AddTriggers(const tsl::ordered_map<FormID, T>& a_triggers,
                      const std::unordered_map<FormID, std::unordered_set<StageNo>>& allowed_stages);
