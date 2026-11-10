@@ -1315,7 +1315,7 @@ void Manager::UpdateQueuedWO(const RefInfo& ref_info, const float curr_time) {
         RefStop a_ref_stop(refid, QueueInfo::UpdateType::kWorldObject);
         UpdateRefStop(*source, wo_inst, a_ref_stop, next_update);
         QueueRefUpdate(a_ref_stop);
-    } else if (!wo_inst.xtra.is_decayed) {
+    } else if (next_update == 0.f && !wo_inst.xtra.is_decayed) {
         QueueRefDelete(refid);
     }
 
@@ -1385,7 +1385,7 @@ void Manager::UpdateWO(RE::TESObjectREFR* ref) {
         RefStop a_ref_stop(refid, QueueInfo::UpdateType::kWorldObject);
         UpdateRefStop(*source, wo_inst, a_ref_stop, next_update);
         QueueRefUpdate(a_ref_stop);
-    } else if (!wo_inst.xtra.is_decayed) {
+    } else if (next_update == 0.f && !wo_inst.xtra.is_decayed) {
         QueueRefDelete(refid);
     }
 
