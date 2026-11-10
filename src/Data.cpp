@@ -524,7 +524,39 @@ bool Source::ShouldFreezeEvolution(RE::TESObjectREFR* ref) const {
            ShouldFreezeEvolution(ref->GetBaseObject()->GetFormID());
 }
 
-void Source::UpdateWorldItemTrigger(RE::TESObjectREFR* wo, StageInstance& wo_inst, const float _time) const {
+bool Source::NeedsActivationUpdate(const RefID location) const {
+    if (settings.delayer_activation_delays.empty() && settings.transformer_activation_delays.empty()) {
+        return false;
+    }
+    const auto it = data.find(location);
+    if (it == data.end()) {
+        return false;
+    }
+    for (const auto& instance : it->second) {
+        if (instance.count <= 0 || instance.xtra.is_decayed) {
+            continue;
+        }
+        const auto prepared = triggers.find(instance.no);
+        if (prepared == triggers.end()) {
+            continue;
+        }
+        for (const auto& trigger : prepared->second.ordered) {
+            const auto id = trigger.form->GetFormID();
+            if (id == instance.GetDelayerFormID()) {
+                break;
+            }
+            const auto& delays = settings.transformers.contains(id)
+                ? settings.transformer_activation_delays : settings.delayer_activation_delays;
+            if (const auto delay = delays.find(id); delay != delays.end() && delay->second > 0.f) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+void Source::UpdateWorldItemTrigger(RE::TESObjectREFR* wo, StageInstance& wo_inst, const float _time,
+                                    const UpdatePhase phase) const {
     if (wo_inst.count <= 0) return;
     const auto previous_trigger = wo_inst.GetDelayerFormID();
     const SKSE::stl::scope_exit notify{[&]() {
@@ -533,7 +565,7 @@ void Source::UpdateWorldItemTrigger(RE::TESObjectREFR* wo, StageInstance& wo_ins
         }
     }};
     const auto it = triggers.find(wo_inst.no);
-    const auto trigger = it != triggers.end() ? FindWorldTrigger(wo, it->second) : 0;
+    const auto trigger = it != triggers.end() ? FindWorldTrigger(wo, it->second, wo_inst, settings, phase) : 0;
     if (ShouldFreezeEvolution(wo)) {
         wo_inst.RemoveTimeMod(_time);
         wo_inst.SetDelay(_time, 0, trigger);
@@ -950,11 +982,13 @@ void Source::SetDelayOfInstance(StageInstance& instance, const UpdateTime time, 
 
     if (const auto transformer_best =
             GetTriggerInInventory(settings.transformers | std::views::keys, settings.transformer_allowed_stages,
-                              settings.transformer_containers, a_inv, queue_info, instance, time.phase)) {
+                              settings.transformer_containers, settings.transformer_activation_delays,
+                              a_inv, queue_info, instance, time.phase)) {
         SetDelayOfInstance(instance, time.hours, transformer_best);
     } else if (const auto delayer_best =
                    GetTriggerInInventory(settings.delayers | std::views::keys, settings.delayer_allowed_stages,
-                              settings.delayer_containers, a_inv, queue_info, instance, time.phase)) {
+                              settings.delayer_containers, settings.delayer_activation_delays,
+                              a_inv, queue_info, instance, time.phase)) {
         SetDelayOfInstance(instance, time.hours, delayer_best);
     } else {
         instance.RemoveTimeMod(time.hours);

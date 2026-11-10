@@ -71,7 +71,10 @@ struct Source {
 
     [[nodiscard]] bool IsDecayedItem(FormID _form_id) const;
 
-    void UpdateWorldItemTrigger(RE::TESObjectREFR* wo, StageInstance& wo_inst, float _time) const;
+    void UpdateWorldItemTrigger(RE::TESObjectREFR* wo, StageInstance& wo_inst, float _time,
+                                UpdatePhase phase = UpdatePhase::kCurrent) const;
+
+    [[nodiscard]] bool NeedsActivationUpdate(RefID location) const;
 
     // always update before doing this
     void UpdateInventoryItemTriggers(QueueInfo& queue_info, UpdateTime time, const Utils::Inventory::Snapshot& inv);

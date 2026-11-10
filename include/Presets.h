@@ -8,6 +8,7 @@ struct AddOnSettings {
     bool containers_defined = false;
 
     tsl::ordered_map<FormID, float> delayers;
+    std::unordered_map<FormID, float> delayer_activation_delays;
     std::unordered_map<FormID, uint32_t> delayer_colors;
     std::unordered_map<FormID, FormID> delayer_sounds;
     std::unordered_map<FormID, FormID> delayer_artobjects;
@@ -16,6 +17,7 @@ struct AddOnSettings {
     std::unordered_map<FormID, std::unordered_set<StageNo>> delayer_allowed_stages;
 
     tsl::ordered_map<FormID, std::pair<FormID, Duration>> transformers;
+    std::unordered_map<FormID, float> transformer_activation_delays;
     std::unordered_map<FormID, uint32_t> transformer_colors;
     std::unordered_map<FormID, FormID> transformer_sounds;
     std::unordered_map<FormID, FormID> transformer_artobjects;
@@ -28,6 +30,8 @@ struct AddOnSettings {
     [[nodiscard]] bool CheckIntegrity();
 
     void Merge(const AddOnSettings& addon);
+
+    [[nodiscard]] bool CheckActivationDelays() const;
 
 private:
     bool init_failed = false;

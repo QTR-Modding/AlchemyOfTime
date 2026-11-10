@@ -664,6 +664,7 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
             auto a_effect_shader = parse_formid(modulator, "effect_shader");
             // containers
             auto containers = parse_formid_vec(modulator, "containers");
+            const auto activation_delay = parse_type<float>(modulator, "activation_delay").value_or(0.f);
 
             const auto trigger_forms = numeric_magnitude
                 ? std::vector<FormID>{NumericKeywords::GetOrCreate(delayer_magnitude)->GetFormID()}
@@ -671,6 +672,11 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
             for (auto a_formid : trigger_forms) {
                 settings.delayer_allowed_stages[a_formid] = std::unordered_set(a_asv.begin(), a_asv.end());
                 settings.delayers[a_formid] = delayer_magnitude;
+                if (activation_delay != 0.f) {
+                    settings.delayer_activation_delays[a_formid] = activation_delay;
+                } else {
+                    settings.delayer_activation_delays.erase(a_formid);
+                }
                 if (a_color) settings.delayer_colors[a_formid] = *a_color;
                 else settings.delayer_colors.erase(a_formid);
                 if (a_sound) settings.delayer_sounds[a_formid] = *a_sound;
@@ -741,12 +747,18 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
             auto a_effect_shader = parse_formid(transformer, "effect_shader");
             // containers
             auto containers = parse_formid_vec(transformer, "containers");
+            const auto activation_delay = parse_type<float>(transformer, "activation_delay").value_or(0.f);
 
             const auto trigger_forms = transformer["duration"]
                 ? Utils::ExpandFormLists(parse_formid_vec(transformer, "FormEditorID"))
                 : std::vector<FormID>{NumericKeywords::GetOrCreate(a_duration)->GetFormID()};
             for (auto a_formid : trigger_forms) {
                 settings.transformers[a_formid] = {a_formid2, a_duration};
+                if (activation_delay != 0.f) {
+                    settings.transformer_activation_delays[a_formid] = activation_delay;
+                } else {
+                    settings.transformer_activation_delays.erase(a_formid);
+                }
                 settings.transformer_allowed_stages[a_formid] = std::unordered_set(a_asv.begin(), a_asv.end());
                 if (a_color) settings.transformer_colors[a_formid] = *a_color;
                 else settings.transformer_colors.erase(a_formid);
@@ -874,6 +886,7 @@ DefaultSettings PresetParse::parseDefaults_(const YAML::Node& config) {
     settings.containers = addons.containers;
     // delayers
     settings.delayers = addons.delayers;
+    settings.delayer_activation_delays = addons.delayer_activation_delays;
     settings.delayer_allowed_stages = addons.delayer_allowed_stages;
     settings.delayer_colors = addons.delayer_colors;
     settings.delayer_sounds = addons.delayer_sounds;
@@ -882,6 +895,7 @@ DefaultSettings PresetParse::parseDefaults_(const YAML::Node& config) {
     settings.delayer_containers = addons.delayer_containers;
     // transformers
     settings.transformers = addons.transformers;
+    settings.transformer_activation_delays = addons.transformer_activation_delays;
     settings.transformer_allowed_stages = addons.transformer_allowed_stages;
     settings.transformer_colors = addons.transformer_colors;
     settings.transformer_sounds = addons.transformer_sounds;

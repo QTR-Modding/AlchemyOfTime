@@ -168,7 +168,8 @@ class Manager final : public Ticker, public SaveLoadData {
     bool UpdateInventory(QueueInfo& queue_info, UpdateTime t, const Utils::Inventory::Snapshot& inv);
 
     // [expects: sourceMutex_] (unique)
-    void UpdateInventory(const RefInfo& a_info, Utils::Inventory::Snapshot& inv);
+    void UpdateInventory(const RefInfo& a_info, Utils::Inventory::Snapshot& inv,
+                         UpdatePhase phase = UpdatePhase::kCurrent);
 
     void UpdateQueuedRef(const QueueInfo& queue_info, float curr_time);
     void UpdateQueuedWO(const RefInfo& ref_info, float curr_time);

@@ -1,6 +1,7 @@
 #include "Triggers.h"
 #include "CellScan.h"
 #include "Settings.h"
+#include "SKSE/Impl/Util.h"
 #include "CLibUtilsQTR/BoundingBox.hpp"
 #include "CLibUtilsQTR/DrawDebug.hpp"
 #ifndef NDEBUG
@@ -89,7 +90,27 @@ REX::EnumSet<Scanner::Scope> GetWorldTriggerScope(RE::TESForm* form) {
 }
 
 
-FormID FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers) {
+bool PassesActivationDelay(const FormID trigger, const FormID active_trigger,
+                           const std::unordered_map<FormID, float>& activation_delays, const UpdatePhase phase) {
+    if (trigger == active_trigger) {
+        return true;
+    }
+    const auto it = activation_delays.find(trigger);
+    if (it == activation_delays.end()) {
+        return true;
+    }
+    if (phase != UpdatePhase::kScheduled) {
+        return false;
+    }
+    constexpr double milliseconds_per_hour = 3'600'000.0;
+    const double interval_hours = Settings::GetCurrentTickInterval() *
+        static_cast<double>(RE::Calendar::GetSingleton()->GetTimescale()) / milliseconds_per_hour;
+    const double chance = -std::expm1(-interval_hours / it->second);
+    return SKSE::stl::RNG::GetSingleton()->Generate(0.0, 1.0) < chance;
+}
+
+FormID FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers, const StageInstance& instance,
+                        const AddOnSettings& settings, const UpdatePhase phase) {
     if (!a_obj || triggers.ordered.empty()) return 0;
 
     Scanner::CachePtr cache;
@@ -103,6 +124,11 @@ FormID FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers) {
 
     for (const auto& [form, scope] : triggers.ordered) {
         const auto triggerID = form->GetFormID();
+        const auto& delays = settings.transformers.contains(triggerID)
+            ? settings.transformer_activation_delays : settings.delayer_activation_delays;
+        if (!PassesActivationDelay(triggerID, instance.GetDelayerFormID(), delays, phase)) {
+            continue;
+        }
         if (!scope.any(Scanner::Scope::kProximity)) {
             if (scope.any(Scanner::Scope::kSelf)) {
                 if (const auto location = form->As<RE::BGSLocation>()) {

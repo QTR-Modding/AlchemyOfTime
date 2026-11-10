@@ -4,6 +4,10 @@
 
 
 bool DefaultSettings::CheckIntegrity() {
+    if (!CheckActivationDelays()) {
+        init_failed = true;
+        return false;
+    }
     if (items.empty() || durations.empty() || stage_names.empty() || effects.empty() || numbers.empty()) {
         logger::error("One of the maps is empty.");
         init_failed = true;
@@ -119,6 +123,12 @@ void DefaultSettings::Add(AddOnSettings& addon) {
             continue;
         }
         delayers[a_formID] = _delay;
+        if (const auto it = addon.delayer_activation_delays.find(a_formID);
+            it != addon.delayer_activation_delays.end()) {
+            delayer_activation_delays[a_formID] = it->second;
+        } else {
+            delayer_activation_delays.erase(a_formID);
+        }
 
         if (addon.delayer_allowed_stages.contains(a_formID)) {
             delayer_allowed_stages[a_formID].insert_range(addon.delayer_allowed_stages.at(a_formID));
@@ -134,6 +144,12 @@ void DefaultSettings::Add(AddOnSettings& addon) {
             continue;
         }
         transformers[a_formID] = _transformer;
+        if (const auto it = addon.transformer_activation_delays.find(a_formID);
+            it != addon.transformer_activation_delays.end()) {
+            transformer_activation_delays[a_formID] = it->second;
+        } else {
+            transformer_activation_delays.erase(a_formID);
+        }
         if (addon.transformer_allowed_stages.contains(a_formID)) {
             transformer_allowed_stages[a_formID].insert_range(addon.transformer_allowed_stages.at(a_formID));
         }
@@ -210,12 +226,14 @@ void AddOnSettings::Merge(const AddOnSettings& addon) {
                 dest.erase(id);
         }
     };
+    replace(delayer_activation_delays, addon.delayer_activation_delays, addon.delayers);
     replace(delayer_colors, addon.delayer_colors, addon.delayers);
     replace(delayer_sounds, addon.delayer_sounds, addon.delayers);
     replace(delayer_artobjects, addon.delayer_artobjects, addon.delayers);
     replace(delayer_effect_shaders, addon.delayer_effect_shaders, addon.delayers);
     replace(delayer_containers, addon.delayer_containers, addon.delayers);
     replace(delayer_allowed_stages, addon.delayer_allowed_stages, addon.delayers);
+    replace(transformer_activation_delays, addon.transformer_activation_delays, addon.transformers);
     replace(transformer_colors, addon.transformer_colors, addon.transformers);
     replace(transformer_sounds, addon.transformer_sounds, addon.transformers);
     replace(transformer_artobjects, addon.transformer_artobjects, addon.transformers);
@@ -224,7 +242,23 @@ void AddOnSettings::Merge(const AddOnSettings& addon) {
     replace(transformer_allowed_stages, addon.transformer_allowed_stages, addon.transformers);
 }
 
+bool AddOnSettings::CheckActivationDelays() const {
+    for (const auto delays : {&delayer_activation_delays, &transformer_activation_delays}) {
+        for (const auto& [id, delay] : *delays) {
+            if (!std::isfinite(delay) || delay < 0.f) {
+                logger::error("Trigger {:x}: activation_delay must be finite and nonnegative.", id);
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 bool AddOnSettings::CheckIntegrity() {
+    if (!CheckActivationDelays()) {
+        init_failed = true;
+        return false;
+    }
     for (const auto& _formID : containers) {
         if (!FormReader::GetFormByID(_formID)) {
             logger::error("Container form {} not found.", _formID);

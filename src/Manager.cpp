@@ -1016,7 +1016,7 @@ bool Manager::UpdateInventory(QueueInfo& queue_info, const UpdateTime t, const U
     return update_took_place;
 }
 
-void Manager::UpdateInventory(const RefInfo& a_info, Utils::Inventory::Snapshot& inv) {
+void Manager::UpdateInventory(const RefInfo& a_info, Utils::Inventory::Snapshot& inv, const UpdatePhase phase) {
     SyncWithInventory(a_info, inv);
 
     const auto curr = RE::Calendar::GetSingleton()->GetHoursPassed();
@@ -1031,7 +1031,7 @@ void Manager::UpdateInventory(const RefInfo& a_info, Utils::Inventory::Snapshot&
         if (!UpdateInventory(pending, {.hours = t, .phase = UpdatePhase::kCatchUp}, inv)) break;
     }
 
-    UpdateInventory(pending, {.hours = curr, .phase = UpdatePhase::kCurrent}, inv);
+    UpdateInventory(pending, {.hours = curr, .phase = phase}, inv);
     if (pending.update_type != QueueInfo::UpdateType::kNone) {
         QueueRefUpdate(RefStop(pending));
     } else {
@@ -1192,7 +1192,22 @@ void Manager::UpdateQueuedInventory(const QueueInfo& queue_info) {
         return;
     }
 
-    if (!watch.HasChanged(owner.get())) return;
+    SRC_UNIQUE_GUARD;
+    bool retry_activation = false;
+    if (const auto it = loc_to_sources.find(queue_info.ref_info.ref_id); it != loc_to_sources.end()) {
+        for (const auto id : it->second) {
+            const auto source = sources.find(id);
+            if (source != sources.end() && source->second->IsHealthy() &&
+                !source->second->ShouldFreezeEvolution(queue_info.ref_info.base_id) &&
+                source->second->NeedsActivationUpdate(queue_info.ref_info.ref_id)) {
+                retry_activation = true;
+                break;
+            }
+        }
+    }
+    if (!retry_activation && !watch.HasChanged(owner.get())) {
+        return;
+    }
     {
         QUE_UNIQUE_GUARD;
         const auto it = _ref_stops_.find(queue_info.ref_info.ref_id);
@@ -1201,7 +1216,12 @@ void Manager::UpdateQueuedInventory(const QueueInfo& queue_info) {
         // if deletion was already requested, stop here instead of calling MarkDirty_ again.
         if (!queue_delete_.insert(queue_info.ref_info.ref_id).second) return;
     }
-    MarkDirty_(owner.get());
+    if (retry_activation) {
+        Utils::Inventory::Snapshot inventory{.items = owner->GetInventory()};
+        UpdateInventory(queue_info.ref_info, inventory, UpdatePhase::kScheduled);
+    } else {
+        MarkDirty_(owner.get());
+    }
 }
 
 void Manager::RestoreInventoryWatches() {
@@ -1212,8 +1232,11 @@ void Manager::RestoreInventoryWatches() {
     };
     for (const auto& source : sources | std::views::values) {
         if (!source->IsHealthy()) continue;
-        if (!std::ranges::any_of(source->triggers | std::views::values, needs_watch)) continue;
+        const bool polls_conditions = std::ranges::any_of(source->triggers | std::views::values, needs_watch);
         for (const auto owner_id : source->data | std::views::keys) {
+            if (!polls_conditions && !source->NeedsActivationUpdate(owner_id)) {
+                continue;
+            }
             if (const auto owner = RE::TESForm::LookupByID<RE::TESObjectREFR>(owner_id);
                 owner && owner->HasContainer()) {
                 MarkDirty_(owner);
@@ -1310,7 +1333,7 @@ void Manager::UpdateQueuedWO(const RefInfo& ref_info, const float curr_time) {
         ApplyStageInWorld(ref, source->GetStage(wo_inst.no), source->GetBoundObject());
     }
 
-    source->UpdateWorldItemTrigger(ref, wo_inst, curr_time);
+    source->UpdateWorldItemTrigger(ref, wo_inst, curr_time, UpdatePhase::kScheduled);
     if (const auto next_update = source->GetNextUpdateTime(&wo_inst); next_update > curr_time) {
         RefStop a_ref_stop(refid, QueueInfo::UpdateType::kWorldObject);
         UpdateRefStop(*source, wo_inst, a_ref_stop, next_update);
