@@ -151,6 +151,15 @@ void Source::RebuildTriggers() {
     }
 }
 
+bool Source::NeedsWorldUpdate(const StageNo no) const {
+    return triggers.contains(no) ||
+           std::ranges::any_of(std::array{&settings.colors, &settings.artobjects, &settings.effect_shaders,
+                                          &settings.sounds}, [no](const auto effects) {
+               const auto it = effects->find(no);
+               return it != effects->end() && it->second != 0;
+           });
+}
+
 RE::TESBoundObject* Source::GetBoundObject() const {
     return FormReader::GetFormByID<RE::TESBoundObject>(formid, editorid);
 }
@@ -558,7 +567,7 @@ float Source::GetNextUpdateTime(const StageInstance* st_inst) {
     const auto delay_slope = st_inst->GetDelaySlope();
     if (std::abs(delay_slope) < EPSILON) {
         //logger::warn("Delay slope is 0.");
-        return std::numeric_limits<float>::infinity();
+        return NeedsWorldUpdate(st_inst->no) ? std::numeric_limits<float>::infinity() : 0.f;
     }
 
     if (st_inst->xtra.is_transforming) {
@@ -601,7 +610,7 @@ float Source::GetNextUpdateTime(const StageInstance* st_inst) const {
     const auto delay_slope = st_inst->GetDelaySlope();
     if (std::abs(delay_slope) < EPSILON) {
         //logger::warn("Delay slope is 0.");
-        return std::numeric_limits<float>::infinity();
+        return NeedsWorldUpdate(st_inst->no) ? std::numeric_limits<float>::infinity() : 0.f;
     }
 
     if (st_inst->xtra.is_transforming) {
