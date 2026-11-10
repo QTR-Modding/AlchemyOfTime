@@ -1,5 +1,6 @@
 #pragma once
 #include "Manager.h"
+#include "ActivationQueue.h"
 #include "CellScan.h"
 #include "Hooks.h"
 #include "Queue.h"
@@ -1016,83 +1017,6 @@ bool Manager::UpdateInventory(QueueInfo& queue_info, const UpdateTime t, const U
     return update_took_place;
 }
 
-bool Manager::IsValidTrigger(QueueInfo& queue_info, const Utils::Inventory::Snapshot& inventory,
-                             const FormID base_id, const FormID trigger_id) {
-    if (inventory.items.empty()) {
-        return false;
-    }
-    const auto refid = queue_info.ref_info.ref_id;
-    const auto location = loc_to_sources.find(refid);
-    if (location == loc_to_sources.end()) {
-        return false;
-    }
-
-    bool eligible = false;
-    for (const auto source_id : location->second) {
-        const auto source = sources.find(source_id);
-        if (source == sources.end() || !source->second->IsHealthy() ||
-            source->second->ShouldFreezeEvolution(queue_info.ref_info.base_id)) {
-            continue;
-        }
-        const auto instances = source->second->data.find(refid);
-        if (instances == source->second->data.end()) {
-            continue;
-        }
-        const auto& settings = source->second->settings;
-        for (const auto& instance : instances->second) {
-            if (instance.count <= 0 || instance.xtra.is_decayed || instance.xtra.form_id != base_id) {
-                continue;
-            }
-            const auto allowed = [&](const auto& stages, const auto& containers) {
-                if (!stages.at(trigger_id).contains(instance.no)) {
-                    return false;
-                }
-                const auto container = containers.find(trigger_id);
-                return container == containers.end() || container->second.empty() ||
-                       container->second.contains(queue_info.ref_info.base_id);
-            };
-            if ((settings.transformers.contains(trigger_id) &&
-                 allowed(settings.transformer_allowed_stages, settings.transformer_containers)) ||
-                (settings.delayers.contains(trigger_id) &&
-                 allowed(settings.delayer_allowed_stages, settings.delayer_containers))) {
-                eligible = true;
-                break;
-            }
-        }
-        if (eligible) {
-            break;
-        }
-    }
-    if (!eligible) {
-        return false;
-    }
-
-    const auto trigger = RE::TESForm::LookupByID(trigger_id);
-    if (!trigger) {
-        return false;
-    }
-    const auto type = GetMatchType_(trigger->GetFormType());
-    if (std::ranges::contains(poll_matchtypes, type)) {
-        const auto owner = queue_info.ref_info.GetRef();
-        if (!owner) {
-            return false;
-        }
-        if (!queue_info.inventory_watch) {
-            queue_info.inventory_watch = std::make_shared<InventoryWatch>();
-            queue_info.update_type = QueueInfo::UpdateType::kInventory;
-        }
-        return queue_info.inventory_watch->Eval(trigger, type, owner, inventory);
-    }
-    if (const auto keyword = trigger->As<RE::BGSKeyword>()) {
-        return inventory.HasKeyword(keyword);
-    }
-    if (const auto obj = trigger->As<RE::TESBoundObject>()) {
-        const auto item = inventory.items.find(obj);
-        return item != inventory.items.end() && item->second.first > 0;
-    }
-    return false;
-}
-
 void Manager::UpdateInventory(const RefInfo& a_info, Utils::Inventory::Snapshot& inv) {
     SyncWithInventory(a_info, inv);
 
@@ -1109,16 +1033,35 @@ void Manager::UpdateInventory(const RefInfo& a_info, Utils::Inventory::Snapshot&
     }
 
     UpdateInventory(pending, {.hours = curr, .phase = UpdatePhase::kCurrent}, inv);
-    for (const auto& [base_id, trigger_id] : ActivationQueue::GetSingleton()->GetQueuedTriggers(a_info.ref_id)) {
-        if (!IsValidTrigger(pending, inv, base_id, trigger_id)) {
-            ActivationQueue::GetSingleton()->RemoveTrigger(a_info.ref_id, base_id, trigger_id);
-        }
-    }
-
+    ValidateInventoryActivationTriggers(pending, inv);
     if (pending.update_type != QueueInfo::UpdateType::kNone) {
         QueueRefUpdate(RefStop(pending));
     } else {
         QueueRefDelete(a_info.ref_id);
+    }
+}
+
+void Manager::ValidateInventoryActivationTriggers(QueueInfo& queue_info, const Utils::Inventory::Snapshot& inv) {
+    const auto activation_queue = ActivationQueue::GetSingleton();
+    const auto refid = queue_info.ref_info.ref_id;
+    for (const auto& key : activation_queue->GetQueuedTriggers(refid)) {
+        const auto& [source_id, base_id, trigger_id, kind] = key;
+        bool valid = false;
+        const auto source = sources.find(source_id);
+        if (source != sources.end() && source->second->IsHealthy() &&
+            !source->second->ShouldFreezeEvolution(queue_info.ref_info.base_id)) {
+            const auto& src = *source->second;
+            if (const auto instances = src.data.find(refid); instances != src.data.end()) {
+                valid = std::ranges::any_of(instances->second, [&](const StageInstance& instance) {
+                    return instance.count > 0 && !instance.xtra.is_decayed && instance.xtra.form_id == base_id &&
+                           MatchesInventoryTrigger(src.settings, trigger_id, kind, inv, queue_info,
+                                                   instance, UpdatePhase::kCurrent);
+                });
+            }
+        }
+        if (!valid) {
+            activation_queue->RemoveTrigger(refid, key);
+        }
     }
 }
 
@@ -2138,7 +2081,7 @@ std::uint32_t Manager::GetProgress(const RefID owner, const FormID item, std::sp
             if (instance.xtra.is_transforming) {
                 const auto transformer = src.settings.transformers.find(trigger);
                 if (transformer == src.settings.transformers.end()) continue;
-                duration = transformer->second.second;
+                duration = transformer->second.duration;
             }
 
             if (count < output.size()) {

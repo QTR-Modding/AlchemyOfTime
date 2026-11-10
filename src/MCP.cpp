@@ -865,10 +865,10 @@ void UI::UpdateStages(const std::vector<Source>& sources) {
             auto temp_formid = fst;
             const auto temp_name = GetName(temp_formid);
             transformers_.insert(GameObject{.name = temp_name, .formid = temp_formid});
-            const auto temp_formid2 = std::get<0>(snd);
+            const auto temp_formid2 = snd.final_form;
             auto temp_name2 = GetName(temp_formid2);
             transformer_enditems_[temp_formid] = GameObject{.name = temp_name2, .formid = temp_formid2};
-            transform_durations_[temp_formid] = std::get<1>(snd);
+            transform_durations_[temp_formid] = snd.duration;
         }
         std::set<GameObject> time_modulators_;
         std::map<FormID, float> time_modulator_multipliers_;
@@ -877,7 +877,7 @@ void UI::UpdateStages(const std::vector<Source>& sources) {
             const auto temp_form = RE::TESForm::LookupByID(temp_formid);
             const auto temp_name = temp_form ? temp_form->GetName() : std::format("{:x}", temp_formid);
             time_modulators_.insert(GameObject{.name = temp_name, .formid = temp_formid});
-            time_modulator_multipliers_[temp_formid] = snd;
+            time_modulator_multipliers_[temp_formid] = snd.magnitude;
         }
 
         const auto qform_type = Settings::GetQFormType(source.formid);

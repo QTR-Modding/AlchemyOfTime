@@ -1,8 +1,7 @@
 #pragma once
-#include "ActivationQueue.h"
 #include "CellScan.h"
 #include "InventoryWatch.h"
-#include "Stages.h"
+#include "Presets.h"
 
 enum class UpdatePhase { kCatchUp, kCurrent };
 
@@ -18,67 +17,15 @@ struct Triggers {
     bool preload_temp_effects{false};
 };
 
-bool IsValidWorldTrigger(RE::TESObjectREFR* a_obj, const Scanner::ScopedForm& trigger);
-FormID FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers, FormID active_trigger);
+FormID FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers);
 
-FormID GetTriggerInInventory(std::ranges::input_range auto&& trigger_ids,
-                             const std::unordered_map<FormID, std::unordered_set<StageNo>>& allowed_stages,
-                             const std::unordered_map<FormID, std::unordered_set<FormID>>& containers,
+bool IsInventoryTriggerAllowed(const AddOnSettings& settings, FormID trigger_id, TriggerKind kind,
+                               StageNo stage, FormID container);
+bool IsActiveInventoryTrigger(const StageInstance& instance, FormID trigger_id, TriggerKind kind);
+bool MatchesInventoryTrigger(const AddOnSettings& settings, FormID trigger_id, TriggerKind kind,
                              const Utils::Inventory::Snapshot& inventory, QueueInfo& queue_info,
                              const StageInstance& instance, UpdatePhase phase);
 
-FormID GetTriggerInInventory(std::ranges::input_range auto&& trigger_ids,
-                             const std::unordered_map<FormID, std::unordered_set<StageNo>>& allowed_stages,
-                             const std::unordered_map<FormID, std::unordered_set<FormID>>& containers,
-                             const Utils::Inventory::Snapshot& inventory, QueueInfo& queue_info,
-                             const StageInstance& instance,
-                             const UpdatePhase phase) {
-    const auto& inv = inventory.items;
-    if (inv.empty()) return 0;
-
-    const auto can_activate = [&](const FormID trigger_id) {
-        return trigger_id == instance.GetDelayerFormID() ||
-               ActivationQueue::GetSingleton()->CanActivate(
-                   queue_info.ref_info.ref_id, instance.xtra.form_id, trigger_id, 0.0f);
-    };
-
-    for (const auto a_trigger_id : trigger_ids) {
-        if (!allowed_stages.at(a_trigger_id).contains(instance.no)) continue;
-        if (const auto it = containers.find(a_trigger_id);
-            it != containers.end() && !it->second.empty() && !it->second.contains(queue_info.ref_info.base_id)) {
-            continue;
-        }
-        const auto trigger = RE::TESForm::LookupByID(a_trigger_id);
-        if (!trigger) continue;
-
-        const auto type = GetMatchType_(trigger->GetFormType());
-        if (std::ranges::contains(poll_matchtypes, type)) {
-            if (phase == UpdatePhase::kCatchUp) {
-                if (a_trigger_id == instance.GetDelayerFormID()) return a_trigger_id;
-                continue;
-            }
-
-            const auto owner = queue_info.ref_info.GetRef();
-            if (!owner) continue;
-            if (!queue_info.inventory_watch) {
-                queue_info.inventory_watch = std::make_shared<InventoryWatch>();
-                queue_info.update_type = QueueInfo::UpdateType::kInventory;
-            }
-
-            if (auto& watch = *queue_info.inventory_watch;
-                watch.Eval(trigger, type, owner, inventory) && can_activate(a_trigger_id)) {
-                return a_trigger_id;
-            }
-        } else if (const auto keyword = trigger->As<RE::BGSKeyword>()) {
-            if (inventory.HasKeyword(keyword) && can_activate(a_trigger_id)) {
-                return a_trigger_id;
-            }
-        } else if (const auto obj = trigger->As<RE::TESBoundObject>()) {
-            if (const auto it = inv.find(obj);
-                it != inv.end() && it->second.first > 0 && can_activate(a_trigger_id)) {
-                return a_trigger_id;
-            }
-        }
-    }
-    return 0;
-}
+std::pair<FormID, TriggerKind> GetTriggerInInventory(const AddOnSettings& settings, FormID source_id,
+                            const Utils::Inventory::Snapshot& inventory, QueueInfo& queue_info,
+                            const StageInstance& instance, UpdatePhase phase);

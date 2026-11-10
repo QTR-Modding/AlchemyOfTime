@@ -65,7 +65,7 @@ namespace {
             t.transforming = true;
             const auto tr = st.GetDelayerFormID();
             if (tr && src.settings.transformers.contains(tr)) {
-                t.nextFormId = src.settings.transformers.at(tr).first;
+                t.nextFormId = src.settings.transformers.at(tr).final_form;
                 t.hasNext = t.nextFormId != 0;
                 t.label = std::format(L"{} {}", Lorebox::arrow_right, FormNameW(t.nextFormId));
             } else {
@@ -147,7 +147,7 @@ namespace {
             const auto tr = st.GetDelayerFormID();
             if (tr && src.settings.transformers.contains(tr)) {
                 const float elapsed = st.GetTransformElapsed(now);
-                const float total = std::get<1>(src.settings.transformers.at(tr));
+                const float total = src.settings.transformers.at(tr).duration;
                 if (total > 0.f) pct = std::clamp(elapsed / total * 100.f, 0.f, 100.f);
             }
         } else {
@@ -175,7 +175,7 @@ namespace {
         if (Lorebox::show_multiplier.load(std::memory_order_relaxed)) {
             float mult = r.slope;
             if (src.settings.delayers.contains(r.mod)) {
-                mult = src.settings.delayers.at(r.mod);
+                mult = src.settings.delayers.at(r.mod).magnitude;
             }
             nm += std::format(L": x{:.2f}", mult);
         }

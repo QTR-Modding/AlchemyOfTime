@@ -644,6 +644,7 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
             if (modulator["allowed_stages"] && !modulator["allowed_stages"].IsNull()) {
                 a_asv = PresetHelpers::YAML_Helpers::CollectFrom<StageNo>(modulator, "allowed_stages");
             }
+            const auto activation_delay = parse_type<float>(modulator, "activation_delay").value_or(0.0f);
             // delayer magnitude
             std::optional<float> numeric_magnitude;
             if (!modulator["magnitude"]) {
@@ -670,7 +671,7 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
                 : Utils::ExpandFormLists(parse_formid_vec(modulator, "FormEditorID"));
             for (auto a_formid : trigger_forms) {
                 settings.delayer_allowed_stages[a_formid] = std::unordered_set(a_asv.begin(), a_asv.end());
-                settings.delayers[a_formid] = delayer_magnitude;
+                settings.delayers[a_formid] = {delayer_magnitude, activation_delay};
                 if (a_color) settings.delayer_colors[a_formid] = *a_color;
                 else settings.delayer_colors.erase(a_formid);
                 if (a_sound) settings.delayer_sounds[a_formid] = *a_sound;
@@ -709,6 +710,7 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
             }
 
             // duration
+            const auto activation_delay = parse_type<float>(transformer, "activation_delay").value_or(0.0f);
             float a_duration;
             auto temp_duration = parse_type<float>(transformer, "duration");
             if (!transformer["duration"]) {
@@ -746,7 +748,7 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
                 ? Utils::ExpandFormLists(parse_formid_vec(transformer, "FormEditorID"))
                 : std::vector<FormID>{NumericKeywords::GetOrCreate(a_duration)->GetFormID()};
             for (auto a_formid : trigger_forms) {
-                settings.transformers[a_formid] = {a_formid2, a_duration};
+                settings.transformers[a_formid] = {a_formid2, a_duration, activation_delay};
                 settings.transformer_allowed_stages[a_formid] = std::unordered_set(a_asv.begin(), a_asv.end());
                 if (a_color) settings.transformer_colors[a_formid] = *a_color;
                 else settings.transformer_colors.erase(a_formid);

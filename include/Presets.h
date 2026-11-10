@@ -3,11 +3,24 @@
 #include "tsl/ordered_map.h"
 
 
+enum class TriggerKind : std::uint32_t { kTransformer, kDelayer };
+
+struct Delayer {
+    float magnitude;
+    float activation_delay = 0.0f;
+};
+
+struct Transformer {
+    FormID final_form;
+    Duration duration;
+    float activation_delay = 0.0f;
+};
+
 struct AddOnSettings {
     std::unordered_set<FormID> containers;
     bool containers_defined = false;
 
-    tsl::ordered_map<FormID, float> delayers;
+    tsl::ordered_map<FormID, Delayer> delayers;
     std::unordered_map<FormID, uint32_t> delayer_colors;
     std::unordered_map<FormID, FormID> delayer_sounds;
     std::unordered_map<FormID, FormID> delayer_artobjects;
@@ -15,7 +28,7 @@ struct AddOnSettings {
     std::unordered_map<FormID, std::unordered_set<FormID>> delayer_containers;
     std::unordered_map<FormID, std::unordered_set<StageNo>> delayer_allowed_stages;
 
-    tsl::ordered_map<FormID, std::pair<FormID, Duration>> transformers;
+    tsl::ordered_map<FormID, Transformer> transformers;
     std::unordered_map<FormID, uint32_t> transformer_colors;
     std::unordered_map<FormID, FormID> transformer_sounds;
     std::unordered_map<FormID, FormID> transformer_artobjects;
@@ -28,6 +41,7 @@ struct AddOnSettings {
     [[nodiscard]] bool CheckIntegrity();
 
     void Merge(const AddOnSettings& addon);
+    [[nodiscard]] bool HasValidActivationDelays() const;
 
 private:
     bool init_failed = false;

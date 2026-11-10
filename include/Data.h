@@ -103,7 +103,6 @@ private:
     void Init(const DefaultSettings* defaultsettings);
     void RebuildTriggers();
     bool NeedsWorldUpdate(StageNo no) const;
-    bool IsValidTrigger(RE::TESObjectREFR* wo, StageNo stage_no, FormID trigger_id) const;
     template <class T>
     void AddTriggers(const tsl::ordered_map<FormID, T>& a_triggers,
                      const std::unordered_map<FormID, std::unordered_set<StageNo>>& allowed_stages);
@@ -181,7 +180,8 @@ private:
 
     void SetDelayOfInstance(StageInstance& instance, UpdateTime time, QueueInfo& queue_info,
                             const Utils::Inventory::Snapshot& a_inv) const;
-    void SetDelayOfInstance(StageInstance& instance, float a_time, FormID a_modulator) const;
+    void SetDelayOfInstance(StageInstance& instance, float a_time, FormID a_modulator,
+                            TriggerKind kind) const;
 
     [[nodiscard]] bool CheckIntegrity();
 

@@ -169,8 +169,9 @@ class Manager final : public Ticker, public SaveLoadData {
 
     // [expects: sourceMutex_] (unique)
     void UpdateInventory(const RefInfo& a_info, Utils::Inventory::Snapshot& inv);
-    bool IsValidTrigger(QueueInfo& queue_info, const Utils::Inventory::Snapshot& inventory,
-                        FormID base_id, FormID trigger_id);
+
+    // [expects: sourceMutex_] (unique)
+    void ValidateInventoryActivationTriggers(QueueInfo& queue_info, const Utils::Inventory::Snapshot& inv);
 
     void UpdateQueuedRef(const QueueInfo& queue_info, float curr_time);
     void UpdateQueuedWO(const RefInfo& ref_info, float curr_time);
