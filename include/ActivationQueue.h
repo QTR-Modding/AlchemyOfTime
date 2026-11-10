@@ -2,7 +2,7 @@
 #include <REX/REX/Singleton.h>
 #include <CLibUtil/rng.hpp>
 #include "ClibUtilsQTR/Ticker.hpp"
-#include "Presets.h"
+#include "Data.h"
 
 class ActivationQueue : public REX::Singleton<ActivationQueue>, public Ticker {
 public:
@@ -12,11 +12,16 @@ public:
     ~ActivationQueue();
 
     void Reset();
-    std::vector<Key> GetQueuedTriggers(RefID refid);
-    void RemoveTrigger(RefID refid, const Key& key);
+    void ClearRef(RefID refid);
+    // Called during trigger selection while Manager's source lock is held.
+    void Refresh(const RefInfo& ref_info, const std::unordered_map<FormID, std::unique_ptr<Source>>& sources,
+                 const Utils::Inventory::Snapshot& inventory);
+    void Refresh(const RefInfo& ref_info, const Source& source);
     [[nodiscard]] bool CanActivate(RefID refid, const Key& key, float activation_delay);
 
 private:
+    std::vector<Key> GetQueuedTriggers(RefID refid);
+    void RemoveTrigger(RefID refid, const Key& key);
     void UpdateLoop();
     void RequestUpdates(const std::vector<RefID>& refids);
 

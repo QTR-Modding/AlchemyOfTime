@@ -105,7 +105,7 @@ private:
     bool NeedsWorldUpdate(StageNo no) const;
     template <class T>
     void AddTriggers(const tsl::ordered_map<FormID, T>& a_triggers,
-                     const std::unordered_map<FormID, std::unordered_set<StageNo>>& allowed_stages);
+                     const std::unordered_map<FormID, std::unordered_set<StageNo>>& allowed_stages, TriggerKind kind);
 
     RE::FormType formtype;
     std::set<StageNo> fake_stages;

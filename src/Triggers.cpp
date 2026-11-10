@@ -2,7 +2,6 @@
 #include "ActivationQueue.h"
 #include "CellScan.h"
 #include "Settings.h"
-#include "CLibUtilsQTR/BoundingBox.hpp"
 #include "CLibUtilsQTR/DrawDebug.hpp"
 #ifndef NDEBUG
     #include "MCP.h"
@@ -90,55 +89,72 @@ REX::EnumSet<Scanner::Scope> GetWorldTriggerScope(RE::TESForm* form) {
 }
 
 
-FormID FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers) {
-    if (!a_obj || triggers.ordered.empty()) return 0;
-
-    Scanner::CachePtr cache;
-    std::optional<RE::BGSLocation*> current_location;
-    const auto originID = a_obj->GetFormID();
-    std::optional<RE::NiPoint3> originPos;
-    std::optional<DirectX::BoundingOrientedBox> originOBB;
-
-    const float r = Settings::search_radius;
-    const float r2 = (r > 0.0f) ? (r * r) : std::numeric_limits<float>::infinity();
-
-    for (const auto& [form, scope] : triggers.ordered) {
-        const auto triggerID = form->GetFormID();
-        if (!scope.any(Scanner::Scope::kProximity)) {
-            if (scope.any(Scanner::Scope::kSelf)) {
-                if (const auto location = form->As<RE::BGSLocation>()) {
-                    if (!current_location) current_location = LazyCache::GetSingleton()->GetLocation(a_obj);
-                    if (Utils::IsInLocation(location, *current_location)) return triggerID;
-                } else if (Matches(a_obj, form)) return triggerID;
+bool MatchesWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers::Candidate& trigger,
+                         WorldTriggerMatchContext& context) {
+    const auto form = trigger.form;
+    const auto scope = trigger.scope;
+    const auto triggerID = form->GetFormID();
+    if (!scope.any(Scanner::Scope::kProximity)) {
+        if (scope.any(Scanner::Scope::kSelf)) {
+            if (const auto location = form->As<RE::BGSLocation>()) {
+                if (!context.current_location) {
+                    context.current_location = LazyCache::GetSingleton()->GetLocation(a_obj);
+                }
+                return Utils::IsInLocation(location, *context.current_location);
             }
-            continue;
+            return Matches(a_obj, form);
         }
-
-        if (!cache) cache = Scanner::GetSingleton()->GetCache();
-        const auto it = cache->byTrigger.find(triggerID);
-        if (it == cache->byTrigger.end()) {
-            continue;
-        }
-        if (scope.any(Scanner::Scope::kSelf) && it->second.contains(originID)) return triggerID;
-
-        for (const auto& [refid, pos] : it->second) {
-            if (!originPos) originPos = Utils::WorldObject::GetPosition(a_obj);
-            if (originPos->GetSquaredDistance(pos) > r2) {
-                continue;
-            }
-
-            const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(refid);
-            if (!ref || !Utils::WorldObject::IsActive(ref)) {
-                continue;
-            }
-
-            if (SearchModulatorInCell_Sub(a_obj, ref, originOBB)) {
-                return triggerID;
-            }
-        }
+        return false;
     }
 
-    return 0;
+    if (!context.cache) {
+        context.cache = Scanner::GetSingleton()->GetCache();
+    }
+    const auto it = context.cache->byTrigger.find(triggerID);
+    if (it == context.cache->byTrigger.end()) {
+        return false;
+    }
+    if (scope.any(Scanner::Scope::kSelf) && it->second.contains(context.origin_id)) {
+        return true;
+    }
+
+    for (const auto& [refid, pos] : it->second) {
+        if (!context.origin_pos) {
+            context.origin_pos = Utils::WorldObject::GetPosition(a_obj);
+        }
+        if (context.origin_pos->GetSquaredDistance(pos) > context.radius_squared) {
+            continue;
+        }
+        const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(refid);
+        if (!ref || !Utils::WorldObject::IsActive(ref)) {
+            continue;
+        }
+        if (SearchModulatorInCell_Sub(a_obj, ref, context.origin_obb)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::pair<FormID, TriggerKind> FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers,
+                                               const FormID source_id, const StageInstance& instance) {
+    if (!a_obj || triggers.ordered.empty()) {
+        return {};
+    }
+
+    const float r = Settings::search_radius;
+    WorldTriggerMatchContext context{
+        .origin_id = a_obj->GetFormID(),
+        .radius_squared = (r > 0.0f) ? (r * r) : std::numeric_limits<float>::infinity()
+    };
+    for (const auto& trigger : triggers.ordered) {
+        if (MatchesWorldTrigger(a_obj, trigger, context) &&
+            CanActivateTrigger(context.origin_id, source_id, instance, trigger.form->GetFormID(),
+                               trigger.kind, trigger.activation_delay)) {
+            return {trigger.form->GetFormID(), trigger.kind};
+        }
+    }
+    return {};
 }
 
 bool IsInventoryTriggerAllowed(const AddOnSettings& settings, const FormID trigger_id, const TriggerKind kind,

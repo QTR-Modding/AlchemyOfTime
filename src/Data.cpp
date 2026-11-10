@@ -1,4 +1,5 @@
 #include "Data.h"
+#include "ActivationQueue.h"
 #include "CellScan.h"
 #include "Lorebox.h"
 #include "Manager.h"
@@ -121,8 +122,9 @@ void Source::UpdateAddons() {
 
 template <class T>
 void Source::AddTriggers(const tsl::ordered_map<FormID, T>& a_triggers,
-                         const std::unordered_map<FormID, std::unordered_set<StageNo>>& allowed_stages) {
-    for (const auto trigger_id : a_triggers | std::views::keys) {
+                         const std::unordered_map<FormID, std::unordered_set<StageNo>>& allowed_stages,
+                         const TriggerKind kind) {
+    for (const auto& [trigger_id, definition] : a_triggers) {
         const auto form = FormReader::GetFormByID(trigger_id);
         if (!form) continue;
 
@@ -131,7 +133,8 @@ void Source::AddTriggers(const tsl::ordered_map<FormID, T>& a_triggers,
 
         for (const auto no : allowed_stages.at(trigger_id)) {
             auto& prepared = triggers[no];
-            prepared.ordered.push_back({.form = form, .scope = scope});
+            prepared.ordered.push_back({.form = form, .scope = scope, .kind = kind,
+                                        .activation_delay = definition.activation_delay});
             if (scope.any(Scanner::Scope::kProximity)) prepared.scan_forms.push_back({.form = form, .scope = scope});
         }
     }
@@ -139,8 +142,8 @@ void Source::AddTriggers(const tsl::ordered_map<FormID, T>& a_triggers,
 
 void Source::RebuildTriggers() {
     triggers.clear();
-    AddTriggers(settings.transformers, settings.transformer_allowed_stages);
-    AddTriggers(settings.delayers, settings.delayer_allowed_stages);
+    AddTriggers(settings.transformers, settings.transformer_allowed_stages, TriggerKind::kTransformer);
+    AddTriggers(settings.delayers, settings.delayer_allowed_stages, TriggerKind::kDelayer);
     for (auto& prepared : triggers | std::views::values) {
         auto& forms = prepared.scan_forms;
         std::ranges::sort(forms, {}, &Scanner::ScopedForm::form);
@@ -527,23 +530,32 @@ bool Source::ShouldFreezeEvolution(RE::TESObjectREFR* ref) const {
 void Source::UpdateWorldItemTrigger(RE::TESObjectREFR* wo, StageInstance& wo_inst, const float _time) const {
     if (wo_inst.count <= 0) return;
     const auto previous_trigger = wo_inst.GetDelayerFormID();
+    const bool was_transforming = wo_inst.xtra.is_transforming;
     const SKSE::stl::scope_exit notify{[&]() {
-        if (wo_inst.GetDelayerFormID() != previous_trigger) {
+        if (wo_inst.GetDelayerFormID() != previous_trigger || wo_inst.xtra.is_transforming != was_transforming) {
             M->QueueRefNotification(wo->GetFormID());
         }
     }};
+    ActivationQueue::GetSingleton()->Refresh(RefInfo(wo->GetFormID(), wo_inst.xtra.form_id), *this);
     const auto it = triggers.find(wo_inst.no);
-    const auto trigger = it != triggers.end() ? FindWorldTrigger(wo, it->second) : 0;
+    const auto [trigger, kind] = it != triggers.end()
+        ? FindWorldTrigger(wo, it->second, formid, wo_inst)
+        : std::pair<FormID, TriggerKind>{};
     if (ShouldFreezeEvolution(wo)) {
         wo_inst.RemoveTimeMod(_time);
         wo_inst.SetDelay(_time, 0, trigger);
-        wo_inst.xtra.is_transforming = settings.transformers.contains(trigger);
+        switch (kind) {
+            case TriggerKind::kTransformer:
+                wo_inst.xtra.is_transforming = trigger != 0;
+                break;
+            case TriggerKind::kDelayer:
+                wo_inst.xtra.is_transforming = false;
+                break;
+        }
         return;
     }
 
     if (trigger) {
-        const auto kind = settings.transformers.contains(trigger) ? TriggerKind::kTransformer
-                                                                 : TriggerKind::kDelayer;
         SetDelayOfInstance(wo_inst, _time, trigger, kind);
     } else {
         wo_inst.RemoveTimeMod(_time);

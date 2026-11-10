@@ -2,6 +2,7 @@
 #include "CellScan.h"
 #include "InventoryWatch.h"
 #include "Presets.h"
+#include "CLibUtilsQTR/BoundingBox.hpp"
 
 enum class UpdatePhase { kCatchUp, kCurrent };
 
@@ -12,12 +13,31 @@ constexpr auto poll_matchtypes =
 REX::EnumSet<Scanner::Scope> GetWorldTriggerScope(RE::TESForm* form);
 
 struct Triggers {
-    std::vector<Scanner::ScopedForm> ordered; // from configs, in the given order
+    struct Candidate {
+        RE::TESForm* form;
+        REX::EnumSet<Scanner::Scope> scope;
+        TriggerKind kind;
+        float activation_delay;
+    };
+
+    std::vector<Candidate> ordered; // from configs, in the given order
     std::vector<Scanner::ScopedForm> scan_forms;
     bool preload_temp_effects{false};
 };
 
-FormID FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers);
+struct WorldTriggerMatchContext {
+    RefID origin_id;
+    float radius_squared;
+    Scanner::CachePtr cache;
+    std::optional<RE::BGSLocation*> current_location;
+    std::optional<RE::NiPoint3> origin_pos;
+    std::optional<DirectX::BoundingOrientedBox> origin_obb;
+};
+
+bool MatchesWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers::Candidate& trigger,
+                         WorldTriggerMatchContext& context);
+std::pair<FormID, TriggerKind> FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers,
+                                               FormID source_id, const StageInstance& instance);
 
 bool IsInventoryTriggerAllowed(const AddOnSettings& settings, FormID trigger_id, TriggerKind kind,
                                StageNo stage, FormID container);

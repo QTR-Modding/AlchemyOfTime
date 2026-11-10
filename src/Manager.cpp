@@ -575,7 +575,7 @@ void Manager::QueueRefDelete(const RefID refid) {
 
 void Manager::UpdateRefStop(const Source& src, const StageInstance& wo_inst, RefStop& a_ref_stop, const float stop_t) {
     const auto delayer = wo_inst.GetDelayerFormID();
-    const bool is_transformer = src.settings.transformers.contains(delayer);
+    const bool is_transformer = wo_inst.xtra.is_transforming;
     const bool is_delayer = !is_transformer && src.settings.delayers.contains(delayer);
 
     const auto pick = [&](const std::unordered_map<FormID, uint32_t>& transformer_map,
@@ -933,6 +933,9 @@ bool Manager::UpdateInventory(QueueInfo& queue_info, const UpdateTime t, const U
     std::vector<FormID> candidate_sources;
     const auto it0 = loc_to_sources.find(refid);
     if (it0 == loc_to_sources.end()) {
+        if (t.phase == UpdatePhase::kCurrent) {
+            ActivationQueue::GetSingleton()->ClearRef(refid);
+        }
         return false;
     }
     candidate_sources.reserve(it0->second.size());
@@ -970,6 +973,10 @@ bool Manager::UpdateInventory(QueueInfo& queue_info, const UpdateTime t, const U
                          {.hours = update.update_time, .phase = UpdatePhase::kCatchUp}, inv);
             }
         }
+    }
+
+    if (t.phase == UpdatePhase::kCurrent) {
+        ActivationQueue::GetSingleton()->Refresh(a_info, sources, inv);
     }
 
     // Time modulation: only re-snapshot if loc_to_sources[refid] changed (size or membership)
@@ -1033,35 +1040,10 @@ void Manager::UpdateInventory(const RefInfo& a_info, Utils::Inventory::Snapshot&
     }
 
     UpdateInventory(pending, {.hours = curr, .phase = UpdatePhase::kCurrent}, inv);
-    ValidateInventoryActivationTriggers(pending, inv);
     if (pending.update_type != QueueInfo::UpdateType::kNone) {
         QueueRefUpdate(RefStop(pending));
     } else {
         QueueRefDelete(a_info.ref_id);
-    }
-}
-
-void Manager::ValidateInventoryActivationTriggers(QueueInfo& queue_info, const Utils::Inventory::Snapshot& inv) {
-    const auto activation_queue = ActivationQueue::GetSingleton();
-    const auto refid = queue_info.ref_info.ref_id;
-    for (const auto& key : activation_queue->GetQueuedTriggers(refid)) {
-        const auto& [source_id, base_id, trigger_id, kind] = key;
-        bool valid = false;
-        const auto source = sources.find(source_id);
-        if (source != sources.end() && source->second->IsHealthy() &&
-            !source->second->ShouldFreezeEvolution(queue_info.ref_info.base_id)) {
-            const auto& src = *source->second;
-            if (const auto instances = src.data.find(refid); instances != src.data.end()) {
-                valid = std::ranges::any_of(instances->second, [&](const StageInstance& instance) {
-                    return instance.count > 0 && !instance.xtra.is_decayed && instance.xtra.form_id == base_id &&
-                           MatchesInventoryTrigger(src.settings, trigger_id, kind, inv, queue_info,
-                                                   instance, UpdatePhase::kCurrent);
-                });
-            }
-        }
-        if (!valid) {
-            activation_queue->RemoveTrigger(refid, key);
-        }
     }
 }
 
@@ -1232,7 +1214,7 @@ void Manager::UpdateQueuedInventory(const QueueInfo& queue_info) {
 
 void Manager::RestoreInventoryWatches() {
     const auto needs_watch = [](const Triggers& triggers) {
-        return std::ranges::any_of(triggers.ordered, [](const Scanner::ScopedForm& trigger) {
+        return std::ranges::any_of(triggers.ordered, [](const Triggers::Candidate& trigger) {
             return std::ranges::contains(poll_matchtypes, GetMatchType_(trigger.form->GetFormType()));
         });
     };

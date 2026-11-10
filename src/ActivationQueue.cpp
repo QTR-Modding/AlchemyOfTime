@@ -36,6 +36,82 @@ void ActivationQueue::Reset() {
     pending_.clear();
 }
 
+void ActivationQueue::ClearRef(const RefID refid) {
+    std::lock_guard lock(mutex_);
+    pending_.erase(refid);
+    if (pending_.empty()) {
+        Stop();
+    }
+}
+
+void ActivationQueue::Refresh(const RefInfo& ref_info,
+                              const std::unordered_map<FormID, std::unique_ptr<Source>>& sources,
+                              const Utils::Inventory::Snapshot& inventory) {
+    // Matching uses a local cache; refresh does not register inventory watches.
+    QueueInfo matching{.ref_info = ref_info};
+    for (const auto& key : GetQueuedTriggers(ref_info.ref_id)) {
+        const auto& [source_id, base_id, trigger_id, kind] = key;
+        bool valid = false;
+        const auto source = sources.find(source_id);
+        if (source != sources.end() && source->second->IsHealthy()) {
+            const auto& src = *source->second;
+            if (const auto instances = src.data.find(ref_info.ref_id); instances != src.data.end()) {
+                valid = std::ranges::any_of(instances->second, [&](const StageInstance& instance) {
+                    return instance.count > 0 && !instance.xtra.is_decayed && instance.xtra.form_id == base_id &&
+                           MatchesInventoryTrigger(src.settings, trigger_id, kind, inventory, matching,
+                                                   instance, UpdatePhase::kCurrent);
+                });
+            }
+        }
+        if (!valid) {
+            RemoveTrigger(ref_info.ref_id, key);
+        }
+    }
+}
+
+void ActivationQueue::Refresh(const RefInfo& ref_info, const Source& source) {
+    const auto queued = GetQueuedTriggers(ref_info.ref_id);
+    if (queued.empty()) {
+        return;
+    }
+    const auto world_ref = ref_info.GetRef();
+    if (!world_ref) {
+        return;
+    }
+
+    const float r = Settings::search_radius;
+    WorldTriggerMatchContext context{
+        .origin_id = ref_info.ref_id,
+        .radius_squared = (r > 0.0f) ? (r * r) : std::numeric_limits<float>::infinity()
+    };
+    for (const auto& key : queued) {
+        const auto& [source_id, base_id, trigger_id, kind] = key;
+        bool valid = false;
+        if (source.formid == source_id && source.IsHealthy()) {
+            if (const auto instances = source.data.find(ref_info.ref_id); instances != source.data.end()) {
+                for (const auto& instance : instances->second) {
+                    if (instance.count <= 0 || instance.xtra.is_decayed || instance.xtra.form_id != base_id) {
+                        continue;
+                    }
+                    if (const auto stage = source.triggers.find(instance.no); stage != source.triggers.end()) {
+                        const auto& candidates = stage->second.ordered;
+                        const auto candidate = std::ranges::find_if(candidates, [&](const Triggers::Candidate& entry) {
+                            return entry.form->GetFormID() == trigger_id && entry.kind == kind;
+                        });
+                        valid = candidate != candidates.end() && MatchesWorldTrigger(world_ref, *candidate, context);
+                    }
+                    if (valid) {
+                        break;
+                    }
+                }
+            }
+        }
+        if (!valid) {
+            RemoveTrigger(ref_info.ref_id, key);
+        }
+    }
+}
+
 std::vector<ActivationQueue::Key> ActivationQueue::GetQueuedTriggers(const RefID refid) {
     std::lock_guard lock(mutex_);
     std::vector<Key> result;
