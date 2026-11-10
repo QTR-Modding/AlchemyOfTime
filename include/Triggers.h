@@ -21,7 +21,9 @@ FormID FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers);
 
 bool IsInventoryTriggerAllowed(const AddOnSettings& settings, FormID trigger_id, TriggerKind kind,
                                StageNo stage, FormID container);
-bool IsActiveInventoryTrigger(const StageInstance& instance, FormID trigger_id, TriggerKind kind);
+bool IsActiveTrigger(const StageInstance& instance, FormID trigger_id, TriggerKind kind);
+bool CanActivateTrigger(RefID refid, FormID source_id, const StageInstance& instance,
+                        FormID trigger_id, TriggerKind kind, float activation_delay);
 bool MatchesInventoryTrigger(const AddOnSettings& settings, FormID trigger_id, TriggerKind kind,
                              const Utils::Inventory::Snapshot& inventory, QueueInfo& queue_info,
                              const StageInstance& instance, UpdatePhase phase);

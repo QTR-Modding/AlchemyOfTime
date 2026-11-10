@@ -159,7 +159,7 @@ bool IsInventoryTriggerAllowed(const AddOnSettings& settings, const FormID trigg
     return false;
 }
 
-bool IsActiveInventoryTrigger(const StageInstance& instance, const FormID trigger_id, const TriggerKind kind) {
+bool IsActiveTrigger(const StageInstance& instance, const FormID trigger_id, const TriggerKind kind) {
     if (trigger_id != instance.GetDelayerFormID()) {
         return false;
     }
@@ -170,6 +170,13 @@ bool IsActiveInventoryTrigger(const StageInstance& instance, const FormID trigge
             return !instance.xtra.is_transforming;
     }
     return false;
+}
+
+bool CanActivateTrigger(const RefID refid, const FormID source_id, const StageInstance& instance,
+                        const FormID trigger_id, const TriggerKind kind, const float activation_delay) {
+    return IsActiveTrigger(instance, trigger_id, kind) ||
+           ActivationQueue::GetSingleton()->CanActivate(
+               refid, {source_id, instance.xtra.form_id, trigger_id, kind}, activation_delay);
 }
 
 bool MatchesInventoryTrigger(const AddOnSettings& settings, const FormID trigger_id, const TriggerKind kind,
@@ -187,7 +194,7 @@ bool MatchesInventoryTrigger(const AddOnSettings& settings, const FormID trigger
     const auto type = GetMatchType_(trigger->GetFormType());
     if (std::ranges::contains(poll_matchtypes, type)) {
         if (phase == UpdatePhase::kCatchUp) {
-            return IsActiveInventoryTrigger(instance, trigger_id, kind);
+            return IsActiveTrigger(instance, trigger_id, kind);
         }
         const auto owner = queue_info.ref_info.GetRef();
         if (!owner) {
@@ -212,20 +219,11 @@ bool MatchesInventoryTrigger(const AddOnSettings& settings, const FormID trigger
 std::pair<FormID, TriggerKind> GetTriggerInInventory(const AddOnSettings& settings, const FormID source_id,
                             const Utils::Inventory::Snapshot& inventory, QueueInfo& queue_info,
                             const StageInstance& instance, const UpdatePhase phase) {
-    const auto activation_queue = ActivationQueue::GetSingleton();
-    const auto refid = queue_info.ref_info.ref_id;
-    const auto base_id = instance.xtra.form_id;
-
-
-    const auto can_activate = [&](const FormID trigger_id, const TriggerKind kind,
-                                  const float activation_delay) {
-        return IsActiveInventoryTrigger(instance, trigger_id, kind) ||
-               activation_queue->CanActivate(refid, {source_id, base_id, trigger_id, kind}, activation_delay);
-    };
     const auto find_trigger = [&](const auto& triggers, const TriggerKind kind) -> FormID {
         for (const auto& [trigger_id, definition] : triggers) {
             if (MatchesInventoryTrigger(settings, trigger_id, kind, inventory, queue_info, instance, phase) &&
-                can_activate(trigger_id, kind, definition.activation_delay)) {
+                CanActivateTrigger(queue_info.ref_info.ref_id, source_id, instance,
+                                   trigger_id, kind, definition.activation_delay)) {
                 return trigger_id;
             }
         }
