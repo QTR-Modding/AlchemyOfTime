@@ -533,7 +533,7 @@ void Source::UpdateWorldItemTrigger(RE::TESObjectREFR* wo, StageInstance& wo_ins
         }
     }};
     const auto it = triggers.find(wo_inst.no);
-    const auto trigger = it != triggers.end() ? FindWorldTrigger(wo, it->second) : 0;
+    const auto trigger = it != triggers.end() ? FindWorldTrigger(wo, it->second, previous_trigger) : 0;
     if (ShouldFreezeEvolution(wo)) {
         wo_inst.RemoveTimeMod(_time);
         wo_inst.SetDelay(_time, 0, trigger);

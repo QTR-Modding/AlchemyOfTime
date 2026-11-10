@@ -89,12 +89,17 @@ REX::EnumSet<Scanner::Scope> GetWorldTriggerScope(RE::TESForm* form) {
 }
 
 
-FormID FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers) {
+FormID FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers, const FormID active_trigger) {
     if (!a_obj || triggers.ordered.empty()) return 0;
 
     Scanner::CachePtr cache;
     std::optional<RE::BGSLocation*> current_location;
     const auto originID = a_obj->GetFormID();
+    const auto can_activate = [&](const FormID trigger_id) {
+        return trigger_id == active_trigger ||
+               ActivationQueue::GetSingleton()->CanActivate(
+                   originID, a_obj->GetBaseObject()->GetFormID(), trigger_id, 0.0f);
+    };
     std::optional<RE::NiPoint3> originPos;
     std::optional<DirectX::BoundingOrientedBox> originOBB;
 
@@ -107,8 +112,12 @@ FormID FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers) {
             if (scope.any(Scanner::Scope::kSelf)) {
                 if (const auto location = form->As<RE::BGSLocation>()) {
                     if (!current_location) current_location = LazyCache::GetSingleton()->GetLocation(a_obj);
-                    if (Utils::IsInLocation(location, *current_location)) return triggerID;
-                } else if (Matches(a_obj, form)) return triggerID;
+                    if (Utils::IsInLocation(location, *current_location) && can_activate(triggerID)) {
+                        return triggerID;
+                    }
+                } else if (Matches(a_obj, form) && can_activate(triggerID)) {
+                    return triggerID;
+                }
             }
             continue;
         }
@@ -118,7 +127,12 @@ FormID FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers) {
         if (it == cache->byTrigger.end()) {
             continue;
         }
-        if (scope.any(Scanner::Scope::kSelf) && it->second.contains(originID)) return triggerID;
+        if (scope.any(Scanner::Scope::kSelf) && it->second.contains(originID)) {
+            if (can_activate(triggerID)) {
+                return triggerID;
+            }
+            continue;
+        }
 
         for (const auto& [refid, pos] : it->second) {
             if (!originPos) originPos = Utils::WorldObject::GetPosition(a_obj);
@@ -132,7 +146,10 @@ FormID FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers) {
             }
 
             if (SearchModulatorInCell_Sub(a_obj, ref, originOBB)) {
-                return triggerID;
+                if (can_activate(triggerID)) {
+                    return triggerID;
+                }
+                break;
             }
         }
     }

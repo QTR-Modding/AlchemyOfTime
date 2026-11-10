@@ -1,4 +1,5 @@
 #pragma once
+#include "ActivationQueue.h"
 #include "CellScan.h"
 #include "InventoryWatch.h"
 #include "Stages.h"
@@ -17,7 +18,7 @@ struct Triggers {
     bool preload_temp_effects{false};
 };
 
-FormID FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers);
+FormID FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers, FormID active_trigger);
 
 FormID GetTriggerInInventory(std::ranges::input_range auto&& trigger_ids,
                              const std::unordered_map<FormID, std::unordered_set<StageNo>>& allowed_stages,
@@ -33,6 +34,12 @@ FormID GetTriggerInInventory(std::ranges::input_range auto&& trigger_ids,
                              const UpdatePhase phase) {
     const auto& inv = inventory.items;
     if (inv.empty()) return 0;
+
+    const auto can_activate = [&](const FormID trigger_id) {
+        return trigger_id == instance.GetDelayerFormID() ||
+               ActivationQueue::GetSingleton()->CanActivate(
+                   queue_info.ref_info.ref_id, instance.xtra.form_id, trigger_id, 0.0f);
+    };
 
     for (const auto a_trigger_id : trigger_ids) {
         if (!allowed_stages.at(a_trigger_id).contains(instance.no)) continue;
@@ -57,13 +64,17 @@ FormID GetTriggerInInventory(std::ranges::input_range auto&& trigger_ids,
                 queue_info.update_type = QueueInfo::UpdateType::kInventory;
             }
 
-            if (auto& watch = *queue_info.inventory_watch; watch.Eval(trigger, type, owner, inventory)) {
+            if (auto& watch = *queue_info.inventory_watch;
+                watch.Eval(trigger, type, owner, inventory) && can_activate(a_trigger_id)) {
                 return a_trigger_id;
             }
         } else if (const auto keyword = trigger->As<RE::BGSKeyword>()) {
-            if (inventory.HasKeyword(keyword)) return a_trigger_id;
+            if (inventory.HasKeyword(keyword) && can_activate(a_trigger_id)) {
+                return a_trigger_id;
+            }
         } else if (const auto obj = trigger->As<RE::TESBoundObject>()) {
-            if (const auto it = inv.find(obj); it != inv.end() && it->second.first > 0) {
+            if (const auto it = inv.find(obj);
+                it != inv.end() && it->second.first > 0 && can_activate(a_trigger_id)) {
                 return a_trigger_id;
             }
         }
