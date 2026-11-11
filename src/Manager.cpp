@@ -1427,6 +1427,7 @@ bool Manager::RefIsUpdatable(const RE::TESObjectREFR* ref) {
 }
 
 bool Manager::DeRegisterRef(const RefID refid) {
+    ActivationQueue::GetSingleton()->ClearRef(refid);
     bool found = false;
     for (auto& src : sources | std::views::values) {
         auto& source = *src;
@@ -2177,6 +2178,7 @@ void Manager::HandleWOBaseChange(RE::TESObjectREFR* ref) {
         if (!st_inst || st_inst->count <= 0) return;
         if (const auto bound_expected = src->IsFakeStage(st_inst->no) ? src->GetBoundObject() : st_inst->GetBound();
             bound_expected->GetFormID() != bound->GetFormID()) {
+            ActivationQueue::GetSingleton()->ClearRef(a_refid);
             st_inst->count = 0;
         }
     }
