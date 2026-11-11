@@ -32,12 +32,14 @@ struct WorldTriggerMatchContext {
     std::optional<RE::BGSLocation*> current_location;
     std::optional<RE::NiPoint3> origin_pos;
     std::optional<DirectX::BoundingOrientedBox> origin_obb;
+    std::vector<std::pair<const Triggers::Candidate*, bool>> proximity_matches;
 };
 
 bool MatchesWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers::Candidate& trigger,
                          WorldTriggerMatchContext& context);
 std::pair<FormID, TriggerKind> FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers,
-                                                FormID source_id, const StageInstance& instance, float update_time);
+                                                FormID source_id, const StageInstance& instance, float update_time,
+                                                WorldTriggerMatchContext& context);
 
 bool IsInventoryTriggerAllowed(const AddOnSettings& settings, FormID trigger_id, TriggerKind kind,
                                StageNo stage, FormID container);
