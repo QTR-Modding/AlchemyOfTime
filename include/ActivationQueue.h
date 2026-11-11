@@ -16,7 +16,7 @@ public:
     // Called during trigger selection while Manager's source lock is held.
     void Refresh(const RefInfo& ref_info, const std::unordered_map<FormID, std::unique_ptr<Source>>& sources,
                  const Utils::Inventory::Snapshot& inventory);
-    void Refresh(const RefInfo& ref_info, const Source& source);
+    void Refresh(RE::TESObjectREFR* world_ref, const Source& source, WorldTriggerMatchContext& context);
     [[nodiscard]] bool CanActivate(RefID refid, const Key& key, float activation_delay, float update_time);
 
 private:

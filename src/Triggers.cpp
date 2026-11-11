@@ -137,18 +137,19 @@ bool MatchesWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers::Candidate& tr
 
 std::pair<FormID, TriggerKind> FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers,
                                                 const FormID source_id, const StageInstance& instance,
-                                                const float update_time) {
+                                                const float update_time, WorldTriggerMatchContext& context) {
     if (!a_obj || triggers.ordered.empty()) {
         return {};
     }
 
-    const float r = Settings::search_radius;
-    WorldTriggerMatchContext context{
-        .origin_id = a_obj->GetFormID(),
-        .radius_squared = (r > 0.0f) ? (r * r) : std::numeric_limits<float>::infinity()
-    };
     for (const auto& trigger : triggers.ordered) {
-        if (MatchesWorldTrigger(a_obj, trigger, context) &&
+        const auto match = std::ranges::find_if(context.proximity_matches, [&](const auto& entry) {
+            return entry.first == &trigger;
+        });
+        const bool matches = match != context.proximity_matches.end()
+                                 ? match->second
+                                 : MatchesWorldTrigger(a_obj, trigger, context);
+        if (matches &&
             CanActivateTrigger(context.origin_id, source_id, instance, trigger.form->GetFormID(),
                                trigger.kind, trigger.activation_delay, update_time)) {
             return {trigger.form->GetFormID(), trigger.kind};

@@ -536,10 +536,15 @@ void Source::UpdateWorldItemTrigger(RE::TESObjectREFR* wo, StageInstance& wo_ins
             M->QueueRefNotification(wo->GetFormID());
         }
     }};
-    ActivationQueue::GetSingleton()->Refresh(RefInfo(wo->GetFormID(), wo_inst.xtra.form_id), *this);
+    const float radius = Settings::search_radius;
+    WorldTriggerMatchContext context{
+        .origin_id = wo->GetFormID(),
+        .radius_squared = (radius > 0.0f) ? (radius * radius) : std::numeric_limits<float>::infinity()
+    };
+    ActivationQueue::GetSingleton()->Refresh(wo, *this, context);
     const auto it = triggers.find(wo_inst.no);
     const auto [trigger, kind] = it != triggers.end()
-                                     ? FindWorldTrigger(wo, it->second, formid, wo_inst, _time)
+                                     ? FindWorldTrigger(wo, it->second, formid, wo_inst, _time, context)
                                      : std::pair<FormID, TriggerKind>{};
     if (ShouldFreezeEvolution(wo)) {
         wo_inst.RemoveTimeMod(_time);

@@ -70,26 +70,13 @@ void ActivationQueue::Refresh(const RefInfo& ref_info,
     }
 }
 
-void ActivationQueue::Refresh(const RefInfo& ref_info, const Source& source) {
-    const auto queued = GetQueuedTriggers(ref_info.ref_id);
-    if (queued.empty()) {
-        return;
-    }
-    const auto world_ref = ref_info.GetRef();
-    if (!world_ref) {
-        return;
-    }
-
-    const float r = Settings::search_radius;
-    WorldTriggerMatchContext context{
-        .origin_id = ref_info.ref_id,
-        .radius_squared = (r > 0.0f) ? (r * r) : std::numeric_limits<float>::infinity()
-    };
-    for (const auto& key : queued) {
+void ActivationQueue::Refresh(RE::TESObjectREFR* world_ref, const Source& source,
+                              WorldTriggerMatchContext& context) {
+    for (const auto& key : GetQueuedTriggers(context.origin_id)) {
         const auto& [source_id, base_id, trigger_id, kind] = key;
         bool valid = false;
         if (source.formid == source_id && source.IsHealthy()) {
-            if (const auto instances = source.data.find(ref_info.ref_id); instances != source.data.end()) {
+            if (const auto instances = source.data.find(context.origin_id); instances != source.data.end()) {
                 for (const auto& instance : instances->second) {
                     if (instance.count <= 0 || instance.xtra.is_decayed || instance.xtra.form_id != base_id) {
                         continue;
@@ -99,7 +86,12 @@ void ActivationQueue::Refresh(const RefInfo& ref_info, const Source& source) {
                         const auto candidate = std::ranges::find_if(candidates, [&](const Triggers::Candidate& entry) {
                             return entry.form->GetFormID() == trigger_id && entry.kind == kind;
                         });
-                        valid = candidate != candidates.end() && MatchesWorldTrigger(world_ref, *candidate, context);
+                        if (candidate != candidates.end()) {
+                            valid = MatchesWorldTrigger(world_ref, *candidate, context);
+                            if (candidate->scope.any(Scanner::Scope::kProximity)) {
+                                context.proximity_matches.emplace_back(&*candidate, valid);
+                            }
+                        }
                     }
                     if (valid) {
                         break;
@@ -108,7 +100,7 @@ void ActivationQueue::Refresh(const RefInfo& ref_info, const Source& source) {
             }
         }
         if (!valid) {
-            RemoveTrigger(ref_info.ref_id, key);
+            RemoveTrigger(context.origin_id, key);
         }
     }
 }
