@@ -137,7 +137,8 @@ bool MatchesWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers::Candidate& tr
 }
 
 std::pair<FormID, TriggerKind> FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers,
-                                               const FormID source_id, const StageInstance& instance) {
+                                               const FormID source_id, const StageInstance& instance,
+                                               const float update_time) {
     if (!a_obj || triggers.ordered.empty()) {
         return {};
     }
@@ -150,7 +151,7 @@ std::pair<FormID, TriggerKind> FindWorldTrigger(RE::TESObjectREFR* a_obj, const 
     for (const auto& trigger : triggers.ordered) {
         if (MatchesWorldTrigger(a_obj, trigger, context) &&
             CanActivateTrigger(context.origin_id, source_id, instance, trigger.form->GetFormID(),
-                               trigger.kind, trigger.activation_delay)) {
+                               trigger.kind, trigger.activation_delay, update_time)) {
             return {trigger.form->GetFormID(), trigger.kind};
         }
     }
@@ -189,10 +190,11 @@ bool IsActiveTrigger(const StageInstance& instance, const FormID trigger_id, con
 }
 
 bool CanActivateTrigger(const RefID refid, const FormID source_id, const StageInstance& instance,
-                        const FormID trigger_id, const TriggerKind kind, const float activation_delay) {
+                        const FormID trigger_id, const TriggerKind kind, const float activation_delay,
+                        const float update_time) {
     return IsActiveTrigger(instance, trigger_id, kind) ||
            ActivationQueue::GetSingleton()->CanActivate(
-               refid, {source_id, instance.xtra.form_id, trigger_id, kind}, activation_delay);
+               refid, {source_id, instance.xtra.form_id, trigger_id, kind}, activation_delay, update_time);
 }
 
 bool MatchesInventoryTrigger(const AddOnSettings& settings, const FormID trigger_id, const TriggerKind kind,
@@ -234,12 +236,12 @@ bool MatchesInventoryTrigger(const AddOnSettings& settings, const FormID trigger
 
 std::pair<FormID, TriggerKind> GetTriggerInInventory(const AddOnSettings& settings, const FormID source_id,
                             const Utils::Inventory::Snapshot& inventory, QueueInfo& queue_info,
-                            const StageInstance& instance, const UpdatePhase phase) {
+                            const StageInstance& instance, const UpdatePhase phase, const float update_time) {
     const auto find_trigger = [&](const auto& triggers, const TriggerKind kind) -> FormID {
         for (const auto& [trigger_id, definition] : triggers) {
             if (MatchesInventoryTrigger(settings, trigger_id, kind, inventory, queue_info, instance, phase) &&
                 CanActivateTrigger(queue_info.ref_info.ref_id, source_id, instance,
-                                   trigger_id, kind, definition.activation_delay)) {
+                                   trigger_id, kind, definition.activation_delay, update_time)) {
                 return trigger_id;
             }
         }

@@ -17,7 +17,7 @@ public:
     void Refresh(const RefInfo& ref_info, const std::unordered_map<FormID, std::unique_ptr<Source>>& sources,
                  const Utils::Inventory::Snapshot& inventory);
     void Refresh(const RefInfo& ref_info, const Source& source);
-    [[nodiscard]] bool CanActivate(RefID refid, const Key& key, float activation_delay);
+    [[nodiscard]] bool CanActivate(RefID refid, const Key& key, float activation_delay, float update_time);
 
 private:
     std::vector<Key> GetQueuedTriggers(RefID refid);
@@ -31,7 +31,7 @@ private:
 
     struct Entry {
         float activation_delay;
-        bool ready = false;
+        std::optional<float> ready_time;
     };
 
     float last_update_ = 0.0f;

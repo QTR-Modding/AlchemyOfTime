@@ -37,17 +37,17 @@ struct WorldTriggerMatchContext {
 bool MatchesWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers::Candidate& trigger,
                          WorldTriggerMatchContext& context);
 std::pair<FormID, TriggerKind> FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers,
-                                               FormID source_id, const StageInstance& instance);
+                                               FormID source_id, const StageInstance& instance, float update_time);
 
 bool IsInventoryTriggerAllowed(const AddOnSettings& settings, FormID trigger_id, TriggerKind kind,
                                StageNo stage, FormID container);
 bool IsActiveTrigger(const StageInstance& instance, FormID trigger_id, TriggerKind kind);
 bool CanActivateTrigger(RefID refid, FormID source_id, const StageInstance& instance,
-                        FormID trigger_id, TriggerKind kind, float activation_delay);
+                        FormID trigger_id, TriggerKind kind, float activation_delay, float update_time);
 bool MatchesInventoryTrigger(const AddOnSettings& settings, FormID trigger_id, TriggerKind kind,
                              const Utils::Inventory::Snapshot& inventory, QueueInfo& queue_info,
                              const StageInstance& instance, UpdatePhase phase);
 
 std::pair<FormID, TriggerKind> GetTriggerInInventory(const AddOnSettings& settings, FormID source_id,
                             const Utils::Inventory::Snapshot& inventory, QueueInfo& queue_info,
-                            const StageInstance& instance, UpdatePhase phase);
+                            const StageInstance& instance, UpdatePhase phase, float update_time);

@@ -539,7 +539,7 @@ void Source::UpdateWorldItemTrigger(RE::TESObjectREFR* wo, StageInstance& wo_ins
     ActivationQueue::GetSingleton()->Refresh(RefInfo(wo->GetFormID(), wo_inst.xtra.form_id), *this);
     const auto it = triggers.find(wo_inst.no);
     const auto [trigger, kind] = it != triggers.end()
-        ? FindWorldTrigger(wo, it->second, formid, wo_inst)
+        ? FindWorldTrigger(wo, it->second, formid, wo_inst, _time)
         : std::pair<FormID, TriggerKind>{};
     if (ShouldFreezeEvolution(wo)) {
         wo_inst.RemoveTimeMod(_time);
@@ -962,7 +962,7 @@ void Source::SetDelayOfInstance(StageInstance& instance, const UpdateTime time, 
         return;
     }
 
-    if (const auto [trigger, kind] = GetTriggerInInventory(settings, formid, a_inv, queue_info, instance, time.phase);
+    if (const auto [trigger, kind] = GetTriggerInInventory(settings, formid, a_inv, queue_info, instance, time.phase, time.hours);
         trigger) {
         SetDelayOfInstance(instance, time.hours, trigger, kind);
     } else {

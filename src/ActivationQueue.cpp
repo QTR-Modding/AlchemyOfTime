@@ -16,7 +16,8 @@ std::size_t ActivationQueue::KeyHash::operator()(const Key& key) const noexcept 
         std::string_view(reinterpret_cast<const char*>(ids), sizeof(ids)));
 }
 
-bool ActivationQueue::CanActivate(const RefID refid, const Key& key, const float activation_delay) {
+bool ActivationQueue::CanActivate(const RefID refid, const Key& key, const float activation_delay,
+                                  const float update_time) {
     if (activation_delay == 0.0f) {
         return true;
     }
@@ -27,7 +28,7 @@ bool ActivationQueue::CanActivate(const RefID refid, const Key& key, const float
         last_update_ = RE::Calendar::GetSingleton()->GetHoursPassed();
         Start();
     }
-    return it->second.ready;
+    return it->second.ready_time && update_time >= *it->second.ready_time;
 }
 
 void ActivationQueue::Reset() {
@@ -163,11 +164,11 @@ void ActivationQueue::UpdateLoop() {
         for (auto& [refid, triggers] : pending_) {
             bool hit = false;
             for (auto& entry : triggers | std::views::values) {
-                if (entry.ready) {
+                if (entry.ready_time) {
                     continue;
                 }
                 if (random_.generate() < -std::expm1(-elapsed / entry.activation_delay)) {
-                    entry.ready = true;
+                    entry.ready_time = now;
                     hit = true;
                 } else {
                     waiting = true;
@@ -195,7 +196,8 @@ void ActivationQueue::RequestUpdates(const std::vector<RefID>& refids) {
     for (const auto refid : refids) {
         const auto it = pending_.find(refid);
         if (it == pending_.end() ||
-            !std::ranges::any_of(it->second | std::views::values, &Entry::ready)) {
+            !std::ranges::any_of(it->second | std::views::values,
+                                [](const Entry& entry) { return entry.ready_time.has_value(); })) {
             continue;
         }
         if (const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(refid)) {
