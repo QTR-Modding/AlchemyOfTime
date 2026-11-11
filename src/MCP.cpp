@@ -881,8 +881,11 @@ void UI::UpdateStages(const std::vector<Source>& sources) {
         }
 
         const auto qform_type = Settings::GetQFormType(source.formid);
-        mcp_sources.push_back(MCPSource{.stages = temp_stages, .containers = containers_, .transformers = transformers_, .transformer_enditems = transformer_enditems_,
-                                        .transform_durations = transform_durations_, .time_modulators = time_modulators_, .time_modulator_multipliers = time_modulator_multipliers_,
+        mcp_sources.push_back(MCPSource{.stages = temp_stages, .containers = containers_, .transformers = transformers_,
+                                        .transformer_enditems = transformer_enditems_,
+                                        .transform_durations = transform_durations_,
+                                        .time_modulators = time_modulators_,
+                                        .time_modulator_multipliers = time_modulator_multipliers_,
                                         .type = qform_type});
     }
 }

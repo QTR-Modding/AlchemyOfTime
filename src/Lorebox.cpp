@@ -294,7 +294,8 @@ std::wstring Lorebox::BuildLoreFor(FormID hovered, RefID ownerId) {
                 r.count = st.count;
                 r.slope = st.GetDelaySlope();
                 if (!isFrozen && std::abs(r.slope) >= EPSILON &&
-                    src.GetNextUpdateTime(&st) - now > Settings::critical_stage_dur) continue;
+                    src.GetNextUpdateTime(&st) - now > Settings::critical_stage_dur)
+                    continue;
                 r.mod = st.GetDelayerFormID();
                 r.transforming = st.xtra.is_transforming;
                 r.frozen = isFrozen;

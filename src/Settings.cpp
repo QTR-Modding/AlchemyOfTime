@@ -472,7 +472,7 @@ namespace {
         const auto hashOwners = [](const std::vector<std::string>& owners) {
             return clib_util::hash::fnv1a_64(owners | std::views::transform(std::hash<std::string>{}));
         };
-        std::unordered_set<std::vector<std::string>, decltype(hashOwners)> seenOwners;
+        std::unordered_set<std::vector<std::string>, decltype(hashOwners)> seenOwners(0, hashOwners);
         seenOwners.reserve(combinedSettings.size());
         const auto first = std::remove_if(combinedSettings.rbegin(), combinedSettings.rend(), [&](const auto& rule) {
             return !seenOwners.insert(rule.first).second;
@@ -492,7 +492,7 @@ namespace {
     }
 
     std::unordered_map<FormID, AddOnSettings> processAddOnFile(const std::filesystem::path& filename,
-                                                            const std::string& qformtype) {
+                                                               const std::string& qformtype) {
         const auto displayName = SKSE::stl::utf16_to_utf8(filename.native()).value_or("<invalid filename>");
         logger::info("Parsing file: {}", displayName);
 
@@ -527,12 +527,15 @@ namespace {
             // we have list of owners at each node or a scalar owner
             auto temp_settings = PresetParse::parseAddOns_(Node_);
             if (!temp_settings.CheckIntegrity()) {
-                logger::error("Settings integrity check failed for formsLists entry {} in {}", entry_index, displayName);
+                logger::error("Settings integrity check failed for formsLists entry {} in {}", entry_index,
+                              displayName);
                 continue;
             }
-            if (!temp_settings.containers_defined && temp_settings.delayers.empty() && temp_settings.transformers.empty()) {
-                logger::error("Skipping formsLists entry {} in {}: no effective settings; no containers, time modulators, or transformers resolved.",
-                              entry_index, displayName);
+            if (!temp_settings.containers_defined && temp_settings.delayers.empty() && temp_settings.transformers.
+                empty()) {
+                logger::error(
+                    "Skipping formsLists entry {} in {}: no effective settings; no containers, time modulators, or transformers resolved.",
+                    entry_index, displayName);
                 continue;
             }
             bool has_compatible_forms = false;
@@ -653,8 +656,11 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
                     numeric_magnitude = numeric_trigger;
                 }
             }
-            const auto delayer_magnitude = numeric_magnitude ? *numeric_magnitude
-                : !modulator["magnitude"].IsNull() ? modulator["magnitude"].as<float>() : 1.f;
+            const auto delayer_magnitude = numeric_magnitude
+                                               ? *numeric_magnitude
+                                               : !modulator["magnitude"].IsNull()
+                                               ? modulator["magnitude"].as<float>()
+                                               : 1.f;
             // colors
             auto a_color = parse_color(modulator, "color");
             // sounds
@@ -667,11 +673,12 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
             auto containers = parse_formid_vec(modulator, "containers");
 
             const auto trigger_forms = numeric_magnitude
-                ? std::vector<FormID>{NumericKeywords::GetOrCreate(delayer_magnitude)->GetFormID()}
-                : Utils::ExpandFormLists(parse_formid_vec(modulator, "FormEditorID"));
+                                           ? std::vector<FormID>{
+                                               NumericKeywords::GetOrCreate(delayer_magnitude)->GetFormID()}
+                                           : Utils::ExpandFormLists(parse_formid_vec(modulator, "FormEditorID"));
             for (auto a_formid : trigger_forms) {
                 settings.delayer_allowed_stages[a_formid] = std::unordered_set(a_asv.begin(), a_asv.end());
-                settings.delayers[a_formid] = {delayer_magnitude, activation_delay};
+                settings.delayers[a_formid] = {.magnitude = delayer_magnitude, .activation_delay = activation_delay};
                 if (a_color) settings.delayer_colors[a_formid] = *a_color;
                 else settings.delayer_colors.erase(a_formid);
                 if (a_sound) settings.delayer_sounds[a_formid] = *a_sound;
@@ -725,9 +732,8 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
                     n_warnings++;
                 }
                 continue;
-            } else {
-                a_duration = *temp_duration;
             }
+            a_duration = *temp_duration;
             // allowed_stages
             std::vector<StageNo> a_asv;
             if (transformer["allowed_stages"] && !transformer["allowed_stages"].IsNull()) {
@@ -745,10 +751,11 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
             auto containers = parse_formid_vec(transformer, "containers");
 
             const auto trigger_forms = transformer["duration"]
-                ? Utils::ExpandFormLists(parse_formid_vec(transformer, "FormEditorID"))
-                : std::vector<FormID>{NumericKeywords::GetOrCreate(a_duration)->GetFormID()};
+                                           ? Utils::ExpandFormLists(parse_formid_vec(transformer, "FormEditorID"))
+                                           : std::vector<FormID>{NumericKeywords::GetOrCreate(a_duration)->GetFormID()};
             for (auto a_formid : trigger_forms) {
-                settings.transformers[a_formid] = {a_formid2, a_duration, activation_delay};
+                settings.transformers[a_formid] = {.final_form = a_formid2, .duration = a_duration,
+                                                   .activation_delay = activation_delay};
                 settings.transformer_allowed_stages[a_formid] = std::unordered_set(a_asv.begin(), a_asv.end());
                 if (a_color) settings.transformer_colors[a_formid] = *a_color;
                 else settings.transformer_colors.erase(a_formid);

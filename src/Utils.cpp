@@ -136,7 +136,7 @@ void Utils::hexToRGBA(const uint32_t color_code, RE::NiColorA& nicolora) {
     constexpr auto max_alpha = std::numeric_limits<uint8_t>::max();
     const RE::NiColor rgb(color_code >> alpha_bits);
     nicolora = RE::NiColorA(rgb.red, rgb.green, rgb.blue,
-                          static_cast<float>(color_code & max_alpha) / max_alpha);
+                            static_cast<float>(color_code & max_alpha) / max_alpha);
 }
 
 bool Utils::IsFoodItem(const RE::TESForm* form) {

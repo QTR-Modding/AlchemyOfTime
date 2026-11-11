@@ -6,7 +6,7 @@ void EventSink::HandleRef(RE::TESObjectREFR* ref, const bool skip_if_queued) {
     if (!ref) return;
     if (Utils::containerize) {
         if (const auto chest = RE::TESForm::LookupByID<RE::TESObjectREFR>(
-                Utils::containerize->GetChest(ref->GetFormID()))) {
+            Utils::containerize->GetChest(ref->GetFormID()))) {
             HandleRef(chest, skip_if_queued);
         }
     }

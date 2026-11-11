@@ -2,7 +2,6 @@
 #include "CLibUtilsQTR/FormReader.hpp"
 
 
-
 bool DefaultSettings::CheckIntegrity() {
     if (!HasValidActivationDelays()) {
         init_failed = true;

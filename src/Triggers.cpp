@@ -4,11 +4,10 @@
 #include "Settings.h"
 #include "CLibUtilsQTR/DrawDebug.hpp"
 #ifndef NDEBUG
-    #include "MCP.h"
+#include "MCP.h"
 #endif
 
 namespace {
-
     bool AreClose(const DirectX::BoundingOrientedBox& obb1_in, const DirectX::BoundingOrientedBox& obb2_in,
                   const float threshold) {
         DirectX::BoundingOrientedBox obb1 = obb1_in;
@@ -50,7 +49,7 @@ namespace {
             return false;
         }
 
-#ifndef NDEBUG
+        #ifndef NDEBUG
         if (UI::draw_debug) {
             DebugAPI_IMPL::DrawDebug::DrawOBB(obb2);
             DebugAPI_IMPL::DrawDebug::DrawOBB(*originOBB);
@@ -64,7 +63,7 @@ namespace {
             // yellow debug line between centers
             DebugAPI_IMPL::DrawDebug::draw_line(c1, c2, 2, RE::NiColorA(1.f, 1.f, 0.f, 1.f));
         }
-#endif
+        #endif
 
         return true;
     }
@@ -137,8 +136,8 @@ bool MatchesWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers::Candidate& tr
 }
 
 std::pair<FormID, TriggerKind> FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers,
-                                               const FormID source_id, const StageInstance& instance,
-                                               const float update_time) {
+                                                const FormID source_id, const StageInstance& instance,
+                                                const float update_time) {
     if (!a_obj || triggers.ordered.empty()) {
         return {};
     }
@@ -235,8 +234,9 @@ bool MatchesInventoryTrigger(const AddOnSettings& settings, const FormID trigger
 }
 
 std::pair<FormID, TriggerKind> GetTriggerInInventory(const AddOnSettings& settings, const FormID source_id,
-                            const Utils::Inventory::Snapshot& inventory, QueueInfo& queue_info,
-                            const StageInstance& instance, const UpdatePhase phase, const float update_time) {
+                                                     const Utils::Inventory::Snapshot& inventory, QueueInfo& queue_info,
+                                                     const StageInstance& instance, const UpdatePhase phase,
+                                                     const float update_time) {
     const auto find_trigger = [&](const auto& triggers, const TriggerKind kind) -> FormID {
         for (const auto& [trigger_id, definition] : triggers) {
             if (MatchesInventoryTrigger(settings, trigger_id, kind, inventory, queue_info, instance, phase) &&

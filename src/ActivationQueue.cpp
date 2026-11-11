@@ -23,7 +23,7 @@ bool ActivationQueue::CanActivate(const RefID refid, const Key& key, const float
     }
 
     std::lock_guard lock(mutex_);
-    const auto [it, inserted] = pending_[refid].try_emplace(key, Entry{activation_delay});
+    const auto [it, inserted] = pending_[refid].try_emplace(key, Entry{.activation_delay = activation_delay});
     if (inserted && !isRunning()) {
         last_update_ = RE::Calendar::GetSingleton()->GetHoursPassed();
         Start();
@@ -197,7 +197,7 @@ void ActivationQueue::RequestUpdates(const std::vector<RefID>& refids) {
         const auto it = pending_.find(refid);
         if (it == pending_.end() ||
             !std::ranges::any_of(it->second | std::views::values,
-                                [](const Entry& entry) { return entry.ready_time.has_value(); })) {
+                                 [](const Entry& entry) { return entry.ready_time.has_value(); })) {
             continue;
         }
         if (const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(refid)) {
