@@ -82,6 +82,9 @@ void StageInstance::SetTransform(const float time, const FormID formid) {
         return;
     }
     SetDelay(time, 1, formid);
+    // SetDelay can retain the previous delayer's timestamp.
+    _elapsed = GetElapsed(time);
+    _delay_start = time;
     xtra.is_transforming = true;
 }
 
