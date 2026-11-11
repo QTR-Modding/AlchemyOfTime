@@ -13,10 +13,10 @@ namespace AoT_API {
     constexpr auto kReferenceUpdated = "AoT_ReferenceUpdated";
 
     struct Progress {
-        float startTime;      // Game hour when the current slope started.
-        float elapsed;        // Progress accumulated before startTime, in game hours.
+        float startTime; // Game hour when the current slope started.
+        float elapsed; // Progress accumulated before startTime, in game hours.
         float slope;
-        float totalDuration;  // Active stage or transformation duration, in game hours.
+        float totalDuration; // Active stage or transformation duration, in game hours.
         RE::FormID triggerID;
     };
 

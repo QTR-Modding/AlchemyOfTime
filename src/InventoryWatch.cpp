@@ -7,7 +7,8 @@ bool InventoryWatch::HasChanged(RE::TESObjectREFR* owner) {
         if (current != last_location) {
             if (locations.HasChanged([&](RE::BGSLocation* location) {
                 return Utils::IsInLocation(location, current);
-            })) return true;
+            }))
+                return true;
             last_location = current;
         }
     }

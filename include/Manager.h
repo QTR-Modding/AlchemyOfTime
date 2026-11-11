@@ -193,7 +193,7 @@ class Manager final : public Ticker, public SaveLoadData {
     bool DeRegisterRef(RefID refid);
 
     [[nodiscard]] bool BuildScanRequests_(const std::vector<QueueInfo>& refStopsCopy,
-                                        std::vector<Scanner::Request>* requests);
+                                          std::vector<Scanner::Request>* requests);
 
     static bool LocHasStage(Source* src, RefID loc, FormID stage_formid);
 

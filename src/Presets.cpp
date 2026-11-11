@@ -2,8 +2,11 @@
 #include "CLibUtilsQTR/FormReader.hpp"
 
 
-
 bool DefaultSettings::CheckIntegrity() {
+    if (!HasValidActivationDelays()) {
+        init_failed = true;
+        return false;
+    }
     if (items.empty() || durations.empty() || stage_names.empty() || effects.empty() || numbers.empty()) {
         logger::error("One of the maps is empty.");
         init_failed = true;
@@ -41,8 +44,8 @@ bool DefaultSettings::CheckIntegrity() {
         return false;
     }
     for (const auto& [a_formID, _transformer] : transformers) {
-        const FormID _finalFormEditorID = _transformer.first;
-        const Duration _duration = _transformer.second;
+        const FormID _finalFormEditorID = _transformer.final_form;
+        const Duration _duration = _transformer.duration;
         const auto& _allowedStages = transformer_allowed_stages.at(a_formID);
         if (!FormReader::GetFormByID(a_formID) || !FormReader::GetFormByID<RE::TESBoundObject>(_finalFormEditorID)) {
             logger::error("Formid not found.");
@@ -224,7 +227,23 @@ void AddOnSettings::Merge(const AddOnSettings& addon) {
     replace(transformer_allowed_stages, addon.transformer_allowed_stages, addon.transformers);
 }
 
+bool AddOnSettings::HasValidActivationDelays() const {
+    const auto valid_delay = [](const auto& definition) {
+        return std::isfinite(definition.activation_delay) && definition.activation_delay >= 0.0f;
+    };
+    if (!std::ranges::all_of(delayers | std::views::values, valid_delay) ||
+        !std::ranges::all_of(transformers | std::views::values, valid_delay)) {
+        logger::error("Activation delay must be finite and non-negative.");
+        return false;
+    }
+    return true;
+}
+
 bool AddOnSettings::CheckIntegrity() {
+    if (!HasValidActivationDelays()) {
+        init_failed = true;
+        return false;
+    }
     for (const auto& _formID : containers) {
         if (!FormReader::GetFormByID(_formID)) {
             logger::error("Container form {} not found.", _formID);
@@ -242,8 +261,8 @@ bool AddOnSettings::CheckIntegrity() {
     }
 
     for (const auto& [a_formid, _transformer] : transformers) {
-        const FormID _finalFormEditorID = _transformer.first;
-        const Duration _duration = _transformer.second;
+        const FormID _finalFormEditorID = _transformer.final_form;
+        const Duration _duration = _transformer.duration;
         if (!FormReader::GetFormByID(a_formid) || !FormReader::GetFormByID<RE::TESBoundObject>(_finalFormEditorID)) {
             logger::error("Form not found.");
             init_failed = true;

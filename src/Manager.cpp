@@ -1,5 +1,6 @@
 #pragma once
 #include "Manager.h"
+#include "ActivationQueue.h"
 #include "CellScan.h"
 #include "Hooks.h"
 #include "Queue.h"
@@ -97,7 +98,7 @@ void Manager::RefreshLocationIndex(const RefID location_id) {
 }
 
 bool Manager::BuildScanRequests_(const std::vector<QueueInfo>& refStopsCopy,
-                                std::vector<Scanner::Request>* requests) {
+                                 std::vector<Scanner::Request>* requests) {
     bool preload_temp_effects = false;
 
     // Only touches plugin-owned data => guarded by sourceMutex_.
@@ -252,7 +253,8 @@ void Manager::UpdateImpl(RE::TESObjectREFR* from, RE::TESObjectREFR* to, const R
     {
         SRC_UNIQUE_GUARD;
         if (src = UpdateGetSource(ctx.what->GetFormID(), loc); src) {
-            ApplyTransferToSource_(*src, ctx, {.items = ctx.to && ctx.to->HasContainer() ? ctx.to->GetInventory() : InvMap{}});
+            ApplyTransferToSource_(
+                *src, ctx, {.items = ctx.to && ctx.to->HasContainer() ? ctx.to->GetInventory() : InvMap{}});
             SplitWorldObjectStackIfNeeded_(*src, ctx);
         }
     }
@@ -294,7 +296,8 @@ void Manager::SendRefNotifications() {
     }
     for (const auto refid : changed) {
         if (const auto ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(refid)) {
-            const SKSE::ModCallbackEvent event{AoT_API::kReferenceUpdated, {}, 0.f, ref};
+            const SKSE::ModCallbackEvent event{.eventName = AoT_API::kReferenceUpdated, .strArg = {}, .numArg = 0.f,
+                                               .sender = ref};
             SKSE::GetModCallbackEventSource()->SendEvent(&event);
         }
     }
@@ -574,7 +577,7 @@ void Manager::QueueRefDelete(const RefID refid) {
 
 void Manager::UpdateRefStop(const Source& src, const StageInstance& wo_inst, RefStop& a_ref_stop, const float stop_t) {
     const auto delayer = wo_inst.GetDelayerFormID();
-    const bool is_transformer = src.settings.transformers.contains(delayer);
+    const bool is_transformer = wo_inst.xtra.is_transforming;
     const bool is_delayer = !is_transformer && src.settings.delayers.contains(delayer);
 
     const auto pick = [&](const std::unordered_map<FormID, uint32_t>& transformer_map,
@@ -932,6 +935,9 @@ bool Manager::UpdateInventory(QueueInfo& queue_info, const UpdateTime t, const U
     std::vector<FormID> candidate_sources;
     const auto it0 = loc_to_sources.find(refid);
     if (it0 == loc_to_sources.end()) {
+        if (t.phase == UpdatePhase::kCurrent) {
+            ActivationQueue::GetSingleton()->ClearRef(refid);
+        }
         return false;
     }
     candidate_sources.reserve(it0->second.size());
@@ -969,6 +975,10 @@ bool Manager::UpdateInventory(QueueInfo& queue_info, const UpdateTime t, const U
                          {.hours = update.update_time, .phase = UpdatePhase::kCatchUp}, inv);
             }
         }
+    }
+
+    if (t.phase == UpdatePhase::kCurrent) {
+        ActivationQueue::GetSingleton()->Refresh(a_info, sources, inv);
     }
 
     // Time modulation: only re-snapshot if loc_to_sources[refid] changed (size or membership)
@@ -1104,7 +1114,8 @@ void Manager::SyncWithInventory(const RefInfo& a_info, Utils::Inventory::Snapsho
 
         auto rt = reg_total.find(fid);
         if (rt == reg_total.end()) {
-            if (invCount > 0) Register(fid, invCount, a_info, {.hours = now, .phase = UpdatePhase::kCurrent}, inventory);
+            if (invCount > 0) Register(fid, invCount, a_info, {.hours = now, .phase = UpdatePhase::kCurrent},
+                                       inventory);
             continue;
         }
 
@@ -1206,7 +1217,7 @@ void Manager::UpdateQueuedInventory(const QueueInfo& queue_info) {
 
 void Manager::RestoreInventoryWatches() {
     const auto needs_watch = [](const Triggers& triggers) {
-        return std::ranges::any_of(triggers.ordered, [](const Scanner::ScopedForm& trigger) {
+        return std::ranges::any_of(triggers.ordered, [](const Triggers::Candidate& trigger) {
             return std::ranges::contains(poll_matchtypes, GetMatchType_(trigger.form->GetFormType()));
         });
     };
@@ -1416,6 +1427,7 @@ bool Manager::RefIsUpdatable(const RE::TESObjectREFR* ref) {
 }
 
 bool Manager::DeRegisterRef(const RefID refid) {
+    ActivationQueue::GetSingleton()->ClearRef(refid);
     bool found = false;
     for (auto& src : sources | std::views::values) {
         auto& source = *src;
@@ -1727,6 +1739,7 @@ void Manager::SwapWithStage(RE::TESObjectREFR* wo_ref) {
 void Manager::Reset() {
     logger::info("Resetting manager...");
     Stop();
+    ActivationQueue::GetSingleton()->Reset();
     ClearWOUpdateQueue();
     Scanner::GetSingleton()->Reset();
     {
@@ -1934,7 +1947,7 @@ void Manager::ReceiveData() {
             if (!instance.is_fake || instance.count <= 0) continue;
             DFT->Reserve(base->GetFormID(), lhs.first.editor_id, instance.form_id);
             if (DFT->GetFormSet(base->GetFormID(), lhs.first.editor_id).contains(instance.form_id)) {
-                DFT->EditCustomID(instance.form_id, static_cast<uint32_t>(instance.no));
+                DFT->EditCustomID(instance.form_id, instance.no);
             }
         }
     }
@@ -2047,20 +2060,22 @@ std::uint32_t Manager::GetProgress(const RefID owner, const FormID item, std::sp
 
         for (const auto& instance : instances->second) {
             if (instance.count <= 0 || instance.xtra.is_decayed || instance.xtra.form_id != item ||
-                !src.IsStageNo(instance.no)) continue;
+                !src.IsStageNo(instance.no))
+                continue;
 
             const auto trigger = instance.GetDelayerFormID();
             float duration = src.GetStageDuration(instance.no);
             if (instance.xtra.is_transforming) {
                 const auto transformer = src.settings.transformers.find(trigger);
                 if (transformer == src.settings.transformers.end()) continue;
-                duration = transformer->second.second;
+                duration = transformer->second.duration;
             }
 
             if (count < output.size()) {
                 const auto state = instance.GetPlain();
-                output[count] = {state._delay_start, instance.xtra.is_transforming ? 0.f : state._elapsed,
-                                 instance.GetDelaySlope(), duration, trigger};
+                output[count] = {.startTime = state._delay_start,
+                                 .elapsed = instance.xtra.is_transforming ? 0.f : state._elapsed,
+                                 .slope = instance.GetDelaySlope(), .totalDuration = duration, .triggerID = trigger};
             }
             ++count;
         }
@@ -2163,6 +2178,7 @@ void Manager::HandleWOBaseChange(RE::TESObjectREFR* ref) {
         if (!st_inst || st_inst->count <= 0) return;
         if (const auto bound_expected = src->IsFakeStage(st_inst->no) ? src->GetBoundObject() : st_inst->GetBound();
             bound_expected->GetFormID() != bound->GetFormID()) {
+            ActivationQueue::GetSingleton()->ClearRef(a_refid);
             st_inst->count = 0;
         }
     }

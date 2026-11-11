@@ -105,7 +105,7 @@ private:
     bool NeedsWorldUpdate(StageNo no) const;
     template <class T>
     void AddTriggers(const tsl::ordered_map<FormID, T>& a_triggers,
-                     const std::unordered_map<FormID, std::unordered_set<StageNo>>& allowed_stages);
+                     const std::unordered_map<FormID, std::unordered_set<StageNo>>& allowed_stages, TriggerKind kind);
 
     RE::FormType formtype;
     std::set<StageNo> fake_stages;
@@ -180,7 +180,8 @@ private:
 
     void SetDelayOfInstance(StageInstance& instance, UpdateTime time, QueueInfo& queue_info,
                             const Utils::Inventory::Snapshot& a_inv) const;
-    void SetDelayOfInstance(StageInstance& instance, float a_time, FormID a_modulator) const;
+    void SetDelayOfInstance(StageInstance& instance, float a_time, FormID a_modulator,
+                            TriggerKind kind) const;
 
     [[nodiscard]] bool CheckIntegrity();
 

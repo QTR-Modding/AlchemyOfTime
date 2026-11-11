@@ -12,7 +12,7 @@ void LazyCache::Flush() const {
 }
 
 std::shared_ptr<const std::unordered_map<RE::ObjectRefHandle, std::unordered_set<RE::TESForm*>,
-                                       RE::BSCRC32<RE::ObjectRefHandle>>> LazyCache::GetTempEffects() const {
+                                         RE::BSCRC32<RE::ObjectRefHandle>>> LazyCache::GetTempEffects() const {
     std::lock_guard lock(temp_mutex_);
     if (!temp_effs_) {
         std::vector<std::pair<RE::ObjectRefHandle, RE::TESForm*>> targets;
@@ -22,7 +22,7 @@ std::shared_ptr<const std::unordered_map<RE::ObjectRefHandle, std::unordered_set
                 if (effect && !effect->finished && effect->artObject) {
                     if (effect->target) targets.emplace_back(effect->target, effect->artObject);
                 } else if (const auto shader = tempEffect->As<RE::ShaderReferenceEffect>();
-                           shader && !shader->finished && shader->effectData) {
+                    shader && !shader->finished && shader->effectData) {
                     if (shader->target) targets.emplace_back(shader->target, shader->effectData);
                 }
                 return RE::BSContainer::ForEachResult::kContinue;
@@ -35,7 +35,7 @@ std::shared_ptr<const std::unordered_map<RE::ObjectRefHandle, std::unordered_set
             return temp_effs_;
         }
         auto collected = std::make_shared<std::unordered_map<RE::ObjectRefHandle, std::unordered_set<RE::TESForm*>,
-                                                              RE::BSCRC32<RE::ObjectRefHandle>>>();
+                                                             RE::BSCRC32<RE::ObjectRefHandle>>>();
         for (const auto& [target, form] : targets) {
             (*collected)[target].insert(form);
         }
@@ -53,7 +53,8 @@ std::shared_ptr<const std::unordered_set<RE::TESForm*>> LazyCache::GetTempEffect
     return empty;
 }
 
-std::shared_ptr<const std::unordered_set<RE::EffectSetting*>> LazyCache::GetMagicEffects(RE::TESObjectREFR* a_ref) const {
+std::shared_ptr<const std::unordered_set<RE::EffectSetting*>>
+LazyCache::GetMagicEffects(RE::TESObjectREFR* a_ref) const {
     const auto handle = a_ref->GetHandle();
     std::lock_guard lock(info_mutex_);
     auto& effects = mg_effs_[handle];
@@ -62,8 +63,10 @@ std::shared_ptr<const std::unordered_set<RE::EffectSetting*>> LazyCache::GetMagi
         if (const auto target = a_ref->GetMagicTarget()) {
             if (const auto list = target->GetActiveEffectList()) {
                 for (const auto effect : *list) {
-                    if (!effect || effect->flags.any(RE::ActiveEffect::Flag::kInactive, RE::ActiveEffect::Flag::kDispelled) ||
-                        effect->conditionStatus == RE::ActiveEffect::ConditionStatus::kFalse) continue;
+                    if (!effect || effect->flags.any(RE::ActiveEffect::Flag::kInactive,
+                                                     RE::ActiveEffect::Flag::kDispelled) ||
+                        effect->conditionStatus == RE::ActiveEffect::ConditionStatus::kFalse)
+                        continue;
                     if (const auto base = effect->GetBaseObject()) {
                         if (!collected) collected = std::make_shared<std::unordered_set<RE::EffectSetting*>>();
                         collected->insert(base);
@@ -81,7 +84,8 @@ std::shared_ptr<const std::unordered_set<RE::EffectSetting*>> LazyCache::GetMagi
     return effects;
 }
 
-std::shared_ptr<const std::unordered_set<RE::BGSKeyword*>> LazyCache::GetKeywords(const RE::TESObjectREFR* a_ref) const {
+std::shared_ptr<const std::unordered_set<RE::BGSKeyword*>>
+LazyCache::GetKeywords(const RE::TESObjectREFR* a_ref) const {
     static const auto empty = std::make_shared<const std::unordered_set<RE::BGSKeyword*>>();
     // keywords map is from base form id to keywords, so we need to get the base form of the reference
     const auto base = a_ref->GetObjectReference();
@@ -159,7 +163,8 @@ Matcher GetMatcher_(const MatchType type) {
 
         case MatchType::kLocation:
             return [](RE::TESObjectREFR* ref, RE::TESForm* form) {
-                return Utils::IsInLocation(static_cast<RE::BGSLocation*>(form), LazyCache::GetSingleton()->GetLocation(ref));
+                return Utils::IsInLocation(static_cast<RE::BGSLocation*>(form),
+                                           LazyCache::GetSingleton()->GetLocation(ref));
             };
 
         case MatchType::kPerk:
@@ -190,7 +195,6 @@ Matcher GetMatcher_(const MatchType type) {
 
     return nullptr;
 }
-
 
 
 // 1. `Matches`: **Does this ref have this property ? **Returns a bool.
@@ -247,7 +251,7 @@ namespace {
                         if (actor->IsInFaction(static_cast<RE::TESFaction*>(form))) record(form);
                     }
                 } else if (const auto faction = ref->GetFactionOwner();
-                           faction && forms.contains(faction)) {
+                    faction && forms.contains(faction)) {
                     record(faction);
                 }
                 return;
@@ -331,7 +335,7 @@ void Scanner::Publish_(std::shared_ptr<Cache> next) {
 }
 
 void Scanner::TryAddExteriorCell_(RE::TESWorldSpace* ws, const std::int32_t x, const std::int32_t y,
-                                      std::unordered_set<RE::TESObjectCELL*>& cellsToScan) {
+                                  std::unordered_set<RE::TESObjectCELL*>& cellsToScan) {
     if (!ws) {
         return;
     }
@@ -346,7 +350,7 @@ void Scanner::TryAddExteriorCell_(RE::TESWorldSpace* ws, const std::int32_t x, c
 }
 
 void Scanner::CollectCellsToScan_(const std::vector<RE::TESObjectREFR*>& refs,
-                                      std::unordered_set<RE::TESObjectCELL*>& cellsToScan) {
+                                  std::unordered_set<RE::TESObjectCELL*>& cellsToScan) {
     if (refs.empty()) return;
 
     std::optional<std::unordered_set<RE::TESObjectCELL*>> expandedOrigins;
@@ -392,9 +396,8 @@ void Scanner::CollectCellsToScan_(const std::vector<RE::TESObjectREFR*>& refs,
 }
 
 void Scanner::CollectCellMatches_(RE::TESObjectREFR* ref,
-                                      const std::unordered_map<MatchType, std::unordered_set<RE::TESForm*>>& triggers,
-                                      Cache& outCache) {
-
+                                  const std::unordered_map<MatchType, std::unordered_set<RE::TESForm*>>& triggers,
+                                  Cache& outCache) {
     std::optional<Entry> entry;
     const auto addEntry = [&](const RE::TESForm* form) {
         if (!entry) {
@@ -415,7 +418,6 @@ void Scanner::ScanCells_(const std::unordered_set<RE::TESObjectCELL*>& cellsToSc
         if (!cell) {
             continue;
         }
-
 
         auto callback = [&outCache, &triggers](RE::TESObjectREFR* ref) -> RE::BSContainer::ForEachResult {
             if (!ref || !Utils::WorldObject::IsActive(ref)) {
@@ -444,7 +446,8 @@ void Scanner::ScanTempEffectTargets_(const std::unordered_set<RE::TESObjectCELL*
             if (!entry) {
                 const auto ref = handle.get();
                 if (!ref || !Utils::WorldObject::IsActive(ref.get()) ||
-                    !cellsToScan.contains(ref->GetParentCell())) break;
+                    !cellsToScan.contains(ref->GetParentCell()))
+                    break;
                 entry.emplace(ref->GetFormID(), Utils::WorldObject::GetPosition(ref.get()));
             }
             outCache.byTrigger[form->GetFormID()].try_emplace(entry->refid, entry->pos);

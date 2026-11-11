@@ -123,7 +123,8 @@ bool QueueManager::ProcessPendingMoves(const int n_tasks) {
                                 if (replacement) {
                                     transfer.Remove(owner, item, canRemove);
                                 } else {
-                                    owner->RemoveItem(item, canRemove, RE::ITEM_REMOVE_REASON::kRemove, nullptr, nullptr);
+                                    owner->RemoveItem(item, canRemove, RE::ITEM_REMOVE_REASON::kRemove, nullptr,
+                                                      nullptr);
                                 }
                                 available[rid] -= canRemove;
                                 removed_count = canRemove;
@@ -174,7 +175,8 @@ void QueueManager::PruneAddRemoveItemTasks(
         for (const auto& task : tasks) {
             if (task.add.item_id && task.remove.item_id && task.add.count > 0 && task.remove.count > 0) {
                 if (task.add.count == task.remove.count) {
-                    edges.push_back(Edge{.from = task.remove.item_id, .to = task.add.item_id, .count = task.add.count, .active = true});
+                    edges.push_back(Edge{.from = task.remove.item_id, .to = task.add.item_id, .count = task.add.count,
+                                         .active = true});
                 } else {
                     passthrough.push_back(task);
                 }

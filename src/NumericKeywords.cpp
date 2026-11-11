@@ -45,11 +45,13 @@ RE::BGSKeyword* NumericKeywords::GetOrCreate(const float value) {
 }
 
 bool NumericKeywords::Save(SKSE::SerializationInterface* serializationInterface) {
-    if (!serializationInterface->OpenRecord(Settings::kNumericKeywordsKey, Settings::kSerializationVersion)) return false;
+    if (!serializationInterface->OpenRecord(Settings::kNumericKeywordsKey, Settings::kSerializationVersion)) return
+        false;
     const auto count = numeric_keywords.size();
     if (!serializationInterface->WriteRecordData(count)) return false;
     for (const auto& [value, formid] : numeric_keywords) {
-        if (!serializationInterface->WriteRecordData(value) || !serializationInterface->WriteRecordData(formid)) return false;
+        if (!serializationInterface->WriteRecordData(value) || !serializationInterface->WriteRecordData(formid)) return
+            false;
     }
     return true;
 }
@@ -62,7 +64,8 @@ bool NumericKeywords::Load(SKSE::SerializationInterface* serializationInterface,
         float value;
         RE::FormID old_formid;
         if (serializationInterface->ReadRecordData(value) != sizeof(value) ||
-            serializationInterface->ReadRecordData(old_formid) != sizeof(old_formid)) return false;
+            serializationInterface->ReadRecordData(old_formid) != sizeof(old_formid))
+            return false;
         if (const auto current = numeric_keywords.find(value); current != numeric_keywords.end()) {
             remapped_formids[old_formid] = current->second;
         }

@@ -1,4 +1,5 @@
 #include "Data.h"
+#include "ActivationQueue.h"
 #include "CellScan.h"
 #include "Lorebox.h"
 #include "Manager.h"
@@ -121,8 +122,9 @@ void Source::UpdateAddons() {
 
 template <class T>
 void Source::AddTriggers(const tsl::ordered_map<FormID, T>& a_triggers,
-                         const std::unordered_map<FormID, std::unordered_set<StageNo>>& allowed_stages) {
-    for (const auto trigger_id : a_triggers | std::views::keys) {
+                         const std::unordered_map<FormID, std::unordered_set<StageNo>>& allowed_stages,
+                         const TriggerKind kind) {
+    for (const auto& [trigger_id, definition] : a_triggers) {
         const auto form = FormReader::GetFormByID(trigger_id);
         if (!form) continue;
 
@@ -131,7 +133,8 @@ void Source::AddTriggers(const tsl::ordered_map<FormID, T>& a_triggers,
 
         for (const auto no : allowed_stages.at(trigger_id)) {
             auto& prepared = triggers[no];
-            prepared.ordered.push_back({.form = form, .scope = scope});
+            prepared.ordered.push_back({.form = form, .scope = scope, .kind = kind,
+                                        .activation_delay = definition.activation_delay});
             if (scope.any(Scanner::Scope::kProximity)) prepared.scan_forms.push_back({.form = form, .scope = scope});
         }
     }
@@ -139,8 +142,8 @@ void Source::AddTriggers(const tsl::ordered_map<FormID, T>& a_triggers,
 
 void Source::RebuildTriggers() {
     triggers.clear();
-    AddTriggers(settings.transformers, settings.transformer_allowed_stages);
-    AddTriggers(settings.delayers, settings.delayer_allowed_stages);
+    AddTriggers(settings.transformers, settings.transformer_allowed_stages, TriggerKind::kTransformer);
+    AddTriggers(settings.delayers, settings.delayer_allowed_stages, TriggerKind::kDelayer);
     for (auto& prepared : triggers | std::views::values) {
         auto& forms = prepared.scan_forms;
         std::ranges::sort(forms, {}, &Scanner::ScopedForm::form);
@@ -513,7 +516,7 @@ bool Source::IsDecayedItem(const FormID _form_id) const {
     if (decayed_stage.formid == _form_id) return true;
     return std::ranges::any_of(settings.transformers | std::views::values,
                                [&](const auto& trns_tpl) {
-                                   return trns_tpl.first == _form_id;
+                                   return trns_tpl.final_form == _form_id;
                                });
 }
 
@@ -527,22 +530,33 @@ bool Source::ShouldFreezeEvolution(RE::TESObjectREFR* ref) const {
 void Source::UpdateWorldItemTrigger(RE::TESObjectREFR* wo, StageInstance& wo_inst, const float _time) const {
     if (wo_inst.count <= 0) return;
     const auto previous_trigger = wo_inst.GetDelayerFormID();
+    const bool was_transforming = wo_inst.xtra.is_transforming;
     const SKSE::stl::scope_exit notify{[&]() {
-        if (wo_inst.GetDelayerFormID() != previous_trigger) {
+        if (wo_inst.GetDelayerFormID() != previous_trigger || wo_inst.xtra.is_transforming != was_transforming) {
             M->QueueRefNotification(wo->GetFormID());
         }
     }};
+    ActivationQueue::GetSingleton()->Refresh(RefInfo(wo->GetFormID(), wo_inst.xtra.form_id), *this);
     const auto it = triggers.find(wo_inst.no);
-    const auto trigger = it != triggers.end() ? FindWorldTrigger(wo, it->second) : 0;
+    const auto [trigger, kind] = it != triggers.end()
+                                     ? FindWorldTrigger(wo, it->second, formid, wo_inst, _time)
+                                     : std::pair<FormID, TriggerKind>{};
     if (ShouldFreezeEvolution(wo)) {
         wo_inst.RemoveTimeMod(_time);
         wo_inst.SetDelay(_time, 0, trigger);
-        wo_inst.xtra.is_transforming = settings.transformers.contains(trigger);
+        switch (kind) {
+            case TriggerKind::kTransformer:
+                wo_inst.xtra.is_transforming = trigger != 0;
+                break;
+            case TriggerKind::kDelayer:
+                wo_inst.xtra.is_transforming = false;
+                break;
+        }
         return;
     }
 
     if (trigger) {
-        SetDelayOfInstance(wo_inst, _time, trigger);
+        SetDelayOfInstance(wo_inst, _time, trigger, kind);
     } else {
         wo_inst.RemoveTimeMod(_time);
     }
@@ -573,7 +587,7 @@ float Source::GetNextUpdateTime(const StageInstance* st_inst) {
     if (st_inst->xtra.is_transforming) {
         const auto transformer_form_id = st_inst->GetDelayerFormID();
         if (!settings.transformers.contains(transformer_form_id)) return 0.0f;
-        const auto trnsfrm_duration = std::get<1>(settings.transformers.at(transformer_form_id));
+        const auto trnsfrm_duration = settings.transformers.at(transformer_form_id).duration;
         return st_inst->GetTransformHittingTime(trnsfrm_duration);
     }
 
@@ -582,7 +596,8 @@ float Source::GetNextUpdateTime(const StageInstance* st_inst) {
     return st_inst->GetHittingTime(schranke);
 }
 
-void Source::UpdateInventoryItemTriggers(QueueInfo& queue_info, const UpdateTime time, const Utils::Inventory::Snapshot& inv) {
+void Source::UpdateInventoryItemTriggers(QueueInfo& queue_info, const UpdateTime time,
+                                         const Utils::Inventory::Snapshot& inv) {
     const auto it = data.find(queue_info.ref_info.ref_id);
     if (it == data.end()) return;
 
@@ -616,7 +631,7 @@ float Source::GetNextUpdateTime(const StageInstance* st_inst) const {
     if (st_inst->xtra.is_transforming) {
         const auto transformer_form_id = st_inst->GetDelayerFormID();
         if (!settings.transformers.contains(transformer_form_id)) return 0.0f;
-        const auto trnsfrm_duration = std::get<1>(settings.transformers.at(transformer_form_id));
+        const auto trnsfrm_duration = settings.transformers.at(transformer_form_id).duration;
         return st_inst->GetTransformHittingTime(trnsfrm_duration);
     }
 
@@ -860,7 +875,7 @@ bool Source::UpdateStageInstance(StageInstance& st_inst, const float curr_time) 
             st_inst.RemoveTimeMod(curr_time);
             return false;
         }
-        if (const auto hit_t = st_inst.GetTransformHittingTime(settings.transformers.at(curr_delayer).second);
+        if (const auto hit_t = st_inst.GetTransformHittingTime(settings.transformers.at(curr_delayer).duration);
             hit_t <= curr_time) {
             const auto& transformed_stage = transformed_stages.at(curr_delayer);
             st_inst.xtra.form_id = transformed_stage.formid;
@@ -926,8 +941,7 @@ Stage Source::GetTransformedStage(const FormID key_formid) const {
         logger::error("Transformer Formid {:x} not found in settings.", key_formid);
         return trnsf_st;
     }
-    const auto& [fst, snd] = settings.transformers.at(key_formid);
-    trnsf_st.formid = fst;
+    trnsf_st.formid = settings.transformers.at(key_formid).final_form;
     trnsf_st.duration = 0.1f; // just to avoid error in checkintegrity
     return trnsf_st;
 }
@@ -936,8 +950,9 @@ void Source::SetDelayOfInstance(StageInstance& instance, const UpdateTime time, 
                                 const Utils::Inventory::Snapshot& a_inv) const {
     if (instance.count <= 0 || instance.xtra.is_decayed) return;
     const auto previous_trigger = instance.GetDelayerFormID();
+    const bool was_transforming = instance.xtra.is_transforming;
     const SKSE::stl::scope_exit notify{[&]() {
-        if (instance.GetDelayerFormID() != previous_trigger) {
+        if (instance.GetDelayerFormID() != previous_trigger || instance.xtra.is_transforming != was_transforming) {
             M->QueueRefNotification(queue_info.ref_info.ref_id);
         }
     }};
@@ -948,31 +963,26 @@ void Source::SetDelayOfInstance(StageInstance& instance, const UpdateTime time, 
         return;
     }
 
-    if (const auto transformer_best =
-            GetTriggerInInventory(settings.transformers | std::views::keys, settings.transformer_allowed_stages,
-                              settings.transformer_containers, a_inv, queue_info, instance, time.phase)) {
-        SetDelayOfInstance(instance, time.hours, transformer_best);
-    } else if (const auto delayer_best =
-                   GetTriggerInInventory(settings.delayers | std::views::keys, settings.delayer_allowed_stages,
-                              settings.delayer_containers, a_inv, queue_info, instance, time.phase)) {
-        SetDelayOfInstance(instance, time.hours, delayer_best);
+    if (const auto [trigger, kind] = GetTriggerInInventory(settings, formid, a_inv, queue_info, instance, time.phase,
+                                                           time.hours);
+        trigger) {
+        SetDelayOfInstance(instance, time.hours, trigger, kind);
     } else {
         instance.RemoveTimeMod(time.hours);
     }
 }
 
-void Source::SetDelayOfInstance(StageInstance& instance, const float a_time, const FormID a_modulator) const {
-    if (settings.transformers.contains(a_modulator)) {
-        instance.SetTransform(a_time, a_modulator);
-        return;
+void Source::SetDelayOfInstance(StageInstance& instance, const float a_time, const FormID a_modulator,
+                                const TriggerKind kind) const {
+    switch (kind) {
+        case TriggerKind::kTransformer:
+            instance.SetTransform(a_time, a_modulator);
+            break;
+        case TriggerKind::kDelayer:
+            instance.RemoveTransform(a_time);
+            instance.SetDelay(a_time, settings.delayers.at(a_modulator).magnitude, a_modulator);
+            break;
     }
-    instance.RemoveTransform(a_time);
-    const float delay_ = !a_modulator
-                             ? 1
-                             : settings.delayers.contains(a_modulator)
-                             ? settings.delayers.at(a_modulator)
-                             : 1;
-    instance.SetDelay(a_time, delay_, a_modulator);
 }
 
 bool Source::CheckIntegrity() {

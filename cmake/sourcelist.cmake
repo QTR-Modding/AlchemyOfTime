@@ -14,6 +14,7 @@ set(sources ${sources}
 	src/Lorebox.cpp
 	src/CellScan.cpp
 	src/Queue.cpp
+	src/ActivationQueue.cpp
 	src/InventoryWatch.cpp
 	src/Triggers.cpp
 	src/WorldUpdates.cpp

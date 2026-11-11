@@ -1,7 +1,8 @@
 #pragma once
 #include "CellScan.h"
 #include "InventoryWatch.h"
-#include "Stages.h"
+#include "Presets.h"
+#include "CLibUtilsQTR/BoundingBox.hpp"
 
 enum class UpdatePhase { kCatchUp, kCurrent };
 
@@ -12,61 +13,42 @@ constexpr auto poll_matchtypes =
 REX::EnumSet<Scanner::Scope> GetWorldTriggerScope(RE::TESForm* form);
 
 struct Triggers {
-    std::vector<Scanner::ScopedForm> ordered; // from configs, in the given order
+    struct Candidate {
+        RE::TESForm* form;
+        REX::EnumSet<Scanner::Scope> scope;
+        TriggerKind kind;
+        float activation_delay;
+    };
+
+    std::vector<Candidate> ordered; // from configs, in the given order
     std::vector<Scanner::ScopedForm> scan_forms;
     bool preload_temp_effects{false};
 };
 
-FormID FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers);
+struct WorldTriggerMatchContext {
+    RefID origin_id;
+    float radius_squared;
+    Scanner::CachePtr cache;
+    std::optional<RE::BGSLocation*> current_location;
+    std::optional<RE::NiPoint3> origin_pos;
+    std::optional<DirectX::BoundingOrientedBox> origin_obb;
+};
 
-FormID GetTriggerInInventory(std::ranges::input_range auto&& trigger_ids,
-                             const std::unordered_map<FormID, std::unordered_set<StageNo>>& allowed_stages,
-                             const std::unordered_map<FormID, std::unordered_set<FormID>>& containers,
+bool MatchesWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers::Candidate& trigger,
+                         WorldTriggerMatchContext& context);
+std::pair<FormID, TriggerKind> FindWorldTrigger(RE::TESObjectREFR* a_obj, const Triggers& triggers,
+                                                FormID source_id, const StageInstance& instance, float update_time);
+
+bool IsInventoryTriggerAllowed(const AddOnSettings& settings, FormID trigger_id, TriggerKind kind,
+                               StageNo stage, FormID container);
+bool IsActiveTrigger(const StageInstance& instance, FormID trigger_id, TriggerKind kind);
+bool CanActivateTrigger(RefID refid, FormID source_id, const StageInstance& instance,
+                        FormID trigger_id, TriggerKind kind, float activation_delay, float update_time);
+bool MatchesInventoryTrigger(const AddOnSettings& settings, FormID trigger_id, TriggerKind kind,
                              const Utils::Inventory::Snapshot& inventory, QueueInfo& queue_info,
                              const StageInstance& instance, UpdatePhase phase);
 
-FormID GetTriggerInInventory(std::ranges::input_range auto&& trigger_ids,
-                             const std::unordered_map<FormID, std::unordered_set<StageNo>>& allowed_stages,
-                             const std::unordered_map<FormID, std::unordered_set<FormID>>& containers,
-                             const Utils::Inventory::Snapshot& inventory, QueueInfo& queue_info,
-                             const StageInstance& instance,
-                             const UpdatePhase phase) {
-    const auto& inv = inventory.items;
-    if (inv.empty()) return 0;
-
-    for (const auto a_trigger_id : trigger_ids) {
-        if (!allowed_stages.at(a_trigger_id).contains(instance.no)) continue;
-        if (const auto it = containers.find(a_trigger_id);
-            it != containers.end() && !it->second.empty() && !it->second.contains(queue_info.ref_info.base_id)) {
-            continue;
-        }
-        const auto trigger = RE::TESForm::LookupByID(a_trigger_id);
-        if (!trigger) continue;
-
-        const auto type = GetMatchType_(trigger->GetFormType());
-        if (std::ranges::contains(poll_matchtypes, type)) {
-            if (phase == UpdatePhase::kCatchUp) {
-                if (a_trigger_id == instance.GetDelayerFormID()) return a_trigger_id;
-                continue;
-            }
-
-            const auto owner = queue_info.ref_info.GetRef();
-            if (!owner) continue;
-            if (!queue_info.inventory_watch) {
-                queue_info.inventory_watch = std::make_shared<InventoryWatch>();
-                queue_info.update_type = QueueInfo::UpdateType::kInventory;
-            }
-
-            if (auto& watch = *queue_info.inventory_watch; watch.Eval(trigger, type, owner, inventory)) {
-                return a_trigger_id;
-            }
-        } else if (const auto keyword = trigger->As<RE::BGSKeyword>()) {
-            if (inventory.HasKeyword(keyword)) return a_trigger_id;
-        } else if (const auto obj = trigger->As<RE::TESBoundObject>()) {
-            if (const auto it = inv.find(obj); it != inv.end() && it->second.first > 0) {
-                return a_trigger_id;
-            }
-        }
-    }
-    return 0;
-}
+std::pair<FormID, TriggerKind> GetTriggerInInventory(const AddOnSettings& settings, FormID source_id,
+                                                     const Utils::Inventory::Snapshot& inventory, QueueInfo& queue_info,
+                                                     const StageInstance& instance, UpdatePhase phase,
+                                                     float update_time);
