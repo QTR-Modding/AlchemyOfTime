@@ -172,7 +172,7 @@ class Manager final : public Ticker, public SaveLoadData {
 
     void UpdateQueuedRef(const QueueInfo& queue_info, float curr_time);
     void UpdateQueuedWO(const RefInfo& ref_info, float curr_time);
-    void UpdateQueuedInventory(const QueueInfo& queue_info);
+    void UpdateQueuedInventory(const QueueInfo& queue_info, float curr_time);
     // [expects: sourceMutex_] (shared)
     void RestoreInventoryWatches();
     void RestoreActiveEffectForms(const std::vector<clib_utilsQTR::ActEff>& effects);

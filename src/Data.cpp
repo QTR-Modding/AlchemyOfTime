@@ -567,6 +567,14 @@ void Source::UpdateWorldItemTrigger(RE::TESObjectREFR* wo, StageInstance& wo_ins
     }
 }
 
+StageNo Source::GetNextAgingStage(const StageInstance& instance) const {
+    const auto slope = instance.GetDelaySlope();
+    if (std::abs(slope) < EPSILON || ShouldResetAging(instance)) {
+        return instance.no;
+    }
+    return GetAdjacentStage(instance.no, slope < 0);
+}
+
 float Source::GetNextUpdateTime(const StageInstance* st_inst) {
     if (!st_inst) {
         logger::error("Stage instance is null.");
@@ -830,6 +838,19 @@ void Source::Reset() {
     init_failed = false;
 }
 
+StageNo Source::GetAdjacentStage(const StageNo stage, const bool backwards) {
+    if (backwards) {
+        return stage > 0 ? stage - 1 : stage;
+    }
+    return stage + 1;
+}
+
+bool Source::ShouldResetAging(const StageInstance& instance) const {
+    return (instance.xtra.form_id == settings.decayed_id && GetNStages() < 2) ||
+           (instance.count > 0 && instance.GetDelayerFormID() == 0 &&
+            GetStageDuration(instance.no) > Settings::critical_stage_dur);
+}
+
 bool Source::UpdateStageInstanceHelper(StageInstance& st_inst, const float curr_time,
                                        const std::unordered_set<StageNo>& a_allowed_delayer_stages) {
     if (st_inst.xtra.is_decayed) return false;
@@ -838,14 +859,12 @@ bool Source::UpdateStageInstanceHelper(StageInstance& st_inst, const float curr_
     const auto a_schranke = is_backwards ? 0.f : GetStage(st_inst.no).duration;
 
     if (const auto hit_t = st_inst.GetHittingTime(a_schranke); hit_t <= curr_time) {
-        if (is_backwards && st_inst.no > 0) {
-            --st_inst.no;
-        } else if (!is_backwards) {
-            ++st_inst.no;
-        } else {
+        const auto next_stage = GetAdjacentStage(st_inst.no, is_backwards);
+        if (next_stage == st_inst.no) {
             st_inst.SetNewStart(curr_time);
             return false;
         }
+        st_inst.no = next_stage;
         const bool is_stage = IsStageNo(st_inst.no);
         const auto& new_stage = is_stage ? GetStage(st_inst.no) : decayed_stage;
         st_inst.xtra.form_id = new_stage.formid;
@@ -889,7 +908,7 @@ bool Source::UpdateStageInstance(StageInstance& st_inst, const float curr_time) 
         }
         return false;
     }
-    if (GetNStages() < 2 && GetFinalStage().formid == st_inst.xtra.form_id) {
+    if (ShouldResetAging(st_inst)) {
         st_inst.SetNewStart(curr_time);
         return false;
     }
@@ -897,10 +916,6 @@ bool Source::UpdateStageInstance(StageInstance& st_inst, const float curr_time) 
         return false;
     }
     if (st_inst.count <= 0) {
-        return false;
-    }
-    if (curr_delayer == 0 && GetStage(st_inst.no).duration > Settings::critical_stage_dur) {
-        st_inst.SetNewStart(curr_time);
         return false;
     }
 

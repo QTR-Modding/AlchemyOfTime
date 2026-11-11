@@ -106,7 +106,7 @@ bool Manager::BuildScanRequests_(const std::vector<QueueInfo>& refStopsCopy,
     for (const auto& queue_info : refStopsCopy) {
         if (!requests && preload_temp_effects) break;
         if (queue_info.update_type == QueueInfo::UpdateType::kInventory) {
-            preload_temp_effects |= !queue_info.inventory_watch->temp_effects.list.empty();
+            preload_temp_effects |= queue_info.inventory_watch && !queue_info.inventory_watch->temp_effects.list.empty();
             continue;
         }
 
@@ -211,6 +211,9 @@ std::optional<float> Manager::GetNextUpdateTime(const RefInfo& a_info) {
 
         for (auto& inst : dit->second) {
             if (inst.xtra.is_decayed || !src.IsStageNo(inst.no)) continue;
+            if (!inst.xtra.is_transforming && src.GetNextAgingStage(inst) == inst.no) {
+                continue;
+            }
             const float t = src.GetNextUpdateTime(&inst);
             if (t > 0.0f && t < best) {
                 best = t;
@@ -1042,6 +1045,10 @@ void Manager::UpdateInventory(const RefInfo& a_info, Utils::Inventory::Snapshot&
     }
 
     UpdateInventory(pending, {.hours = curr, .phase = UpdatePhase::kCurrent}, inv);
+    if (const auto next = GetNextUpdateTime(pending.ref_info)) {
+        pending.stop_time = *next;
+        pending.update_type = QueueInfo::UpdateType::kInventory;
+    }
     if (pending.update_type != QueueInfo::UpdateType::kNone) {
         QueueRefUpdate(RefStop(pending));
     } else {
@@ -1188,31 +1195,40 @@ void Manager::UpdateQueuedRef(const QueueInfo& queue_info, const float curr_time
             UpdateQueuedWO(queue_info.ref_info, curr_time);
             break;
         case QueueInfo::UpdateType::kInventory:
-            UpdateQueuedInventory(queue_info);
+            UpdateQueuedInventory(queue_info, curr_time);
             break;
         case QueueInfo::UpdateType::kNone:
             break;
     }
 }
 
-void Manager::UpdateQueuedInventory(const QueueInfo& queue_info) {
-    auto& watch = *queue_info.inventory_watch;
-    const auto owner = queue_info.ref_info.ref_handle.get();
+void Manager::UpdateQueuedInventory(const QueueInfo& queue_info, const float curr_time) {
+    const auto& watch = queue_info.inventory_watch;
+    const bool due = queue_info.stop_time > 0 && queue_info.stop_time <= curr_time;
+    if (!due && !watch) {
+        return;
+    }
+    const auto owner = queue_info.ref_info.GetRef();
     if (!owner || owner->IsDeleted() || owner->IsMarkedForDeletion() || !owner->HasContainer()) {
         QueueRefDelete(queue_info.ref_info.ref_id);
         return;
     }
 
-    if (!watch.HasChanged(owner.get())) return;
+    if (!due && !watch->HasChanged(owner)) {
+        return;
+    }
     {
         QUE_UNIQUE_GUARD;
         const auto it = _ref_stops_.find(queue_info.ref_info.ref_id);
         // check if stale
-        if (it == _ref_stops_.end() || it->second.inventory_watch.get() != &watch) return;
+        if (it == _ref_stops_.end() || it->second.inventory_watch != watch ||
+            it->second.stop_time != queue_info.stop_time) {
+            return;
+        }
         // if deletion was already requested, stop here instead of calling MarkDirty_ again.
         if (!queue_delete_.insert(queue_info.ref_info.ref_id).second) return;
     }
-    MarkDirty_(owner.get());
+    MarkDirty_(owner);
 }
 
 void Manager::RestoreInventoryWatches() {
@@ -1766,6 +1782,7 @@ void Manager::Reset() {
 
 bool Manager::HandleFormDelete(const FormID a_refid) {
     SRC_UNIQUE_GUARD;
+    QueueRefDelete(a_refid);
     return DeRegisterRef(a_refid);
 }
 

@@ -77,6 +77,7 @@ struct Source {
     void UpdateInventoryItemTriggers(QueueInfo& queue_info, UpdateTime time, const Utils::Inventory::Snapshot& inv);
 
 
+    [[nodiscard]] StageNo GetNextAgingStage(const StageInstance& instance) const;
     float GetNextUpdateTime(const StageInstance* st_inst);
     float GetNextUpdateTime(const StageInstance* st_inst) const;
 
@@ -121,6 +122,8 @@ private:
     [[nodiscard]] bool UpdateStageInstanceHelper(StageInstance& st_inst, float curr_time,
                                                  const std::unordered_set<StageNo>& a_allowed_delayer_stages);
     [[nodiscard]] bool UpdateStageInstance(StageInstance& st_inst, float curr_time);
+    [[nodiscard]] bool ShouldResetAging(const StageInstance& instance) const;
+    [[nodiscard]] static StageNo GetAdjacentStage(StageNo stage, bool backwards);
 
     template <typename T>
     void ApplyMGEFFSettings(T* stage_form, std::vector<StageEffect>& settings_effs) {
