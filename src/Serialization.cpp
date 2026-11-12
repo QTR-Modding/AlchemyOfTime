@@ -22,7 +22,10 @@ bool SaveLoadData::Save(SKSE::SerializationInterface* serializationInterface) {
         }
 
         const std::string editorid = lhs.first.editor_id;
-        Serialization::write_string(serializationInterface, editorid);
+        if (!Serialization::write_string(serializationInterface, editorid)) {
+            logger::error("Failed to save EditorID");
+            return false;
+        }
 
         std::uint32_t refid = lhs.second;
         if (!serializationInterface->WriteRecordData(refid)) {
