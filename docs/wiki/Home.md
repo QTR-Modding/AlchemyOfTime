@@ -154,7 +154,7 @@ timeModulators:
 
 ## Additional Features
 
-The `color`, `sound`, `art_object`, and `effect_shader` fields on stages, time modulators, and transformers apply only to items lying in the world, with [world-item evolution enabled](#world-item-evolution). Inventory items still receive the timing and transformation behavior, but these fields do not add visuals or play sounds in inventories.
+The `color`, `sound`, `art_object`, and `effect_shader` fields on stages, time modulators, and transformers apply only to items lying in the world, with [world-item evolution enabled](#world-item-evolution). Inventory items still receive the timing and transformation behavior, but these fields do not add visuals or play sounds in inventories. Omitted or `null` trigger effect fields use the current stage's values.
 
 ### Tint colors
 
@@ -166,7 +166,7 @@ color: "#000000"
 
 Use `"#RRGGBB"` for red, green, and blue, with two hexadecimal digits per channel (`00` to `FF`). For example, `"#FF0000"` is red. Add two more digits for tint alpha: `"#FF000080"` is red at roughly half strength. Alpha `00` makes the tint transparent; `FF` applies its full strength. Quote these values because an unquoted `#` starts a YAML comment.
 
-On a time modulator or transformer, omitting `color` or writing `color: null` keeps the stage's tint. Use `color: 0` to clear the tint while the trigger is active. `"#000000"` and `"#000000FF"` both mean black at full strength; `"#00000000"` clears the tint.
+Use `color: 0` to clear the tint while the trigger is active. `"#000000"` and `"#000000FF"` both mean black at full strength; `"#00000000"` clears the tint.
 
 Existing values without `#`, including values starting with `0x`, keep their previous meaning: zero clears the tint, values through `FFFFFF` use RGB, and larger values use RGBA. Leading zeros do not change that interpretation, so legacy `0x000000FF` means blue, while `"#000000FF"` means black at full strength.
 
