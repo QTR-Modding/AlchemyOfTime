@@ -22,7 +22,10 @@ bool SaveLoadData::Save(SKSE::SerializationInterface* serializationInterface) {
         }
 
         const std::string editorid = lhs.first.editor_id;
-        Serialization::write_string(serializationInterface, editorid);
+        if (!Serialization::write_string(serializationInterface, editorid)) {
+            logger::error("Failed to save EditorID");
+            return false;
+        }
 
         std::uint32_t refid = lhs.second;
         if (!serializationInterface->WriteRecordData(refid)) {
@@ -103,6 +106,10 @@ bool SaveLoadData::Load(SKSE::SerializationInterface* serializationInterface,
         // Consume the complete entry before skipping a missing source form.
         if (!serializationInterface->ResolveFormID(formid, formid)) {
             logger::error("Failed to resolve form ID, 0x{:X}.", formid);
+            continue;
+        }
+        if (!serializationInterface->ResolveFormID(refid, refid)) {
+            logger::error("Failed to resolve reference ID, 0x{:X}.", refid);
             continue;
         }
         const SaveDataLHS lhs({.form_id = formid, .editor_id = editorid}, refid);
