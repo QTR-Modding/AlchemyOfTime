@@ -103,8 +103,6 @@ void RefStop::RemoveTempEffects(bool remove_art, bool remove_shader) {
     remove_shader = remove_shader && !applied_effect_shaders.empty();
     if (!remove_art && !remove_shader) return;
 
-    constexpr float removal_delay = 5.f;
-
     if (const auto a_ref = GetRef()) {
         if (const auto processLists = RE::ProcessLists::GetSingleton()) {
             const auto handle = a_ref->CreateRefHandle();
@@ -124,7 +122,7 @@ void RefStop::RemoveTempEffects(bool remove_art, bool remove_shader) {
                 }
 
                 if (matched && matched->target == handle && matched->lifetime < 0.f) {
-                    matched->lifetime = matched->age + removal_delay;
+                    matched->finished = true;
                 }
 
                 return RE::BSContainer::ForEachResult::kContinue;
