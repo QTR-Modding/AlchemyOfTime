@@ -105,6 +105,10 @@ bool SaveLoadData::Load(SKSE::SerializationInterface* serializationInterface,
             logger::error("Failed to resolve form ID, 0x{:X}.", formid);
             continue;
         }
+        if (!serializationInterface->ResolveFormID(refid, refid)) {
+            logger::error("Failed to resolve reference ID, 0x{:X}.", refid);
+            continue;
+        }
         const SaveDataLHS lhs({.form_id = formid, .editor_id = editorid}, refid);
         m_Data[lhs] = std::move(rhs);
     }
