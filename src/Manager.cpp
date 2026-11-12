@@ -578,20 +578,41 @@ void Manager::QueueRefDelete(const RefID refid) {
     if (_ref_stops_.contains(refid)) queue_delete_.insert(refid);
 }
 
-void Manager::UpdateRefStop(const Source& src, const StageInstance& wo_inst, RefStop& a_ref_stop, const float stop_t) {
+template <class Triggers>
+bool Manager::TriggerEffectsAllowed(RE::TESObjectREFR* ref, const Triggers& triggers, const FormID trigger_id) {
+    const auto found = triggers.find(trigger_id);
+    if (found == triggers.end()) {
+        return false;
+    }
+    const auto& conditions = found->second.fx_conditions;
+    if (conditions.empty()) {
+        return true;
+    }
+    for (const auto perk : conditions) {
+        if (perk && Matches(ref, perk)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void Manager::QueueWorldRefUpdate(RE::TESObjectREFR* ref, const Source& src, const StageInstance& wo_inst,
+                                  const float stop_t) {
+    RefStop a_ref_stop(ref->GetFormID(), QueueInfo::UpdateType::kWorldObject);
     const auto delayer = wo_inst.GetDelayerFormID();
     const bool is_transformer = wo_inst.xtra.is_transforming;
-    const bool is_delayer = !is_transformer && src.settings.delayers.contains(delayer);
+    const bool transformer_effects = is_transformer && TriggerEffectsAllowed(ref, src.settings.transformers, delayer);
+    const bool delayer_effects = !is_transformer && TriggerEffectsAllowed(ref, src.settings.delayers, delayer);
 
     const auto pick = [&](const std::unordered_map<FormID, uint32_t>& transformer_map,
                           const std::unordered_map<FormID, uint32_t>& delayer_map,
                           const std::map<StageNo, uint32_t>& stage_map) {
-        if (is_transformer) {
+        if (transformer_effects) {
             if (const auto it = transformer_map.find(delayer); it != transformer_map.end()) {
                 return it->second;
             }
         }
-        if (is_delayer) {
+        if (delayer_effects) {
             if (const auto it = delayer_map.find(delayer); it != delayer_map.end()) {
                 return it->second;
             }
@@ -612,6 +633,7 @@ void Manager::UpdateRefStop(const Source& src, const StageInstance& wo_inst, Ref
         pick(src.settings.transformer_sounds, src.settings.delayer_sounds, src.settings.sounds);
 
     a_ref_stop.stop_time = stop_t;
+    QueueRefUpdate(a_ref_stop);
 }
 
 
@@ -1339,9 +1361,7 @@ void Manager::UpdateQueuedWO(const RefInfo& ref_info, const float curr_time) {
 
     source->UpdateWorldItemTrigger(ref, wo_inst, curr_time);
     if (const auto next_update = source->GetNextUpdateTime(&wo_inst); next_update > curr_time) {
-        RefStop a_ref_stop(refid, QueueInfo::UpdateType::kWorldObject);
-        UpdateRefStop(*source, wo_inst, a_ref_stop, next_update);
-        QueueRefUpdate(a_ref_stop);
+        QueueWorldRefUpdate(ref, *source, wo_inst, next_update);
     } else if (next_update == 0.f && !wo_inst.xtra.is_decayed) {
         QueueRefDelete(refid);
     }
@@ -1409,9 +1429,7 @@ void Manager::UpdateWO(RE::TESObjectREFR* ref) {
     if (wo_inst.xtra.is_fake) ApplyStageInWorld(ref, source->GetStage(wo_inst.no), source->GetBoundObject());
     source->UpdateWorldItemTrigger(ref, wo_inst, curr_time);
     if (const auto next_update = source->GetNextUpdateTime(&wo_inst); next_update > curr_time) {
-        RefStop a_ref_stop(refid, QueueInfo::UpdateType::kWorldObject);
-        UpdateRefStop(*source, wo_inst, a_ref_stop, next_update);
-        QueueRefUpdate(a_ref_stop);
+        QueueWorldRefUpdate(ref, *source, wo_inst, next_update);
     } else if (next_update == 0.f && !wo_inst.xtra.is_decayed) {
         QueueRefDelete(refid);
     }
@@ -1522,9 +1540,7 @@ void Manager::Register(const FormID some_formid, const Count count, const RefID 
         src->UpdateWorldItemTrigger(ref, *inserted_instance, register_time);
         // add to the queue
         if (const auto hitting_time = src->GetNextUpdateTime(inserted_instance); hitting_time > 0.f) {
-            RefStop a_ref_stop(location_refid, QueueInfo::UpdateType::kWorldObject);
-            UpdateRefStop(*src, *inserted_instance, a_ref_stop, hitting_time);
-            QueueRefUpdate(a_ref_stop);
+            QueueWorldRefUpdate(ref, *src, *inserted_instance, hitting_time);
         }
         UpdateLocationIndexForSource(*src, location_refid);
     }

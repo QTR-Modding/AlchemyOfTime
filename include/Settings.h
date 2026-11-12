@@ -166,6 +166,7 @@ namespace Settings {
 
 namespace PresetParse {
     std::vector<std::string> LoadExcludeList(const std::string& postfix);
+    std::vector<RE::BGSPerk*> ParseEffectsConditions(const YAML::Node& trigger);
     AddOnSettings parseAddOns_(const YAML::Node& config);
     DefaultSettings parseDefaults_(const YAML::Node& config);
     DefaultSettings parseDefaults(const std::string& _type);

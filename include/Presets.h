@@ -8,12 +8,14 @@ enum class TriggerKind : std::uint32_t { kTransformer, kDelayer };
 struct Delayer {
     float magnitude;
     float activation_delay = 0.0f;
+    std::vector<RE::BGSPerk*> fx_conditions{};
 };
 
 struct Transformer {
     FormID final_form;
     Duration duration;
     float activation_delay = 0.0f;
+    std::vector<RE::BGSPerk*> fx_conditions{};
 };
 
 struct AddOnSettings {

@@ -112,7 +112,10 @@ class Manager final : public Ticker, public SaveLoadData {
     // Request removal on the next tick. [locks: queueMutex_]
     void QueueRefDelete(RefID refid);
 
-    static void UpdateRefStop(const Source& src, const StageInstance& wo_inst, RefStop& a_ref_stop, float stop_t);
+    template <class Triggers>
+    static bool TriggerEffectsAllowed(RE::TESObjectREFR* ref, const Triggers& triggers, FormID trigger_id);
+
+    void QueueWorldRefUpdate(RE::TESObjectREFR* ref, const Source& src, const StageInstance& wo_inst, float stop_t);
 
     [[nodiscard]] uint32_t GetNInstances();
     uint32_t GetNInstancesFast() const;

@@ -621,6 +621,28 @@ namespace {
     }
 };
 
+std::vector<RE::BGSPerk*> PresetParse::ParseEffectsConditions(const YAML::Node& trigger) {
+    const auto field = trigger["fx_conditions"];
+    if (!field || field.IsNull()) {
+        return {};
+    }
+    if (!field.IsSequence()) {
+        logger::warn("fx_conditions must be a list of perks.");
+        return {nullptr};
+    }
+    std::vector<RE::BGSPerk*> perks;
+    perks.reserve(field.size());
+    for (const auto& entry : field) {
+        const auto form = entry.IsScalar() ? FormReader::GetFormFromString(entry.Scalar()) : nullptr;
+        const auto perk = form ? form->As<RE::BGSPerk>() : nullptr;
+        if (!perk) {
+            logger::warn("An fx_conditions entry must reference a perk.");
+        }
+        perks.push_back(perk);
+    }
+    return perks;
+}
+
 AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
     AddOnSettings settings;
 
@@ -648,6 +670,7 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
                 a_asv = PresetHelpers::YAML_Helpers::CollectFrom<StageNo>(modulator, "allowed_stages");
             }
             const auto activation_delay = parse_type<float>(modulator, "activation_delay").value_or(0.0f);
+            const auto fx_conditions = ParseEffectsConditions(modulator);
             // delayer magnitude
             std::optional<float> numeric_magnitude;
             if (!modulator["magnitude"]) {
@@ -678,7 +701,8 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
                                            : Utils::ExpandFormLists(parse_formid_vec(modulator, "FormEditorID"));
             for (auto a_formid : trigger_forms) {
                 settings.delayer_allowed_stages[a_formid] = std::unordered_set(a_asv.begin(), a_asv.end());
-                settings.delayers[a_formid] = {.magnitude = delayer_magnitude, .activation_delay = activation_delay};
+                settings.delayers[a_formid] = {.magnitude = delayer_magnitude, .activation_delay = activation_delay,
+                                               .fx_conditions = fx_conditions};
                 if (a_color) settings.delayer_colors[a_formid] = *a_color;
                 else settings.delayer_colors.erase(a_formid);
                 if (a_sound) settings.delayer_sounds[a_formid] = *a_sound;
@@ -718,6 +742,7 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
 
             // duration
             const auto activation_delay = parse_type<float>(transformer, "activation_delay").value_or(0.0f);
+            const auto fx_conditions = ParseEffectsConditions(transformer);
             float a_duration;
             auto temp_duration = parse_type<float>(transformer, "duration");
             if (!transformer["duration"]) {
@@ -755,7 +780,7 @@ AddOnSettings PresetParse::parseAddOns_(const YAML::Node& config) {
                                            : std::vector<FormID>{NumericKeywords::GetOrCreate(a_duration)->GetFormID()};
             for (auto a_formid : trigger_forms) {
                 settings.transformers[a_formid] = {.final_form = a_formid2, .duration = a_duration,
-                                                   .activation_delay = activation_delay};
+                                                   .activation_delay = activation_delay, .fx_conditions = fx_conditions};
                 settings.transformer_allowed_stages[a_formid] = std::unordered_set(a_asv.begin(), a_asv.end());
                 if (a_color) settings.transformer_colors[a_formid] = *a_color;
                 else settings.transformer_colors.erase(a_formid);
