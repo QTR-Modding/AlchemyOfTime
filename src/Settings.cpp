@@ -832,7 +832,7 @@ DefaultSettings PresetParse::parseDefaults_(const YAML::Node& config) {
         // add to durations
         settings.durations[a_stage_no] = stageNode["duration"].as<Duration>();
         // add to stage_names
-        if (!stageNode["name"].IsNull()) {
+        if (stageNode["name"] && !stageNode["name"].IsNull()) {
             // if it is empty, or just whitespace, set it to empty
             if (const auto temp_name = stageNode["name"].as<StageName>();
                 temp_name.empty() || std::ranges::all_of(temp_name, isspace)) {
