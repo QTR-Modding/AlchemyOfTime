@@ -1385,7 +1385,18 @@ void Manager::UpdateWO(RE::TESObjectREFR* ref) {
 
     Source* source = nullptr;
 
-    for (auto& src : sources | std::views::values) {
+    auto first = sources.end();
+    auto last = first;
+    if (const auto location = loc_to_sources.find(refid); location != loc_to_sources.end()) {
+        if (location->second.size() == 1) {
+            first = sources.find(*location->second.begin());
+            last = std::ranges::next(first, 1, last);
+        } else {
+            first = sources.begin();
+        }
+    }
+
+    for (auto& src : std::ranges::subrange(first, last) | std::views::values) {
         auto& a_source = *src;
         if (!a_source.IsHealthy()) continue;
         auto it = a_source.data.find(refid);
