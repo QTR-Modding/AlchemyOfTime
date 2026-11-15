@@ -1311,19 +1311,11 @@ void Manager::UpdateQueuedWO(const RefInfo& ref_info, const float curr_time) {
         return;
     }
 
-    // Handle base change the same way UpdateWO does:
-    HandleWOBaseChange(ref);
-
-    // Re-fetch after HandleWOBaseChange because it may have zeroed the instance
-    {
-        if (const auto it = source->data.find(refid);
-            it == source->data.end() || it->second.empty() || it->second.front().count <= 0) {
-            if (it == source->data.end() || it->second.empty()) {
-                UpdateLocationIndexForSource(*source, refid);
-            }
-            QueueRefDelete(refid);
-            return;
-        }
+    auto& instances = source->data.at(refid);
+    HandleWOBaseChange(ref, *source, instances);
+    if (instances.front().count <= 0) {
+        QueueRefDelete(refid);
+        return;
     }
 
     if (!source->ShouldFreezeEvolution(ref)) {
@@ -1385,18 +1377,26 @@ void Manager::UpdateWO(RE::TESObjectREFR* ref) {
 
     Source* source = nullptr;
 
-    for (auto& src : sources | std::views::values) {
-        auto& a_source = *src;
-        if (!a_source.IsHealthy()) continue;
-        auto it = a_source.data.find(refid);
-        if (it == a_source.data.end() || it->second.empty()) continue;
-        HandleWOBaseChange(ref);
-        if (it->second.front().count <= 0) {
-            QueueRefDelete(refid);
-            continue;
+    if (const auto location = loc_to_sources.find(refid); location != loc_to_sources.end()) {
+        for (const auto source_id : location->second) {
+            const auto source_it = sources.find(source_id);
+            if (source_it == sources.end() || !source_it->second->IsHealthy()) {
+                continue;
+            }
+
+            auto& candidate = *source_it->second;
+            const auto instances = candidate.data.find(refid);
+            if (instances == candidate.data.end() || instances->second.empty()) {
+                continue;
+            }
+
+            HandleWOBaseChange(ref, candidate, instances->second);
+            if (instances->second.front().count <= 0) {
+                continue;
+            }
+            source = &candidate;
+            break;
         }
-        source = &a_source;
-        break;
     }
 
     if (!source) {
@@ -2196,24 +2196,22 @@ void Manager::HandleDynamicWO(RE::TESObjectREFR* ref) {
     }
 }
 
-void Manager::HandleWOBaseChange(RE::TESObjectREFR* ref) {
-    if (!ref) return;
-    if (const auto bound = ref->GetObjectReference()) {
-        if (bound->IsDynamicForm()) return HandleDynamicWO(ref);
-        const auto a_refid = ref->GetFormID();
-        const auto src = GetSourceByLocation(a_refid);
-        if (!src || !src->IsHealthy()) return;
-        const auto it = src->data.find(a_refid);
-        if (it == src->data.end() || it->second.empty() || it->second.size() > 1 || it->second.front().count <= 0) {
-            return;
-        }
-        const auto st_inst = &it->second.front();
-        if (!st_inst || st_inst->count <= 0) return;
-        if (const auto bound_expected = src->IsFakeStage(st_inst->no) ? src->GetBoundObject() : st_inst->GetBound();
-            bound_expected->GetFormID() != bound->GetFormID()) {
-            ActivationQueue::GetSingleton()->ClearRef(a_refid);
-            st_inst->count = 0;
-        }
+void Manager::HandleWOBaseChange(RE::TESObjectREFR* ref, const Source& source, std::vector<StageInstance>& instances) {
+    if (instances.size() != 1 || instances.front().count <= 0) {
+        return;
+    }
+
+    const auto bound = ref->GetObjectReference();
+    if (!bound || bound->IsDynamicForm()) {
+        return;
+    }
+
+    auto& instance = instances.front();
+    const FormID expected_formid = source.IsFakeStage(instance.no) ? source.GetBoundObject()->GetFormID() :
+                                                                   instance.xtra.form_id;
+    if (expected_formid != bound->GetFormID()) {
+        ActivationQueue::GetSingleton()->ClearRef(ref->GetFormID());
+        instance.count = 0;
     }
 }
 
