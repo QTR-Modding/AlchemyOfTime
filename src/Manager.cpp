@@ -1392,7 +1392,6 @@ void Manager::UpdateWO(RE::TESObjectREFR* ref) {
 
             HandleWOBaseChange(ref, candidate, instances->second);
             if (instances->second.front().count <= 0) {
-                QueueRefDelete(refid);
                 continue;
             }
             source = &candidate;
@@ -2208,8 +2207,9 @@ void Manager::HandleWOBaseChange(RE::TESObjectREFR* ref, const Source& source, s
     }
 
     auto& instance = instances.front();
-    const auto expected = source.IsFakeStage(instance.no) ? source.GetBoundObject() : instance.GetBound();
-    if (expected->GetFormID() != bound->GetFormID()) {
+    const FormID expected_formid = source.IsFakeStage(instance.no) ? source.GetBoundObject()->GetFormID() :
+                                                                   instance.xtra.form_id;
+    if (expected_formid != bound->GetFormID()) {
         ActivationQueue::GetSingleton()->ClearRef(ref->GetFormID());
         instance.count = 0;
     }
