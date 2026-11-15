@@ -1311,19 +1311,11 @@ void Manager::UpdateQueuedWO(const RefInfo& ref_info, const float curr_time) {
         return;
     }
 
-    // Handle base change the same way UpdateWO does:
-    HandleWOBaseChange(ref);
-
-    // Re-fetch after HandleWOBaseChange because it may have zeroed the instance
-    {
-        if (const auto it = source->data.find(refid);
-            it == source->data.end() || it->second.empty() || it->second.front().count <= 0) {
-            if (it == source->data.end() || it->second.empty()) {
-                UpdateLocationIndexForSource(*source, refid);
-            }
-            QueueRefDelete(refid);
-            return;
-        }
+    auto& instances = source->data.at(refid);
+    HandleWOBaseChange(ref, *source, instances);
+    if (instances.front().count <= 0) {
+        QueueRefDelete(refid);
+        return;
     }
 
     if (!source->ShouldFreezeEvolution(ref)) {
@@ -1398,7 +1390,7 @@ void Manager::UpdateWO(RE::TESObjectREFR* ref) {
                 continue;
             }
 
-            HandleWOBaseChange(ref);
+            HandleWOBaseChange(ref, candidate, instances->second);
             if (instances->second.front().count <= 0) {
                 QueueRefDelete(refid);
                 continue;
@@ -2205,24 +2197,21 @@ void Manager::HandleDynamicWO(RE::TESObjectREFR* ref) {
     }
 }
 
-void Manager::HandleWOBaseChange(RE::TESObjectREFR* ref) {
-    if (!ref) return;
-    if (const auto bound = ref->GetObjectReference()) {
-        if (bound->IsDynamicForm()) return HandleDynamicWO(ref);
-        const auto a_refid = ref->GetFormID();
-        const auto src = GetSourceByLocation(a_refid);
-        if (!src || !src->IsHealthy()) return;
-        const auto it = src->data.find(a_refid);
-        if (it == src->data.end() || it->second.empty() || it->second.size() > 1 || it->second.front().count <= 0) {
-            return;
-        }
-        const auto st_inst = &it->second.front();
-        if (!st_inst || st_inst->count <= 0) return;
-        if (const auto bound_expected = src->IsFakeStage(st_inst->no) ? src->GetBoundObject() : st_inst->GetBound();
-            bound_expected->GetFormID() != bound->GetFormID()) {
-            ActivationQueue::GetSingleton()->ClearRef(a_refid);
-            st_inst->count = 0;
-        }
+void Manager::HandleWOBaseChange(RE::TESObjectREFR* ref, const Source& source, std::vector<StageInstance>& instances) {
+    if (instances.size() != 1 || instances.front().count <= 0) {
+        return;
+    }
+
+    const auto bound = ref->GetObjectReference();
+    if (!bound || bound->IsDynamicForm()) {
+        return;
+    }
+
+    auto& instance = instances.front();
+    const auto expected = source.IsFakeStage(instance.no) ? source.GetBoundObject() : instance.GetBound();
+    if (expected->GetFormID() != bound->GetFormID()) {
+        ActivationQueue::GetSingleton()->ClearRef(ref->GetFormID());
+        instance.count = 0;
     }
 }
 

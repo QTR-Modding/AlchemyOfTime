@@ -297,9 +297,7 @@ public:
     // [expects: sourceMutex_] (shared)
     void HandleDynamicWO(RE::TESObjectREFR* ref);
 
-    // Note: called from contexts that already hold sourceMutex_. Do not acquire it inside. 
-    // [expects: sourceMutex_] (shared)
-    void HandleWOBaseChange(RE::TESObjectREFR* ref);
+    void HandleWOBaseChange(RE::TESObjectREFR* ref, const Source& source, std::vector<StageInstance>& instances);
 
     bool IsTickerActive() const {
         return isRunning();
