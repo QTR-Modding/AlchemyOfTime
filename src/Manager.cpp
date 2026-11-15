@@ -1385,29 +1385,27 @@ void Manager::UpdateWO(RE::TESObjectREFR* ref) {
 
     Source* source = nullptr;
 
-    auto first = sources.end();
-    auto last = first;
     if (const auto location = loc_to_sources.find(refid); location != loc_to_sources.end()) {
-        if (location->second.size() == 1) {
-            first = sources.find(*location->second.begin());
-            last = std::ranges::next(first, 1, last);
-        } else {
-            first = sources.begin();
-        }
-    }
+        for (const auto source_id : location->second) {
+            const auto source_it = sources.find(source_id);
+            if (source_it == sources.end() || !source_it->second->IsHealthy()) {
+                continue;
+            }
 
-    for (auto& src : std::ranges::subrange(first, last) | std::views::values) {
-        auto& a_source = *src;
-        if (!a_source.IsHealthy()) continue;
-        auto it = a_source.data.find(refid);
-        if (it == a_source.data.end() || it->second.empty()) continue;
-        HandleWOBaseChange(ref);
-        if (it->second.front().count <= 0) {
-            QueueRefDelete(refid);
-            continue;
+            auto& candidate = *source_it->second;
+            const auto instances = candidate.data.find(refid);
+            if (instances == candidate.data.end() || instances->second.empty()) {
+                continue;
+            }
+
+            HandleWOBaseChange(ref);
+            if (instances->second.front().count <= 0) {
+                QueueRefDelete(refid);
+                continue;
+            }
+            source = &candidate;
+            break;
         }
-        source = &a_source;
-        break;
     }
 
     if (!source) {
