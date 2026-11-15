@@ -14,11 +14,11 @@ Supported form types are FOOD, INGR, MEDC, POSN, ARMO, WEAP, SCRL, BOOK, SLGM, M
 
 ## Getting Started
 
-This guide describes the configuration supported by the current source. Parameterized templates and form groups in custom `owners` are pending release; the other features below are available in AoT 1.3.5. A **trigger** is a form whose presence, location, or conditions activate a time modulator or transformer.
+This guide covers Alchemy of Time 1.7. A **trigger** is a form whose presence, location, or conditions activate a time modulator or transformer.
 
 ### Smallest addon example
 
-With AoT's supplied default files installed and FOOD enabled, save this as `SKSE/Plugins/AlchemyOfTime/FOOD/addon/PreserveBeef.yml`:
+An addon only works on items that already have stages defined by a default or custom preset. Enable FOOD, install `AoT_defaultFOOD.yml`, and save this as `SKSE/Plugins/AlchemyOfTime/FOOD/addon/PreserveBeef.yml`.
 
 ```yaml
 formsLists:
@@ -70,7 +70,7 @@ Each stage changes what the item does or looks like and can have specific proper
 
 - **no**: *(Required)* A unique number identifying the stage. It must start at `0` for the initial stage and increment by `1` for each subsequent stage.
 - **FormEditorID**: Stage `0` uses the original item and does not need this field. For later stages, only FOOD and MISC can omit it to create a dynamic derivative of the original item. INGR, MEDC, POSN, ARMO, WEAP, SCRL, BOOK, SLGM, STAT, and MSTT require an explicit replacement form for every later stage.
-- **name**: The name of the stage (e.g., Fresh, Stale). This name will appear next to the original item name in parentheses if the stage is a dynamic form.
+- **name** *(Optional)*. AoT adds this label to generated FOOD and MISC item names. Omit it or leave it empty to keep the original name.
 - **duration**: *(Required)* The time in in-game hours the item remains in this stage; it must be positive. `.inf` means an infinite duration.
 - **value**: Overrides the value of a dynamically generated stage form (FOOD or MISC). Ignored for stage `0` and stages with an explicit `FormEditorID`.
 - **weight**: Overrides the weight of a dynamically generated stage form (FOOD or MISC). Ignored for stage `0` and stages with an explicit `FormEditorID`.
@@ -95,7 +95,8 @@ These properties allow complete customization of each stage's behavior, appearan
 - **Default settings** affect all items of a specific type.
 - These are stored in files named `AoT_default<ITEMTYPE>.yml`. For example, food uses `AoT_defaultFOOD.yml`.
 - Default settings apply to every item of that type unless you make a **custom setting** for specific items.
-AoT supplies a default file for each supported item type with an infinite stage and `finalFormEditorID: 0xF` (Gold). Gold is a required placeholder; the infinite stage never reaches it. These defaults let addons work without a separate custom rule and without changing unrelated items over time. Keep the supplied defaults installed, or use defaults supplied by another preset.
+
+An infinite default stage lets addons work while other items stay in their first stage. AoT's infinite defaults use Gold (`finalFormEditorID: 0xF`) as the required placeholder.
 
 For an item without a custom rule, AoT starts tracking it through the default when stage `0` has a duration below `9999` hours or the item has an addon. Custom rules still require their own `stages` and `finalFormEditorID`.
 
@@ -155,6 +156,8 @@ timeModulators:
 ## Additional Features
 
 The `color`, `sound`, `art_object`, and `effect_shader` fields on stages, time modulators, and transformers apply only to items lying in the world, with [world-item evolution enabled](#world-item-evolution). Inventory items still receive the timing and transformation behavior, but these fields do not add visuals or play sounds in inventories. Omitted or `null` trigger effect fields use the current stage's values.
+
+On a time modulator or transformer, `fx_conditions: [MyPerk]` applies its world effects only when the item meets the conditions defined on the perk with EditorID `MyPerk`. You can list several perks. If none match, the trigger still runs and the item uses its stage's effects. An empty or omitted list allows trigger effects.
 
 ### Tint colors
 
@@ -218,6 +221,7 @@ Time modulators change how quickly items progress through their stages and can e
 - **effect_shader**: The Effect Shader form to be attached to the stage item.
 - **containers**: Specifies the containers (form IDs, editor IDs, or local IDs) where the time modulator is allowed to take effect. Can be a scalar or array type.
 - **allowed_stages**: Stage numbers this modulator can affect. Omitted or empty means all stages; `[0]` means only the initial stage.
+- **activation_delay**. For example, `activation_delay: 0.1` adds a random wait averaging 0.1 game hours after the trigger starts matching. Omit it or use `0` for immediate activation.
 
 ### Transformers
 
@@ -232,6 +236,7 @@ Transformers allow items to **bypass the stage cycle** and transform into anothe
 - **art_object**: The Art Object form attached to the transforming item.
 - **effect_shader**: The Effect Shader form attached to the transforming item.
 - **containers**: Specifies the containers (form IDs, editor IDs, or local IDs) where the transformer is allowed to take effect. Can be a scalar or array type.
+- **activation_delay** works as it does for time modulators. The transformation's `duration` starts after the wait.
 
 ### Keyword triggers
 
@@ -259,9 +264,9 @@ formsLists:
   - FormEditorID: 0.5
 ```
 
-AoT uses `AoT_NKW_0_06` for the transformation and `AoT_NKW_0_5` for the time modulator. Assign these keywords to the base objects that should activate them. Matching follows the [keyword trigger rules](#keyword-triggers).
+Use a single number in `FormEditorID` and omit `duration` or `magnitude`, including in shared settings. Create Keyword (KYWD) records with the exact EditorIDs `AoT_NKW_0_06` and `AoT_NKW_0_5` in your plugin. Assign them to the base objects that should activate the [triggers](#keyword-triggers).
 
-While the `AoT_NKW_0_06` trigger matches, beef transforms into cooked beef over `0.06` game hours. While the `AoT_NKW_0_5` trigger matches and no transformer takes priority, its stages progress at half speed. Omit `duration` or `magnitude` to use the number in `FormEditorID`.
+Here, `AoT_NKW_0_06` turns raw beef into cooked beef in 0.06 game hours. `AoT_NKW_0_5` slows its stage progression to half speed when no transformer takes priority.
 
 ### Faction triggers
 
