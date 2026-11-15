@@ -2,6 +2,27 @@
 #include "Utils.h"
 
 
+RefStop::EffectController::EffectController(RE::ObjectRefHandle target, RE::BGSArtObject* art,
+                                            RE::TESEffectShader* shader)
+    : target_(target), art_(art), shader_(shader) {
+}
+
+RE::TESObjectREFR* RefStop::EffectController::GetTargetReference() {
+    return target_.get().get();
+}
+
+RE::BGSArtObject* RefStop::EffectController::GetHitEffectArt() {
+    return art_;
+}
+
+RE::TESEffectShader* RefStop::EffectController::GetHitEffectShader() {
+    return shader_;
+}
+
+bool RefStop::EffectController::GetManagerHandlesSaveLoad() {
+    return false;
+}
+
 RefStop& RefStop::operator=(const RefStop& other) {
     if (this != &other) {
         QueueInfo::operator=(other);
@@ -38,11 +59,12 @@ void RefStop::ApplyArtObject(RE::TESObjectREFR* a_ref, const float duration) {
         return;
     }
 
-    auto h = a_ref->GetHandle();
-    SKSE::GetTaskInterface()->AddTask([h, a_art_obj, duration]() {
-        const auto ref = h.get().get();
-        if (!ref || !a_art_obj) return;
-        ref->ApplyArtObject(a_art_obj, duration);
+    const auto handle = a_ref->GetHandle();
+    SKSE::GetTaskInterface()->AddTask([handle, a_art_obj, duration]() {
+        if (const auto ref = handle.get()) {
+            RE::ModelReferenceEffect::StartOwned(
+                std::make_unique<EffectController>(handle, a_art_obj, nullptr), duration);
+        }
     });
 
     applied_art_objects.insert(art_object.id);
@@ -60,13 +82,13 @@ void RefStop::ApplyShader(RE::TESObjectREFR* a_ref, const float duration) {
         return;
     }
 
-    auto h = a_ref->GetHandle();
-    SKSE::GetTaskInterface()->AddTask([h, eff_shader, duration]() {
-        const auto ref = h.get().get();
-        if (!ref || !eff_shader) return;
-        ref->ApplyEffectShader(eff_shader, duration);
+    const auto handle = a_ref->GetHandle();
+    SKSE::GetTaskInterface()->AddTask([handle, eff_shader, duration]() {
+        if (const auto ref = handle.get()) {
+            RE::ShaderReferenceEffect::StartOwned(
+                std::make_unique<EffectController>(handle, nullptr, eff_shader), duration);
+        }
     });
-    // shader_ref_eff = a_shader_ref_eff_ptr;
 
     applied_effect_shaders.insert(effect_shader.id);
 
