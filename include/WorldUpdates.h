@@ -44,4 +44,20 @@ struct RefStop : QueueInfo {
     void Update(const RefStop& other);
 
     RE::TESObjectREFR* GetRef() const { return ref_info.GetRef(); }
+
+private:
+    class EffectController final : public RE::ReferenceEffectController {
+    public:
+        EffectController(RE::ObjectRefHandle target, RE::BGSArtObject* art, RE::TESEffectShader* shader);
+
+        RE::TESObjectREFR* GetTargetReference() override;
+        RE::BGSArtObject* GetHitEffectArt() override;
+        RE::TESEffectShader* GetHitEffectShader() override;
+        bool GetManagerHandlesSaveLoad() override;
+
+    private:
+        RE::ObjectRefHandle target_;
+        RE::BGSArtObject* art_;
+        RE::TESEffectShader* shader_;
+    };
 };
