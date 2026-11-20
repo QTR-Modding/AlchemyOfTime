@@ -1,4 +1,5 @@
 #include "WorldUpdates.h"
+#include "Settings.h"
 #include "Utils.h"
 
 
@@ -144,7 +145,7 @@ void RefStop::RemoveTempEffects(bool remove_art, bool remove_shader) {
                 }
 
                 if (matched && matched->target == handle && matched->lifetime < 0.f) {
-                    matched->finished = true;
+                    matched->lifetime = matched->age + (Settings::GetCurrentTickInterval() + 100) / 1000.0f;
                 }
 
                 return RE::BSContainer::ForEachResult::kContinue;
